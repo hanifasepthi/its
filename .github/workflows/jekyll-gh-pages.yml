@@ -1,4 +1,4 @@
-name: Deploy ITS Maps to GitHub Pages
+name: Deploy ITS Maps to GitHub Page
 
 on:
   push:
