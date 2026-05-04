@@ -1,0 +1,8 @@
+{
+  "snapshotUrl": "./data/its-state.json",
+  "refreshMs": 5000,
+  "mapAttribution": "OpenStreetMap contributors",
+  "mapLabel": "Custom ITS map",
+  "githubRepo": "https://github.com/hanifasepthi/its",
+  "githubBranch": "main"
+}

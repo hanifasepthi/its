@@ -1,0 +1,66 @@
+{
+  "updatedAt": 1777870000000,
+  "source": "github-static-json",
+  "devices": [
+    {
+      "id": "raspberry-its",
+      "label": "Raspberry Pi 5 Controller",
+      "district": "Koridor Utama ITS",
+      "ip": "10.176.37.67",
+      "status": "online",
+      "vehicles": 28,
+      "congestion": 62,
+      "speedKph": 31,
+      "camera": "pending",
+      "note": "controller aktif; kamera belum terpasang",
+      "lastSeen": 1777869995000,
+      "position": { "x": 54.8, "y": 48.5 }
+    },
+    {
+      "id": "edge-sensor-02",
+      "label": "Edge Sensor Timur",
+      "district": "Simpang Timur",
+      "ip": "10.176.37.82",
+      "status": "offline",
+      "vehicles": 9,
+      "congestion": 18,
+      "speedKph": 40,
+      "camera": "offline",
+      "note": "node cadangan belum online",
+      "lastSeen": 1777868880000,
+      "position": { "x": 70.5, "y": 38.7 }
+    },
+    {
+      "id": "camera-gate-01",
+      "label": "Camera Gate Selatan",
+      "district": "Gerbang Selatan",
+      "ip": "10.176.37.120",
+      "status": "degraded",
+      "vehicles": 41,
+      "congestion": 78,
+      "speedKph": 22,
+      "camera": "pending",
+      "note": "AI detector menunggu kamera fisik",
+      "lastSeen": 1777869972000,
+      "position": { "x": 43.8, "y": 69.5 }
+    }
+  ],
+  "events": [
+    {
+      "id": "ev-1",
+      "time": 1777869820000,
+      "label": "Heartbeat Raspberry Pi",
+      "detail": "device raspberry-its mengirim status online",
+      "severity": "good",
+      "deviceId": "raspberry-its"
+    },
+    {
+      "id": "ev-2",
+      "time": 1777869600000,
+      "label": "Lonjakan kendaraan",
+      "detail": "koridor timur naik ke 78% congestion",
+      "severity": "warn",
+      "deviceId": "camera-gate-01"
+    }
+  ]
+}
