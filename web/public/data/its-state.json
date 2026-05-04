@@ -12,6 +12,9 @@
       "congestion": 62,
       "speedKph": 31,
       "camera": "pending",
+      "cameraTitle": "Controller preview",
+      "cameraThumbnailUrl": "",
+      "cameraStreamUrl": "",
       "note": "controller aktif; kamera belum terpasang",
       "lastSeen": 1777869995000,
       "position": { "x": 54.8, "y": 48.5 }
@@ -26,6 +29,9 @@
       "congestion": 18,
       "speedKph": 40,
       "camera": "offline",
+      "cameraTitle": "Koridor Timur camera",
+      "cameraThumbnailUrl": "",
+      "cameraStreamUrl": "",
       "note": "node cadangan belum online",
       "lastSeen": 1777868880000,
       "position": { "x": 70.5, "y": 38.7 }
@@ -40,7 +46,10 @@
       "congestion": 78,
       "speedKph": 22,
       "camera": "pending",
-      "note": "AI detector menunggu kamera fisik",
+      "cameraTitle": "Gate Selatan live cam",
+      "cameraThumbnailUrl": "",
+      "cameraStreamUrl": "",
+      "note": "slot video realtime siap; AI detector menunggu kamera fisik",
       "lastSeen": 1777869972000,
       "position": { "x": 43.8, "y": 69.5 }
     }
