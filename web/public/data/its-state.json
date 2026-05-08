@@ -1,17 +1,17 @@
 {
-  "updatedAt": 1762355000000,
-  "source": "scala-controller",
-  "devices": [
-    {
-      "id": "raspberry-its",
-      "label": "Raspberry Pi 5 Controller",
-      "status": "online",
-      "lastSeen": 1762355000000,
-      "note": "controller aktif",
-      "position": {
-        "lat": -7.280734,
-        "lng": 112.794963
-      }
-    }
-  ]
+    "updatedAt": 1762355000000,
+    "source": "scala-controller",
+    "devices": [
+        {
+            "id": "raspberry-its",
+            "label": "Raspberry Pi 5 Controller",
+            "status": "online",
+            "lastSeen": 1762355000000,
+            "note": "controller aktif",
+            "position": {
+                "lat": -7.280734,
+                "lng": 112.794963
+            }
+        }
+    ]
 }
