@@ -71,6 +71,45 @@ L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
 }).addTo(state.map);
 
+// Replace default Leaflet/OSM prefix with project attribution
+if (state.map.attributionControl) {
+  try {
+    state.map.attributionControl.setPrefix("ITS Maps • Telkom University");
+  } catch {
+    // ignore if not available
+  }
+}
+
+// Add a disabled video thumbnail rail (bottom-right). Thumbnails are placeholders
+// for future realtime camera/video integration. Clicks are disabled and show
+// 'Coming soon' visually.
+const videoRail = (L.control as any)({ position: "bottomright" });
+videoRail.onAdd = function () {
+  const container = L.DomUtil.create("div", "video-rail");
+  container.innerHTML = `
+    <div class="video-rail-inner">
+      <button class="thumb" aria-label="Preview 1" title="Realtime preview (coming soon)" disabled>
+        <div class="thumb-image">Preview</div>
+        <div class="thumb-overlay">Coming soon</div>
+      </button>
+      <button class="thumb" aria-label="Preview 2" title="Realtime preview (coming soon)" disabled>
+        <div class="thumb-image">Preview</div>
+        <div class="thumb-overlay">Coming soon</div>
+      </button>
+      <button class="thumb" aria-label="Preview 3" title="Realtime preview (coming soon)" disabled>
+        <div class="thumb-image">Preview</div>
+        <div class="thumb-overlay">Coming soon</div>
+      </button>
+    </div>
+  `;
+
+  // Prevent clicks on the control from propagating to the map (no map pan/zoom)
+  L.DomEvent.disableClickPropagation(container);
+  L.DomEvent.disableScrollPropagation(container);
+  return container;
+};
+videoRail.addTo(state.map);
+
 function requiredElement<T extends Element>(selector: string, name: string): T {
   const element = document.querySelector<T>(selector);
   if (!element) {
