@@ -1,6 +1,6 @@
 {
   "updatedAt": 1762355000000,
-  "source": "raspberry-pi",
+  "source": "scala-controller",
   "devices": [
     {
       "id": "raspberry-its",
@@ -9,8 +9,8 @@
       "lastSeen": 1762355000000,
       "note": "controller aktif",
       "position": {
-        "x": 54.8,
-        "y": 48.5
+        "lat": -7.280734,
+        "lng": 112.794963
       }
     }
   ]
