@@ -41,6 +41,7 @@ const DEFAULT_CONFIG: Required<AppConfig> = {
 
 const DEFAULT_CENTER: L.LatLngExpression = [-7.280734, 112.794963];
 const DEFAULT_ZOOM = 17;
+const OFFLINE_AFTER_MS = 60_000;
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) {
@@ -64,6 +65,7 @@ const state = {
     preferCanvas: true,
   }),
   marker: null as L.Marker | null,
+  deviceRail: null as HTMLDivElement | null,
 };
 
 L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -80,35 +82,32 @@ if (state.map.attributionControl) {
   }
 }
 
-// Add a disabled video thumbnail rail (bottom-right). Thumbnails are placeholders
-// for future realtime camera/video integration. Clicks are disabled and show
-// 'Coming soon' visually.
-const videoRail = (L.control as any)({ position: "bottomright" });
-videoRail.onAdd = function () {
-  const container = L.DomUtil.create("div", "video-rail");
+const deviceRail = (L.control as any)({ position: "bottomright" });
+deviceRail.onAdd = function () {
+  const container = L.DomUtil.create("div", "device-rail");
+  state.deviceRail = container;
   container.innerHTML = `
-    <div class="video-rail-inner">
-      <button class="thumb" aria-label="Preview 1" title="Realtime preview (coming soon)" disabled>
-        <div class="thumb-image">Preview</div>
-        <div class="thumb-overlay">Coming soon</div>
-      </button>
-      <button class="thumb" aria-label="Preview 2" title="Realtime preview (coming soon)" disabled>
-        <div class="thumb-image">Preview</div>
-        <div class="thumb-overlay">Coming soon</div>
-      </button>
-      <button class="thumb" aria-label="Preview 3" title="Realtime preview (coming soon)" disabled>
-        <div class="thumb-image">Preview</div>
-        <div class="thumb-overlay">Coming soon</div>
+    <div class="device-rail-inner">
+      <div class="device-tile">
+        <span class="tile-label">Status</span>
+        <strong class="tile-value" data-device-status>Loading</strong>
+      </div>
+      <div class="device-tile">
+        <span class="tile-label">Last seen</span>
+        <strong class="tile-value" data-device-last-seen>-</strong>
+      </div>
+      <button class="camera-tile" aria-label="Camera preview coming soon" title="Camera preview coming soon" disabled>
+        <span class="camera-lens"></span>
+        <strong>Coming soon</strong>
       </button>
     </div>
   `;
 
-  // Prevent clicks on the control from propagating to the map (no map pan/zoom)
   L.DomEvent.disableClickPropagation(container);
   L.DomEvent.disableScrollPropagation(container);
   return container;
 };
-videoRail.addTo(state.map);
+deviceRail.addTo(state.map);
 
 function requiredElement<T extends Element>(selector: string, name: string): T {
   const element = document.querySelector<T>(selector);
@@ -133,6 +132,19 @@ function formatTime(value: number): string {
   }).format(new Date(value));
 }
 
+function formatAge(value: number): string {
+  if (value <= 0) {
+    return "-";
+  }
+
+  const ageMs = Math.max(0, Date.now() - value);
+  if (ageMs < 60_000) {
+    return `${Math.max(1, Math.round(ageMs / 1000))}s ago`;
+  }
+
+  return `${Math.round(ageMs / 60_000)}m ago`;
+}
+
 function normalizeDevice(snapshot: Snapshot): DeviceRecord | null {
   const raw = snapshot.devices?.[0];
   if (!raw) {
@@ -154,11 +166,15 @@ function normalizeDevice(snapshot: Snapshot): DeviceRecord | null {
     return null;
   }
 
+  const lastSeen = typeof raw.lastSeen === "number" ? raw.lastSeen : 0;
+  const rawStatus = isDeviceStatus(raw.status) ? raw.status : "offline";
+  const status = lastSeen > 0 && Date.now() - lastSeen > OFFLINE_AFTER_MS ? "offline" : rawStatus;
+
   return {
     id: raw.id?.trim() || "raspberry-its",
     label: raw.label?.trim() || "Raspberry Pi 5 Controller",
-    status: isDeviceStatus(raw.status) ? raw.status : "offline",
-    lastSeen: typeof raw.lastSeen === "number" ? raw.lastSeen : 0,
+    status,
+    lastSeen,
     note: raw.note?.trim() || undefined,
     position: {
       lat: clamp(latitude, -90, 90),
@@ -216,6 +232,22 @@ function renderPopup(device: DeviceRecord): string {
   `;
 }
 
+function renderDeviceRail(device: DeviceRecord | null): void {
+  if (!state.deviceRail) {
+    return;
+  }
+
+  const statusElement = state.deviceRail.querySelector<HTMLElement>("[data-device-status]");
+  const lastSeenElement = state.deviceRail.querySelector<HTMLElement>("[data-device-last-seen]");
+  if (!statusElement || !lastSeenElement) {
+    return;
+  }
+
+  state.deviceRail.dataset.status = device?.status || "offline";
+  statusElement.textContent = device ? device.status : "offline";
+  lastSeenElement.textContent = device ? formatAge(device.lastSeen) : "-";
+}
+
 async function fetchJson<T>(url: string): Promise<T> {
   const response = await fetch(url, { cache: "no-store" });
   if (!response.ok) {
@@ -246,6 +278,7 @@ async function refreshSnapshot(): Promise<void> {
 
     state.device = device;
     ensureMarker(device);
+    renderDeviceRail(device);
     state.map.setView([device.position.lat, device.position.lng], state.map.getZoom() || DEFAULT_ZOOM, {
       animate: false,
     });
@@ -255,6 +288,7 @@ async function refreshSnapshot(): Promise<void> {
       state.marker = null;
     }
     state.device = null;
+    renderDeviceRail(null);
   } finally {
     state.refreshBusy = false;
     window.clearTimeout(state.refreshTimer);
