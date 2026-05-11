@@ -283,7 +283,7 @@ function normBearing(raw: number): number {
 function updateCompass(): void {
   if (!state.compassNeedle) return;
   const norm = normBearing(map.getBearing?.() ?? 0);
-  state.compassNeedle.setAttribute("transform", `rotate(${norm}, 22, 22)`);
+  state.compassNeedle.setAttribute("transform", `rotate(${norm}, 26, 26)`);
   if (state.compassBtn) {
     const isNorth = norm < BEARING_SNAP || norm > (360 - BEARING_SNAP);
     state.compassBtn.classList.toggle("compass-active", !isNorth);
@@ -391,16 +391,21 @@ async function patchFirebaseDevice(deviceId: string, payload: Record<string, unk
 }
 
 function makeCompassSvg(): string {
-  return `<svg class="compass-svg" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="22" cy="22" r="19" class="compass-ring-bg"/>
-    <text x="22" y="8" text-anchor="middle" font-size="5" font-weight="700"
-          font-family="sans-serif" fill="#D92B2B">N</text>
-    <path d="M4 22 L8.5 19 L8.5 25 Z" class="compass-arrow-left"/>
-    <path d="M40 22 L35.5 19 L35.5 25 Z" class="compass-arrow-right"/>
+  return `<svg class="compass-svg" viewBox="0 0 52 52" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <circle cx="26" cy="26" r="23" class="compass-ring-bg"/>
+    <path d="M9 31 C5.8 25.4 6.9 18.4 11.8 13.7" class="compass-side-arc"/>
+    <path d="M43 31 C46.2 25.4 45.1 18.4 40.2 13.7" class="compass-side-arc"/>
+    <path d="M8.6 31.3 L5.9 25.9 L12.2 27.3 Z" class="compass-arrow-left"/>
+    <path d="M43.4 31.3 L46.1 25.9 L39.8 27.3 Z" class="compass-arrow-right"/>
+    <text x="26" y="10" text-anchor="middle" class="compass-label compass-label-n">N</text>
+    <text x="26" y="47" text-anchor="middle" class="compass-label">S</text>
+    <text x="8.2" y="28.5" text-anchor="middle" class="compass-label">W</text>
+    <text x="43.8" y="28.5" text-anchor="middle" class="compass-label">E</text>
     <g class="compass-needle-group">
-      <polygon points="22,5 19.5,23 24.5,23" fill="#D92B2B"/>
-      <polygon points="22,39 19.5,23 24.5,23" fill="#B0B0B0"/>
-      <circle cx="22" cy="22" r="3" fill="#fff" stroke="#999" stroke-width="0.8"/>
+      <polygon points="26,15 31,26 26,37 21,26" class="compass-needle-shadow"/>
+      <polygon points="26,15 31,26 26,26 21,26" class="compass-needle-north"/>
+      <polygon points="26,37 31,26 26,26 21,26" class="compass-needle-south"/>
+      <circle cx="26" cy="26" r="2.4" class="compass-needle-cap"/>
     </g>
   </svg>`;
 }
