@@ -1,8 +1,8 @@
 {
     "updatedAt": 1762355000000,
     "source": "scala-controller",
-    "devices": [
-        {
+    "devices": {
+        "raspberry-its": {
             "id": "raspberry-its",
             "label": "Raspberry Pi 5 Controller",
             "status": "online",
@@ -14,5 +14,5 @@
                 "lng": 112.794963
             }
         }
-    ]
+    }
 }
