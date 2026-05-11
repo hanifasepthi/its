@@ -21,8 +21,8 @@ object ItsController {
   private val intervalSeconds = math.max(5, envInt("ITS_INTERVAL_SECONDS", 15))
   private val outputPath = env("ITS_OUTPUT_PATH", "../web/public/data/its-state.json")
   private val firebaseUrl = env(
-    "ITS_FIREBASE_URL",
-    "https://itstelkom-default-rtdb.asia-southeast1.firebasedatabase.app/devices/raspberry-its.json"
+    "ITS_FIREBASE_BASE_URL",
+    "https://itstelkom-default-rtdb.asia-southeast1.firebasedatabase.app/devices"
   )
   private val firebaseEnabled = env("ITS_FIREBASE_ENABLED", "true").toLowerCase(Locale.ROOT) != "false"
   private val httpClient = HttpClient.newHttpClient()
@@ -79,8 +79,9 @@ object ItsController {
     }
 
     try {
+      val devicePath = s"${firebaseUrl.stripSuffix("/")}/${deviceId}.json"
       val request = HttpRequest
-        .newBuilder(URI.create(firebaseUrl))
+        .newBuilder(URI.create(devicePath))
         .header("Content-Type", "application/json")
         .PUT(HttpRequest.BodyPublishers.ofString(json))
         .build()
