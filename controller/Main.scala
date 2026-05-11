@@ -3,6 +3,7 @@ import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.net.URLEncoder
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.nio.file.StandardOpenOption
@@ -24,6 +25,7 @@ object ItsController {
     "ITS_FIREBASE_BASE_URL",
     "https://itstelkom-default-rtdb.asia-southeast1.firebasedatabase.app/devices"
   )
+  private val firebaseAuth = env("ITS_FIREBASE_AUTH", "")
   private val firebaseEnabled = env("ITS_FIREBASE_ENABLED", "true").toLowerCase(Locale.ROOT) != "false"
   private val httpClient = HttpClient.newHttpClient()
   private val lastSeenFormatter = DateTimeFormatter
@@ -79,7 +81,8 @@ object ItsController {
     }
 
     try {
-      val devicePath = s"${firebaseUrl.stripSuffix("/")}/${deviceId}.json"
+      val devicePath = s"${firebaseUrl.stripSuffix("/")}/${deviceId}.json" +
+        (if (firebaseAuth.trim.isEmpty) "" else s"?auth=${URLEncoder.encode(firebaseAuth.trim, StandardCharsets.UTF_8)}")
       val request = HttpRequest
         .newBuilder(URI.create(devicePath))
         .header("Content-Type", "application/json")
