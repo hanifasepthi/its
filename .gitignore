@@ -3,6 +3,7 @@
 *.log
 web/node_modules/
 web/dist/
+.firebase/
 itstelkom-firebase-adminsdk-fbsvc-2abe9e70b0.json
 
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
