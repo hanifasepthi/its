@@ -1,18 +1,21 @@
 {
-    "updatedAt": 1762355000000,
-    "source": "scala-controller",
-    "devices": {
-        "raspberry-its": {
-            "id": "raspberry-its",
-            "label": "Raspberry Pi 5 Controller",
-            "status": "online",
-            "lastSeen": 1762355000000,
-            "lastSeenText": "5 Mei 2026 22:03:20",
-            "note": "controller aktif",
-            "position": {
-                "lat": -7.280734,
-                "lng": 112.794963
-            }
-        }
+  "updatedAt": 0,
+  "source": "sample-fallback",
+  "devices": [
+    {
+      "id": "raspberry-its",
+      "label": "Raspberry Pi 5 Controller",
+      "status": "offline",
+      "lastSeen": 0,
+      "lastSeenText": "-",
+      "note": "sample fallback; realtime marker dibaca dari Firebase",
+      "locationSource": "sample",
+      "locationLabel": "ITS fallback coordinate",
+      "locationAccuracyM": 50000,
+      "position": {
+        "lat": -7.280734,
+        "lng": 112.794963
+      }
     }
+  ]
 }
