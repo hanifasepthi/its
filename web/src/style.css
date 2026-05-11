@@ -174,58 +174,97 @@ body {
 
 /* Kompas button */
 .toolbar-compass {
-  width: 46px;
-  height: 46px;
+  width: 52px;
+  height: 52px;
   padding: 0;
   border: none;
   border-radius: 50%;
   background: #fff;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 2px 9px rgba(15, 23, 42, 0.22);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition: box-shadow 0.15s ease, filter 0.15s ease;
   margin-bottom: 2px;
 }
 
 .toolbar-compass:hover {
-  transform: scale(1.08);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+  filter: brightness(1.02);
+  box-shadow: 0 4px 13px rgba(15, 23, 42, 0.26);
 }
 
 .toolbar-compass:active {
-  transform: scale(0.96);
+  filter: brightness(0.96);
 }
 
 /* Saat bearing ≠ 0 */
 .toolbar-compass.compass-active {
-  box-shadow: 0 2px 10px rgba(217, 43, 43, 0.35);
+  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.28);
 }
 
 /* SVG kompas */
 .compass-svg {
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   display: block;
   overflow: visible;
 }
 
 .compass-ring-bg {
-  fill: #f0f0f0;
-  stroke: #c8c8c8;
+  fill: #f7f8fa;
+  stroke: #d7dce2;
   stroke-width: 1;
+}
+
+.compass-side-arc {
+  fill: none;
+  stroke: #7f8793;
+  stroke-width: 2;
+  stroke-linecap: round;
 }
 
 .compass-arrow-left,
 .compass-arrow-right {
-  fill: #7a8594;
+  fill: #7f8793;
+}
+
+.compass-label {
+  fill: #667085;
+  font-family: Inter, sans-serif;
+  font-size: 6.5px;
+  font-weight: 800;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.compass-label-n {
+  fill: #d92b2b;
 }
 
 .compass-needle-group {
   transform-box: fill-box;
   transform-origin: center;
   /* rotate() di-set via JS attribute */
+}
+
+.compass-needle-shadow {
+  fill: rgba(15, 23, 42, 0.18);
+  transform: translate(0.6px, 0.8px);
+}
+
+.compass-needle-north {
+  fill: #d92b2b;
+}
+
+.compass-needle-south {
+  fill: #c8ced7;
+}
+
+.compass-needle-cap {
+  fill: #fff;
+  stroke: #a4abb6;
+  stroke-width: 0.7;
 }
 
 /* Animasi reset north */
