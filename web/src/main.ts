@@ -28,6 +28,7 @@ type DeviceRecord = {
   label: string;
   status: DeviceStatus;
   lastSeen: number;
+  lastSeenText?: string;
   note?: string;
   cameraUrl?: string;
   position: { lat: number; lng: number };
@@ -157,6 +158,7 @@ function normalizeDevice(snapshot: Snapshot): DeviceRecord | null {
     id: raw.id?.trim() || "raspberry-its",
     label: raw.label?.trim() || "Raspberry Pi 5 Controller",
     status, lastSeen,
+    lastSeenText: raw.lastSeenText?.trim() || undefined,
     note: raw.note?.trim() || undefined,
     cameraUrl: raw.cameraUrl?.trim() || undefined,
     position: { lat: clamp(lat, -90, 90), lng: clamp(lng, -180, 180) },
@@ -174,7 +176,7 @@ function renderPopup(device: DeviceRecord): string {
       <div class="popup-title">${escapeHtml(device.label)}</div>
       <div class="popup-row"><span>ID</span><strong>${escapeHtml(device.id)}</strong></div>
       <div class="popup-row"><span>Status</span><strong>${escapeHtml(device.status)}</strong></div>
-      <div class="popup-row"><span>Last seen</span><strong>${formatTime(device.lastSeen)}</strong></div>
+      <div class="popup-row"><span>Last seen</span><strong>${escapeHtml(device.lastSeenText || formatTime(device.lastSeen))}</strong></div>
       <div class="popup-row"><span>Age</span><strong>${formatAge(device.lastSeen)}</strong></div>
       ${device.note ? `<div class="popup-note">${escapeHtml(device.note)}</div>` : ""}
     </div>`;
@@ -231,17 +233,15 @@ function updateCompass(): void {
   if (!state.compassNeedle) return;
   const norm = normBearing(map.getBearing?.() ?? 0);
 
-  // Jarum merah selalu menunjuk ke arah utara sejati.
-  // Saat peta berputar norm derajat searah jarum jam,
-  // jarum harus berputar -norm (berlawanan) supaya tetap ke utara.
-  state.compassNeedle.setAttribute("transform", `rotate(${-norm}, 22, 22)`);
+  // Kompas mengikuti arah bearing peta saat ini.
+  state.compassNeedle.setAttribute("transform", `rotate(${norm}, 22, 22)`);
 
   if (state.compassBtn) {
     const isNorth = norm < BEARING_SNAP || norm > (360 - BEARING_SNAP);
     state.compassBtn.classList.toggle("compass-active", !isNorth);
     state.compassBtn.title = isNorth
       ? "Kompas – klik untuk putar peta ke Timur (90°)"
-      : `${bearingLabel(norm)} — klik lagi untuk lanjut`;
+      : `Kompas mengarah ke ${bearingLabel(norm)} — klik lagi untuk lanjut`;
   }
 }
 
