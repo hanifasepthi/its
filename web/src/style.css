@@ -208,6 +208,7 @@ body {
   width: 34px;
   height: 34px;
   display: block;
+  overflow: visible;
 }
 
 .compass-ring-bg {
@@ -222,6 +223,7 @@ body {
 }
 
 .compass-needle-group {
+  transform-box: fill-box;
   transform-origin: center;
   /* rotate() di-set via JS attribute */
 }

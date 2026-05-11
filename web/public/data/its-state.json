@@ -1,17 +1,18 @@
 {
     "updatedAt": 1762355000000,
     "source": "scala-controller",
-    "devices": [
-        {
+    "devices": {
+        "raspberry-its": {
             "id": "raspberry-its",
             "label": "Raspberry Pi 5 Controller",
             "status": "online",
             "lastSeen": 1762355000000,
+            "lastSeenText": "5 Mei 2026 22:03:20",
             "note": "controller aktif",
             "position": {
                 "lat": -7.280734,
                 "lng": 112.794963
             }
         }
-    ]
+    }
 }

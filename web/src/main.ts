@@ -28,6 +28,7 @@ type DeviceRecord = {
   label: string;
   status: DeviceStatus;
   lastSeen: number;
+  lastSeenText?: string;
   note?: string;
   cameraUrl?: string;
   position: { lat: number; lng: number };
@@ -38,7 +39,11 @@ type SnapshotDevice = Partial<Omit<DeviceRecord, "position" | "lastSeen">> & {
   position?: Partial<DeviceRecord["position"]> & { x?: number; y?: number };
 };
 
-type Snapshot = { updatedAt?: number; source?: string; devices?: SnapshotDevice[] };
+type Snapshot = {
+  updatedAt?: number;
+  source?: string;
+  devices?: SnapshotDevice[] | Record<string, SnapshotDevice>;
+};
 type AppConfig = { snapshotUrl?: string; refreshMs?: number };
 type BaseMapMode = "street" | "satellite";
 
@@ -88,6 +93,7 @@ const map = L.map(mapRoot, {
 const state = {
   config: DEFAULT_CONFIG,
   device: null as DeviceRecord | null,
+  devices: [] as DeviceRecord[],
   refreshTimer: 0,
   refreshBusy: false,
   hasCentered: false,
@@ -97,6 +103,7 @@ const state = {
   cameraPreview: null as HTMLDivElement | null,
   cameraButton: null as HTMLButtonElement | null,
   modeBtnLabel: null as HTMLSpanElement | null,
+  markers: new Map<string, L.Marker>(),
 };
 
 // ─── Tile layers ────────────────────────────────────────────────
@@ -143,7 +150,11 @@ function escapeHtml(v: string): string {
     .replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 function normalizeDevice(snapshot: Snapshot): DeviceRecord | null {
-  const raw = snapshot.devices?.[0];
+  const raw = Array.isArray(snapshot.devices)
+    ? snapshot.devices[0]
+    : snapshot.devices && typeof snapshot.devices === "object"
+      ? Object.values(snapshot.devices)[0]
+      : null;
   if (!raw) return null;
   const lat = typeof raw.position?.lat === "number" ? raw.position.lat
     : typeof raw.position?.y === "number" ? raw.position.y : null;
@@ -157,10 +168,24 @@ function normalizeDevice(snapshot: Snapshot): DeviceRecord | null {
     id: raw.id?.trim() || "raspberry-its",
     label: raw.label?.trim() || "Raspberry Pi 5 Controller",
     status, lastSeen,
+    lastSeenText: raw.lastSeenText?.trim() || undefined,
     note: raw.note?.trim() || undefined,
     cameraUrl: raw.cameraUrl?.trim() || undefined,
     position: { lat: clamp(lat, -90, 90), lng: clamp(lng, -180, 180) },
   };
+}
+
+function normalizeDevices(snapshot: Snapshot): DeviceRecord[] {
+  const rawDevices = snapshot.devices;
+  const entries = Array.isArray(rawDevices)
+    ? rawDevices.map((device, index) => [device.id?.trim() || `device-${index}`, device] as const)
+    : rawDevices && typeof rawDevices === "object"
+      ? Object.entries(rawDevices)
+      : [];
+
+  return entries
+    .map(([deviceId, device]) => normalizeDevice({ devices: [{ ...device, id: device.id?.trim() || deviceId }] }))
+    .filter((device): device is DeviceRecord => Boolean(device));
 }
 
 // ─── Marker ─────────────────────────────────────────────────────
@@ -174,7 +199,7 @@ function renderPopup(device: DeviceRecord): string {
       <div class="popup-title">${escapeHtml(device.label)}</div>
       <div class="popup-row"><span>ID</span><strong>${escapeHtml(device.id)}</strong></div>
       <div class="popup-row"><span>Status</span><strong>${escapeHtml(device.status)}</strong></div>
-      <div class="popup-row"><span>Last seen</span><strong>${formatTime(device.lastSeen)}</strong></div>
+      <div class="popup-row"><span>Last seen</span><strong>${escapeHtml(device.lastSeenText || formatTime(device.lastSeen))}</strong></div>
       <div class="popup-row"><span>Age</span><strong>${formatAge(device.lastSeen)}</strong></div>
       ${device.note ? `<div class="popup-note">${escapeHtml(device.note)}</div>` : ""}
     </div>`;
@@ -185,22 +210,33 @@ function ensureMarker(device: DeviceRecord): void {
     html: markerHtml(device.status),
     iconSize: [42, 54], iconAnchor: [21, 50], popupAnchor: [0, -42],
   });
-  if (!state.device || !map.hasLayer(streetLayer) && !map.hasLayer(satelliteLayer)) return;
-
-  const marker = (state as typeof state & { _marker?: L.Marker })._marker;
-  if (!marker) {
+  const existing = state.markers.get(device.id);
+  if (!existing) {
     const m = L.marker([device.position.lat, device.position.lng], { icon }).addTo(map);
     m.bindPopup(renderPopup(device), {
       closeButton: false, autoClose: true, closeOnClick: true,
       className: "raspi-popup", offset: L.point(0, -14),
     });
-    m.on("click", () => m.openPopup());
-    (state as typeof state & { _marker?: L.Marker })._marker = m;
+    m.on("click", () => {
+      state.device = device;
+      renderCameraTile();
+      m.openPopup();
+    });
+    state.markers.set(device.id, m);
     return;
   }
-  marker.setLatLng([device.position.lat, device.position.lng]);
-  marker.setIcon(icon);
-  marker.setPopupContent(renderPopup(device));
+  existing.setLatLng([device.position.lat, device.position.lng]);
+  existing.setIcon(icon);
+  existing.setPopupContent(renderPopup(device));
+}
+
+function removeMissingMarkers(activeIds: Set<string>): void {
+  for (const [deviceId, marker] of state.markers.entries()) {
+    if (!activeIds.has(deviceId)) {
+      map.removeLayer(marker);
+      state.markers.delete(deviceId);
+    }
+  }
 }
 
 // ─── Compass ────────────────────────────────────────────────────
@@ -231,17 +267,15 @@ function updateCompass(): void {
   if (!state.compassNeedle) return;
   const norm = normBearing(map.getBearing?.() ?? 0);
 
-  // Jarum merah selalu menunjuk ke arah utara sejati.
-  // Saat peta berputar norm derajat searah jarum jam,
-  // jarum harus berputar -norm (berlawanan) supaya tetap ke utara.
-  state.compassNeedle.setAttribute("transform", `rotate(${-norm}, 22, 22)`);
+  // Kompas mengikuti arah bearing peta saat ini.
+  state.compassNeedle.setAttribute("transform", `rotate(${norm}, 22, 22)`);
 
   if (state.compassBtn) {
     const isNorth = norm < BEARING_SNAP || norm > (360 - BEARING_SNAP);
     state.compassBtn.classList.toggle("compass-active", !isNorth);
     state.compassBtn.title = isNorth
       ? "Kompas – klik untuk putar peta ke Timur (90°)"
-      : `${bearingLabel(norm)} — klik lagi untuk lanjut`;
+      : `Kompas mengarah ke ${bearingLabel(norm)} — klik lagi untuk lanjut`;
   }
 }
 
@@ -449,19 +483,32 @@ async function refreshSnapshot(): Promise<void> {
         ? config.refreshMs : DEFAULT_CONFIG.refreshMs,
     };
     const snapshot = await fetchJson<Snapshot>(state.config.snapshotUrl);
-    const device = normalizeDevice(snapshot);
-    if (!device) throw new Error("Snapshot missing device position");
-    state.device = device;
-    ensureMarker(device);
+    const devices = normalizeDevices(snapshot);
+    if (!devices.length) throw new Error("Snapshot missing devices");
+
+    state.devices = devices;
+    const activeIds = new Set(devices.map((device) => device.id));
+    removeMissingMarkers(activeIds);
+
+    devices.forEach((device) => ensureMarker(device));
+
+    const selected = state.device && activeIds.has(state.device.id)
+      ? state.device
+      : devices[0];
+    state.device = selected;
     renderCameraTile();
-    if (!state.hasCentered) {
-      map.setView([device.position.lat, device.position.lng],
+
+    if (!state.hasCentered && selected) {
+      map.setView([selected.position.lat, selected.position.lng],
         map.getZoom() || DEFAULT_ZOOM, { animate: false });
       state.hasCentered = true;
     }
   } catch {
-    const m = (state as typeof state & { _marker?: L.Marker })._marker;
-    if (m) { map.removeLayer(m); (state as typeof state & { _marker?: L.Marker })._marker = undefined; }
+    for (const marker of state.markers.values()) {
+      map.removeLayer(marker);
+    }
+    state.markers.clear();
+    state.devices = [];
     state.device = null;
   } finally {
     state.refreshBusy = false;
