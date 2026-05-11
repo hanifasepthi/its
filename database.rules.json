@@ -1,6 +1,13 @@
 {
     "rules": {
         ".read": true,
-        ".write": false
+        ".write": false,
+        "devices": {
+            ".read": true,
+            "$deviceId": {
+                ".write": true,
+                ".validate": "newData.hasChildren(['id', 'status', 'lastSeen', 'position']) && (newData.child('status').val() == 'online' || newData.child('status').val() == 'offline' || newData.child('status').val() == 'degraded') && newData.child('lastSeen').isNumber() && newData.child('position/lat').isNumber() && newData.child('position/lng').isNumber() && newData.child('position/lat').val() >= -90 && newData.child('position/lat').val() <= 90 && newData.child('position/lng').val() >= -180 && newData.child('position/lng').val() <= 180"
+            }
+        }
     }
 }

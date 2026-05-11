@@ -1,7 +1,5 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-// Plugin rotasi peta — install dulu: npm install leaflet-rotate
-// Cukup import saja, plugin otomatis extend L.Map
 import "leaflet-rotate";
 import "./style.css";
 
@@ -53,11 +51,13 @@ const DEFAULT_CONFIG: Required<AppConfig> = {
   snapshotUrl: "./data/its-state.json",
   refreshMs: 5000,
 };
+
+// FIX: DEFAULT_CENTER sekarang hanya sebagai fallback awal sebelum snapshot dimuat.
+// Setelah snapshot dimuat, peta akan berpindah ke koordinat device pertama.
 const DEFAULT_CENTER: L.LatLngExpression = [-7.280734, 112.794963];
 const DEFAULT_ZOOM = 17;
 const OFFLINE_AFTER_MS = 60_000;
 
-// Tiap klik maju 90° searah jarum jam (N→E→S→W→N)
 const BEARING_STEP = 90;
 const BEARING_SNAP = 5;
 
@@ -74,18 +74,17 @@ if (!app) throw new Error("Missing #app element.");
 app.innerHTML = `<div id="map" class="map" aria-label="Raspberry Pi realtime map"></div>`;
 const mapRoot = requiredElement<HTMLDivElement>("#map", "map");
 
-// ─── Map init (dengan rotate enabled) ───────────────────────────
+// ─── Map init ───────────────────────────────────────────────────
 
 const map = L.map(mapRoot, {
   center: DEFAULT_CENTER,
   zoom: DEFAULT_ZOOM,
   zoomControl: false,
   preferCanvas: true,
-  // leaflet-rotate options
-  rotate: true,          // aktifkan rotasi
-  bearing: 0,            // mulai dari utara
-  touchRotate: true,     // dua jari untuk rotasi di mobile
-  rotateControl: false,  // matikan kontrol default plugin (kita punya sendiri)
+  rotate: true,
+  bearing: 0,
+  touchRotate: true,
+  rotateControl: false,
 });
 
 // ─── State ──────────────────────────────────────────────────────
@@ -104,6 +103,7 @@ const state = {
   cameraButton: null as HTMLButtonElement | null,
   modeBtnLabel: null as HTMLSpanElement | null,
   markers: new Map<string, L.Marker>(),
+  offlineReported: new Set<string>(),
 };
 
 // ─── Tile layers ────────────────────────────────────────────────
@@ -115,7 +115,7 @@ const streetLayer = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 
 const satelliteLayer = L.tileLayer(
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-  { maxZoom: 20, attribution: "" }, // kosongkan attribution Esri
+  { maxZoom: 20, attribution: "" },
 );
 
 if (map.attributionControl) {
@@ -149,13 +149,10 @@ function escapeHtml(v: string): string {
   return v.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
-function normalizeDevice(snapshot: Snapshot): DeviceRecord | null {
-  const raw = Array.isArray(snapshot.devices)
-    ? snapshot.devices[0]
-    : snapshot.devices && typeof snapshot.devices === "object"
-      ? Object.values(snapshot.devices)[0]
-      : null;
-  if (!raw) return null;
+
+// FIX: normalizeOneDevice — parser untuk satu raw device object langsung,
+// tidak membungkus ulang dalam Snapshot sehingga tidak ada double-wrapping.
+function normalizeOneDevice(raw: SnapshotDevice): DeviceRecord | null {
   const lat = typeof raw.position?.lat === "number" ? raw.position.lat
     : typeof raw.position?.y === "number" ? raw.position.y : null;
   const lng = typeof raw.position?.lng === "number" ? raw.position.lng
@@ -175,17 +172,40 @@ function normalizeDevice(snapshot: Snapshot): DeviceRecord | null {
   };
 }
 
+// FIX: normalizeDevices langsung iterasi tiap entry dan panggil normalizeOneDevice.
+// Juga handle format Firebase lama di mana node device masih berisi nested
+// {devices:[...], source, updatedAt} — unwrap otomatis jika position tidak ada
+// tapi ada field "devices" di dalamnya.
 function normalizeDevices(snapshot: Snapshot): DeviceRecord[] {
   const rawDevices = snapshot.devices;
-  const entries = Array.isArray(rawDevices)
-    ? rawDevices.map((device, index) => [device.id?.trim() || `device-${index}`, device] as const)
-    : rawDevices && typeof rawDevices === "object"
-      ? Object.entries(rawDevices)
-      : [];
 
-  return entries
-    .map(([deviceId, device]) => normalizeDevice({ devices: [{ ...device, id: device.id?.trim() || deviceId }] }))
-    .filter((device): device is DeviceRecord => Boolean(device));
+  if (Array.isArray(rawDevices)) {
+    return rawDevices
+      .flatMap((raw) => {
+        // Handle format lama: device node yang masih berisi nested snapshot wrapper
+        if (!raw.position && Array.isArray((raw as Record<string, unknown>).devices)) {
+          const nested = (raw as Record<string, unknown>).devices as SnapshotDevice[];
+          return nested.map((d) => normalizeOneDevice(d));
+        }
+        return [normalizeOneDevice(raw)];
+      })
+      .filter((d): d is DeviceRecord => d !== null);
+  }
+
+  if (rawDevices && typeof rawDevices === "object") {
+    return Object.entries(rawDevices)
+      .flatMap(([key, raw]) => {
+        // Handle format Firebase lama: raspberry-its → {devices:[...], source, updatedAt}
+        if (!raw.position && Array.isArray((raw as Record<string, unknown>).devices)) {
+          const nested = (raw as Record<string, unknown>).devices as SnapshotDevice[];
+          return nested.map((d) => normalizeOneDevice({ ...d, id: d.id?.trim() || key }));
+        }
+        return [normalizeOneDevice({ ...raw, id: raw.id?.trim() || key })];
+      })
+      .filter((d): d is DeviceRecord => d !== null);
+  }
+
+  return [];
 }
 
 // ─── Marker ─────────────────────────────────────────────────────
@@ -201,6 +221,8 @@ function renderPopup(device: DeviceRecord): string {
       <div class="popup-row"><span>Status</span><strong>${escapeHtml(device.status)}</strong></div>
       <div class="popup-row"><span>Last seen</span><strong>${escapeHtml(device.lastSeenText || formatTime(device.lastSeen))}</strong></div>
       <div class="popup-row"><span>Age</span><strong>${formatAge(device.lastSeen)}</strong></div>
+      <div class="popup-row"><span>Lat</span><strong>${device.position.lat.toFixed(6)}</strong></div>
+      <div class="popup-row"><span>Lng</span><strong>${device.position.lng.toFixed(6)}</strong></div>
       ${device.note ? `<div class="popup-note">${escapeHtml(device.note)}</div>` : ""}
     </div>`;
 }
@@ -225,6 +247,7 @@ function ensureMarker(device: DeviceRecord): void {
     state.markers.set(device.id, m);
     return;
   }
+  // FIX: update posisi marker setiap refresh jika koordinat berubah
   existing.setLatLng([device.position.lat, device.position.lng]);
   existing.setIcon(icon);
   existing.setPopupContent(renderPopup(device));
@@ -241,11 +264,6 @@ function removeMissingMarkers(activeIds: Set<string>): void {
 
 // ─── Compass ────────────────────────────────────────────────────
 
-/**
- * Sinkronkan jarum SVG dengan bearing peta saat ini.
- * leaflet-rotate fire event "rotate" setiap kali bearing berubah.
- */
-// Label mata angin berdasarkan bearing
 function bearingLabel(deg: number): string {
   const n = ((deg % 360) + 360) % 360;
   if (n < 22.5 || n >= 337.5) return "Utara (N)";
@@ -258,7 +276,6 @@ function bearingLabel(deg: number): string {
   return "Barat Laut (NW)";
 }
 
-// Normalisasi bearing ke 0..359 (leaflet-rotate kadang return negatif)
 function normBearing(raw: number): number {
   return ((raw % 360) + 360) % 360;
 }
@@ -266,10 +283,7 @@ function normBearing(raw: number): number {
 function updateCompass(): void {
   if (!state.compassNeedle) return;
   const norm = normBearing(map.getBearing?.() ?? 0);
-
-  // Kompas mengikuti arah bearing peta saat ini.
   state.compassNeedle.setAttribute("transform", `rotate(${norm}, 22, 22)`);
-
   if (state.compassBtn) {
     const isNorth = norm < BEARING_SNAP || norm > (360 - BEARING_SNAP);
     state.compassBtn.classList.toggle("compass-active", !isNorth);
@@ -279,22 +293,10 @@ function updateCompass(): void {
   }
 }
 
-/**
- * Tiap klik maju tepat 90° searah jarum jam:
- *   N(0°) → E(90°) → S(180°) → W(270°) → N(0°)
- *
- * Algoritma: snap bearing saat ini ke kelipatan 90° terdekat,
- * lalu tambah 90°. Ini memastikan tidak ada posisi nanggung
- * walau user sempat putar manual.
- */
 function handleCompassClick(): void {
   const norm = normBearing(map.getBearing?.() ?? 0);
-
-  // Kelipatan 90° terdekat dari posisi saat ini
   const snapped = Math.round(norm / BEARING_STEP) * BEARING_STEP;
-  // Maju satu step, wrap di 360
   const nextBearing = (snapped + BEARING_STEP) % 360;
-
   map.setBearing(nextBearing);
   map.closePopup();
 }
@@ -328,8 +330,15 @@ function renderCameraTile(): void {
 
 // ─── Map actions ────────────────────────────────────────────────
 
+// FIX: goHome sekarang fly ke posisi device pertama yang diketahui,
+// bukan ke DEFAULT_CENTER yang hardcoded.
 function goHome(): void {
-  map.setView(DEFAULT_CENTER, DEFAULT_ZOOM, { animate: true });
+  const primary = state.devices[0] ?? state.device;
+  if (primary) {
+    map.setView([primary.position.lat, primary.position.lng], DEFAULT_ZOOM, { animate: true });
+  } else {
+    map.setView(DEFAULT_CENTER, DEFAULT_ZOOM, { animate: true });
+  }
   map.setBearing(0);
 }
 
@@ -352,7 +361,7 @@ function toggleBaseMap(): void {
 
 function openCameraPreview(): void {
   const device = state.device;
-  const anchor = (state as typeof state & { _marker?: L.Marker })._marker?.getLatLng() ?? map.getCenter();
+  const anchor = map.getCenter();
   const content = device?.cameraUrl
     ? `<div class="camera-card">
         <img class="camera-image" src="${escapeHtml(device.cameraUrl)}" alt="Camera preview">
@@ -368,25 +377,29 @@ function openCameraPreview(): void {
 
 // ─── Toolbar Control ─────────────────────────────────────────────
 
+function firebaseDeviceUrl(deviceId: string): string {
+  return FIREBASE_DEVICES_URL.replace(/\.json$/, `/${encodeURIComponent(deviceId)}.json`);
+}
+
+async function patchFirebaseDevice(deviceId: string, payload: Record<string, unknown>): Promise<void> {
+  const res = await fetch(firebaseDeviceUrl(deviceId), {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`Firebase PATCH ${deviceId} failed: HTTP ${res.status}`);
+}
+
 function makeCompassSvg(): string {
-  // Jarum: segitiga merah (utara) lebih panjang dan lancip dari putih (selatan)
-  // Ini memastikan orientasi jelas di semua sudut (0/90/180/270)
   return `<svg class="compass-svg" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
-    <!-- Ring luar -->
     <circle cx="22" cy="22" r="19" class="compass-ring-bg"/>
-    <!-- Tanda N kecil di atas ring -->
     <text x="22" y="8" text-anchor="middle" font-size="5" font-weight="700"
           font-family="sans-serif" fill="#D92B2B">N</text>
-    <!-- Arrow kiri kanan -->
     <path d="M4 22 L8.5 19 L8.5 25 Z" class="compass-arrow-left"/>
     <path d="M40 22 L35.5 19 L35.5 25 Z" class="compass-arrow-right"/>
-    <!-- Jarum: grup yang dirotasi JS -->
     <g class="compass-needle-group">
-      <!-- Utara: merah, runcing ke atas, lebih panjang -->
       <polygon points="22,5 19.5,23 24.5,23" fill="#D92B2B"/>
-      <!-- Selatan: abu, lebih pendek dan tumpul -->
       <polygon points="22,39 19.5,23 24.5,23" fill="#B0B0B0"/>
-      <!-- Titik tengah -->
       <circle cx="22" cy="22" r="3" fill="#fff" stroke="#999" stroke-width="0.8"/>
     </g>
   </svg>`;
@@ -411,7 +424,7 @@ const BottomRightControl = L.Control.extend({
                 stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
         </svg>
       </button>
-      <button type="button" class="toolbar-btn" data-action="home" title="Kembali ke posisi awal">
+      <button type="button" class="toolbar-btn" data-action="home" title="Kembali ke posisi device">
         <svg viewBox="0 0 20 20" fill="none" width="16" height="16">
           <path d="M3 9.5L10 3l7 6.5V17a1 1 0 01-1 1H5a1 1 0 01-1-1V9.5z"
                 stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
@@ -459,54 +472,118 @@ const BottomRightControl = L.Control.extend({
 
 new BottomRightControl().addTo(map);
 
-// Update jarum kompas setiap kali bearing peta berubah
-// leaflet-rotate menambahkan event "rotate"
 map.on("rotate", updateCompass);
-map.on("move zoom", updateCompass); // fallback
+map.on("move zoom", updateCompass);
 
 // ─── Fetch & refresh ────────────────────────────────────────────
 
+// Firebase RTDB — dibaca langsung sebagai fallback jika file lokal tidak tersedia
+const FIREBASE_DEVICES_URL =
+  "https://itstelkom-default-rtdb.asia-southeast1.firebasedatabase.app/devices.json";
+
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) throw new Error(`Failed to load ${url}: ${res.status}`);
-  return (await res.json()) as T;
+  if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`);
+  const text = await res.text();
+  // Guard: pastikan response adalah JSON, bukan HTML 404 page
+  if (text.trimStart().startsWith("<")) {
+    throw new Error(`Expected JSON but got HTML from ${url}`);
+  }
+  return JSON.parse(text) as T;
+}
+
+/**
+ * Baca Firebase RTDB: GET /devices.json
+ * Hasilnya Record<id, DeviceRecord|LegacyWrapper> dibungkus sebagai Snapshot.
+ */
+async function fetchFirebaseDevices(): Promise<Snapshot> {
+  const res = await fetch(FIREBASE_DEVICES_URL, { cache: "no-store" });
+  if (!res.ok) throw new Error(`Firebase HTTP ${res.status}`);
+  const data = await res.json() as Record<string, unknown> | null;
+  if (!data || typeof data !== "object") throw new Error("Firebase: empty/null");
+  return { devices: data as Record<string, SnapshotDevice>, source: "firebase" };
+}
+
+function applyDevices(devices: DeviceRecord[]): void {
+  state.devices = devices;
+  const activeIds = new Set(devices.map((d) => d.id));
+  removeMissingMarkers(activeIds);
+  devices.forEach((d) => ensureMarker(d));
+  const selected = state.device && activeIds.has(state.device.id)
+    ? devices.find((d) => d.id === state.device!.id) ?? devices[0]
+    : devices[0];
+  state.device = selected;
+  renderCameraTile();
+  if (!state.hasCentered) {
+    map.setView([selected.position.lat, selected.position.lng],
+      map.getZoom() || DEFAULT_ZOOM, { animate: false });
+    state.hasCentered = true;
+  }
+}
+
+function reportOfflineDevices(devices: DeviceRecord[]): void {
+  const staleOffline = devices.filter((device) =>
+    device.status === "offline"
+    && device.lastSeen > 0
+    && Date.now() - device.lastSeen > OFFLINE_AFTER_MS
+    && !state.offlineReported.has(device.id),
+  );
+
+  staleOffline.forEach((device) => {
+    state.offlineReported.add(device.id);
+    void patchFirebaseDevice(device.id, {
+      status: "offline",
+      note: "controller tidak mengirim heartbeat; status diset offline oleh dashboard",
+    }).catch((err) => {
+      state.offlineReported.delete(device.id);
+      console.warn("[ITS] Failed to mark device offline:", err);
+    });
+  });
 }
 
 async function refreshSnapshot(): Promise<void> {
   if (state.refreshBusy) return;
   state.refreshBusy = true;
   try {
-    const config = await fetchJson<AppConfig>("./data/its-config.json");
-    state.config = {
-      snapshotUrl: config.snapshotUrl?.trim() || DEFAULT_CONFIG.snapshotUrl,
-      refreshMs: config.refreshMs && config.refreshMs > 0
-        ? config.refreshMs : DEFAULT_CONFIG.refreshMs,
-    };
-    const snapshot = await fetchJson<Snapshot>(state.config.snapshotUrl);
-    const devices = normalizeDevices(snapshot);
-    if (!devices.length) throw new Error("Snapshot missing devices");
-
-    state.devices = devices;
-    const activeIds = new Set(devices.map((device) => device.id));
-    removeMissingMarkers(activeIds);
-
-    devices.forEach((device) => ensureMarker(device));
-
-    const selected = state.device && activeIds.has(state.device.id)
-      ? state.device
-      : devices[0];
-    state.device = selected;
-    renderCameraTile();
-
-    if (!state.hasCentered && selected) {
-      map.setView([selected.position.lat, selected.position.lng],
-        map.getZoom() || DEFAULT_ZOOM, { animate: false });
-      state.hasCentered = true;
+    // Baca config — jangan crash jika tidak ada (return HTML 404)
+    try {
+      const config = await fetchJson<AppConfig>("./data/its-config.json");
+      state.config = {
+        snapshotUrl: config.snapshotUrl?.trim() || DEFAULT_CONFIG.snapshotUrl,
+        refreshMs: config.refreshMs && config.refreshMs > 0
+          ? config.refreshMs : DEFAULT_CONFIG.refreshMs,
+      };
+    } catch {
+      state.config = DEFAULT_CONFIG;
     }
-  } catch {
-    for (const marker of state.markers.values()) {
-      map.removeLayer(marker);
+
+    // Coba snapshot lokal → fallback Firebase
+    let snapshot: Snapshot | null = null;
+    try {
+      snapshot = await fetchJson<Snapshot>(state.config.snapshotUrl);
+    } catch (localErr) {
+      console.warn("[ITS] Local snapshot failed, trying Firebase:", localErr);
+      snapshot = await fetchFirebaseDevices();
     }
+
+    let devices = normalizeDevices(snapshot);
+
+    // Jika lokal ada tapi kosong, coba Firebase
+    if (!devices.length) {
+      console.warn("[ITS] Local snapshot empty, trying Firebase...");
+      try {
+        const fbSnapshot = await fetchFirebaseDevices();
+        devices = normalizeDevices(fbSnapshot);
+      } catch { /* Firebase juga gagal, biarkan devices tetap kosong */ }
+    }
+
+    if (!devices.length) throw new Error("No valid devices found (local & Firebase)");
+
+    applyDevices(devices);
+    reportOfflineDevices(devices);
+  } catch (err) {
+    console.warn("[ITS] Snapshot error:", err);
+    for (const marker of state.markers.values()) map.removeLayer(marker);
     state.markers.clear();
     state.devices = [];
     state.device = null;

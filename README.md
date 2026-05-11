@@ -42,8 +42,21 @@ Kalau ingin mengganti device ID atau koordinat, atur lewat environment variable 
 ITS_DEVICE_ID=raspberry-its
 ITS_DEVICE_LABEL="Raspberry Pi 5 Controller"
 ITS_STATUS=online
+```
+
+Secara default controller mengambil `lat/lng` dari IP geolocation perangkat yang menjalankan `Main.scala`, lalu mengirimkannya ke Firebase. Frontend hanya membaca posisi dari Firebase untuk marker. Kalau ingin override manual, baru set:
+
+```bash
+ITS_LOCATION_MODE=manual
 ITS_LATITUDE=-7.280734
 ITS_LONGITUDE=112.794963
+```
+
+Provider IP geolocation bisa diganti tanpa edit kode:
+
+```bash
+ITS_IP_GEOLOCATION_URLS="https://ipapi.co/json/,https://ipwho.is/"
+ITS_GEO_REFRESH_SECONDS=15
 ```
 
 Jika database membutuhkan aturan akses khusus, sesuaikan Firebase Realtime Database rules agar path tersebut bisa dibaca dan ditulis oleh controller.
