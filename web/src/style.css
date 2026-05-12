@@ -187,6 +187,8 @@ body {
   justify-content: center;
   transition: box-shadow 0.15s ease, filter 0.15s ease;
   margin-bottom: 2px;
+  overflow: visible;
+  position: relative;
 }
 
 .toolbar-compass:hover {
@@ -205,23 +207,16 @@ body {
 
 /* SVG kompas */
 .compass-svg {
-  width: 44px;
-  height: 44px;
+  width: 42px;
+  height: 42px;
   display: block;
-  overflow: visible;
+  overflow: hidden;
 }
 
 .compass-ring-bg {
   fill: #f7f8fa;
   stroke: #d7dce2;
   stroke-width: 1;
-}
-
-.compass-side-arc {
-  fill: none;
-  stroke: #7f8793;
-  stroke-width: 2;
-  stroke-linecap: round;
 }
 
 .compass-arrow-left,
@@ -303,6 +298,8 @@ body {
   align-items: center;
   justify-content: center;
   transition: background 0.1s, box-shadow 0.1s;
+  overflow: visible;
+  position: relative;
 }
 
 .toolbar-btn:hover {
@@ -355,7 +352,7 @@ body {
   border-radius: 8px;
   background: #111827;
   cursor: pointer;
-  overflow: hidden;
+  overflow: visible;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -363,6 +360,39 @@ body {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
   position: relative;
   transition: opacity 0.15s;
+}
+
+.toolbar-tip {
+  position: absolute;
+  right: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 20;
+  width: max-content;
+  max-width: 210px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(17, 24, 39, 0.92);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: left;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s ease, visibility 0.12s ease;
+  white-space: normal;
+}
+
+.toolbar-compass:hover .toolbar-tip,
+.toolbar-compass:focus-visible .toolbar-tip,
+.toolbar-btn:hover .toolbar-tip,
+.toolbar-btn:focus-visible .toolbar-tip,
+.toolbar-camera:hover .toolbar-tip,
+.toolbar-camera:focus-visible .toolbar-tip {
+  opacity: 1;
+  visibility: visible;
 }
 
 .toolbar-camera:hover {

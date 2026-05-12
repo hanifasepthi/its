@@ -283,10 +283,17 @@ function normBearing(raw: number): number {
 function updateCompass(): void {
   if (!state.compassNeedle) return;
   const norm = normBearing(map.getBearing?.() ?? 0);
-  state.compassNeedle.setAttribute("transform", `rotate(${norm}, 26, 26)`);
+  state.compassNeedle.setAttribute("transform", `rotate(${norm}, 24, 24)`);
   if (state.compassBtn) {
     const isNorth = norm < BEARING_SNAP || norm > (360 - BEARING_SNAP);
     state.compassBtn.classList.toggle("compass-active", !isNorth);
+    const tip = state.compassBtn.querySelector<HTMLSpanElement>(".toolbar-tip");
+    if (tip) {
+      tip.textContent = isNorth
+        ? "Kompas - klik untuk putar peta ke Timur (90 deg)"
+        : `Kompas mengarah ke ${bearingLabel(norm)} - klik lagi untuk lanjut`;
+    }
+    window.setTimeout(() => state.compassBtn?.removeAttribute("title"), 0);
     state.compassBtn.title = isNorth
       ? "Kompas – klik untuk putar peta ke Timur (90°)"
       : `Kompas mengarah ke ${bearingLabel(norm)} — klik lagi untuk lanjut`;
@@ -391,21 +398,19 @@ async function patchFirebaseDevice(deviceId: string, payload: Record<string, unk
 }
 
 function makeCompassSvg(): string {
-  return `<svg class="compass-svg" viewBox="0 0 52 52" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    <circle cx="26" cy="26" r="23" class="compass-ring-bg"/>
-    <path d="M9 31 C5.8 25.4 6.9 18.4 11.8 13.7" class="compass-side-arc"/>
-    <path d="M43 31 C46.2 25.4 45.1 18.4 40.2 13.7" class="compass-side-arc"/>
-    <path d="M8.6 31.3 L5.9 25.9 L12.2 27.3 Z" class="compass-arrow-left"/>
-    <path d="M43.4 31.3 L46.1 25.9 L39.8 27.3 Z" class="compass-arrow-right"/>
-    <text x="26" y="10" text-anchor="middle" class="compass-label compass-label-n">N</text>
-    <text x="26" y="47" text-anchor="middle" class="compass-label">S</text>
-    <text x="8.2" y="28.5" text-anchor="middle" class="compass-label">W</text>
-    <text x="43.8" y="28.5" text-anchor="middle" class="compass-label">E</text>
+  return `<svg class="compass-svg" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <circle cx="24" cy="24" r="21.5" class="compass-ring-bg"/>
+    <path d="M11.2 24 L15.2 20.8 L15.2 27.2 Z" class="compass-arrow-left"/>
+    <path d="M36.8 24 L32.8 20.8 L32.8 27.2 Z" class="compass-arrow-right"/>
+    <text x="24" y="9.8" text-anchor="middle" class="compass-label compass-label-n">N</text>
+    <text x="24" y="42.4" text-anchor="middle" class="compass-label">S</text>
+    <text x="9" y="26.4" text-anchor="middle" class="compass-label">W</text>
+    <text x="39" y="26.4" text-anchor="middle" class="compass-label">E</text>
     <g class="compass-needle-group">
-      <polygon points="26,15 31,26 26,37 21,26" class="compass-needle-shadow"/>
-      <polygon points="26,15 31,26 26,26 21,26" class="compass-needle-north"/>
-      <polygon points="26,37 31,26 26,26 21,26" class="compass-needle-south"/>
-      <circle cx="26" cy="26" r="2.4" class="compass-needle-cap"/>
+      <polygon points="24,13.5 28.4,24 24,34.5 19.6,24" class="compass-needle-shadow"/>
+      <polygon points="24,13.5 28.4,24 24,24 19.6,24" class="compass-needle-north"/>
+      <polygon points="24,34.5 28.4,24 24,24 19.6,24" class="compass-needle-south"/>
+      <circle cx="24" cy="24" r="2.2" class="compass-needle-cap"/>
     </g>
   </svg>`;
 }
@@ -446,6 +451,28 @@ const BottomRightControl = L.Control.extend({
         <span class="camera-tile-label">全景</span>
       </button>
     `;
+
+    const tooltipLabels: Record<string, string> = {
+      compass: "Kompas - klik untuk putar peta ke Timur (90 deg)",
+      mode: "Ganti tampilan peta",
+      locate: "Lokasi saya",
+      home: "Kembali ke posisi device",
+      "zoom-in": "Zoom in",
+      "zoom-out": "Zoom out",
+      camera: "Camera preview",
+    };
+    container.querySelectorAll<HTMLButtonElement>("button[data-action]").forEach((btn) => {
+      const action = btn.dataset.action || "";
+      const label = tooltipLabels[action] || btn.getAttribute("title") || btn.getAttribute("aria-label") || "";
+      btn.removeAttribute("title");
+      if (!btn.getAttribute("aria-label") && label) btn.setAttribute("aria-label", label);
+      if (!btn.querySelector(".toolbar-tip") && label) {
+        const tip = document.createElement("span");
+        tip.className = "toolbar-tip";
+        tip.textContent = label;
+        btn.appendChild(tip);
+      }
+    });
 
     L.DomEvent.disableClickPropagation(container);
     L.DomEvent.disableScrollPropagation(container);
