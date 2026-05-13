@@ -28,8 +28,8 @@ object ItsController {
   private val status              = env("ITS_STATUS",       "online")
   private val note                = env("ITS_NOTE",         "controller aktif")
 
-  private val fallbackLatitude   = envDouble("ITS_FALLBACK_LATITUDE",  -7.280734)
-  private val fallbackLongitude  = envDouble("ITS_FALLBACK_LONGITUDE", 112.794963)
+  private val fallbackLatitude   = envDouble("ITS_FALLBACK_LATITUDE",  0.0)
+  private val fallbackLongitude  = envDouble("ITS_FALLBACK_LONGITUDE", 0.0)
   private val explicitLatitude   = envDoubleOpt("ITS_LATITUDE")
   private val explicitLongitude  = envDoubleOpt("ITS_LONGITUDE")
   private val locationMode       = env("ITS_LOCATION_MODE", "ip").toLowerCase(Locale.ROOT)
@@ -152,6 +152,7 @@ object ItsController {
          |  "lastSeen": $lastSeen,
          |  "lastSeenText": "${escapeJson(lastSeenText)}",
          |  "note": "${escapeJson(note)}",
+         |  "roadName": "${escapeJson(location.label)}",
          |  "locationSource": "${escapeJson(location.source)}",
          |  "locationLabel": "${escapeJson(location.label)}",
          |  "locationAccuracyM": ${location.accuracyM},
@@ -292,6 +293,7 @@ object ItsController {
          |  "lastSeen": $lastSeen,
          |  "lastSeenText": "${escapeJson(lastSeenText)}",
          |  "note": "${escapeJson(note)}; controller berhenti",
+         |  "roadName": "${escapeJson(location.label)}",
          |  "locationSource": "${escapeJson(location.source)}",
          |  "locationLabel": "${escapeJson(location.label)}",
          |  "locationAccuracyM": ${location.accuracyM},
@@ -305,9 +307,9 @@ object ItsController {
   }
 
   private def currentLocation(): GeoLocation = {
-    manualLocation()
-      .orElse(ipGeolocation())
+    val baseLocation = manualLocation()
       .orElse(firebaseLocation())
+      .orElse(ipGeolocation())
       .getOrElse(GeoLocation(
         fallbackLatitude,
         fallbackLongitude,
@@ -315,6 +317,8 @@ object ItsController {
         "fallback coordinate",
         50_000
       ))
+
+    snapToRoad(baseLocation).getOrElse(baseLocation)
   }
 
   private def manualLocation(): Option[GeoLocation] = {
@@ -416,6 +420,79 @@ object ItsController {
       lng <- extractNumber(json, "lng")
       if lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
     } yield GeoLocation(lat, lng, "firebase-cache", "last Firebase position", 50_000)
+  }
+
+  private def snapToRoad(location: GeoLocation): Option[GeoLocation] = {
+    if (location.lat == 0.0 && location.lng == 0.0) return Some(location)
+
+    val nearestUrl = s"https://router.project-osrm.org/nearest/v1/driving/${location.lng},${location.lat}?number=1"
+    try {
+      val request = HttpRequest
+        .newBuilder(URI.create(nearestUrl))
+        .header("Accept", "application/json")
+        .header("User-Agent", "its-maps-controller/1.0")
+        .GET()
+        .build()
+      val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+      if (response.statusCode() < 200 || response.statusCode() >= 300) return Some(location)
+
+      val body = response.body()
+      extractOsrmWaypoint(body)
+        .map { case (snappedLng, snappedLat, osrmName) =>
+          val roadName = reverseRoadName(snappedLat, snappedLng)
+            .orElse(Some(osrmName).filter(_.nonEmpty))
+            .orElse(Some(location.label))
+            .getOrElse(location.label)
+          GeoLocation(
+            snappedLat,
+            snappedLng,
+            "road-snapped",
+            roadName,
+            math.min(location.accuracyM, 50)
+          )
+        }
+        .orElse(Some(location))
+    } catch {
+      case _: Exception => Some(location)
+    }
+  }
+
+  private def extractOsrmWaypoint(json: String): Option[(Double, Double, String)] = {
+    val locationPattern = """(?s)"location"\s*:\s*\[\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\]""".r
+    val namePattern = """(?s)"name"\s*:\s*"([^"]*)""".r
+    for {
+      locationMatch <- locationPattern.findFirstMatchIn(json)
+    } yield {
+      val lng = locationMatch.group(1).toDouble
+      val lat = locationMatch.group(2).toDouble
+      val name = namePattern.findFirstMatchIn(json).map(m => unescapeJsonString(m.group(1))).getOrElse("")
+      (lng, lat, name)
+    }
+  }
+
+  private def reverseRoadName(lat: Double, lng: Double): Option[String] = {
+    val reverseUrl = s"https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=$lat&lon=$lng&zoom=18&addressdetails=1"
+    try {
+      val request = HttpRequest
+        .newBuilder(URI.create(reverseUrl))
+        .header("Accept", "application/json")
+        .header("User-Agent", "its-maps-controller/1.0")
+        .GET()
+        .build()
+      val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+      if (response.statusCode() < 200 || response.statusCode() >= 300) return None
+
+      val body = response.body()
+      extractString(body, "road")
+        .orElse(extractString(body, "pedestrian"))
+        .orElse(extractString(body, "service"))
+        .orElse(extractString(body, "residential"))
+        .orElse(extractString(body, "footway"))
+        .orElse(extractString(body, "path"))
+        .orElse(extractString(body, "display_name").flatMap(_.split(",").headOption.map(_.trim)))
+    } catch {
+      case _: Exception => None
+    }
   }
 
   private def env(name: String, fallback: String): String = {
