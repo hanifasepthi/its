@@ -1,0 +1,20 @@
+{
+  "name": "scala-cli",
+  "argv": [
+    "C:\\Users\\asus\\public\\scala-cli.exe",
+    "bsp",
+    "--json-options",
+    "C:\\Users\\asus\\public\\its-maps\\controller\\.scala-build\\ide-options-v2.json",
+    "--json-launcher-options",
+    "C:\\Users\\asus\\public\\its-maps\\controller\\.scala-build\\ide-launcher-options.json",
+    "--envs-file",
+    "C:\\Users\\asus\\public\\its-maps\\controller\\.scala-build\\ide-envs.json",
+    "C:\\Users\\asus\\public\\its-maps\\controller\\Main.scala"
+  ],
+  "version": "1.12.1",
+  "bspVersion": "2.1.1",
+  "languages": [
+    "scala",
+    "java"
+  ]
+}

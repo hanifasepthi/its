@@ -1,6 +1,7 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet-rotate";
+import "maplibre-gl/dist/maplibre-gl.css";
 import "./style.css";
 
 // ─── Type augmentation untuk leaflet-rotate ─────────────────────
@@ -29,6 +30,11 @@ type DeviceRecord = {
   lastSeenText?: string;
   note?: string;
   cameraUrl?: string;
+  roadName?: string;
+  roadHint?: string;
+  trafficColor?: "red" | "yellow" | "green";
+  trafficDuration?: number;
+  vehicleCount?: number;
   position: { lat: number; lng: number };
 };
 
@@ -43,7 +49,31 @@ type Snapshot = {
   devices?: SnapshotDevice[] | Record<string, SnapshotDevice>;
 };
 type AppConfig = { snapshotUrl?: string; refreshMs?: number };
-type BaseMapMode = "street" | "satellite";
+type BaseMapMode = "street" | "3d" | "satellite";
+type TrafficColor = "red" | "yellow" | "green";
+type TrafficState = {
+  color: TrafficColor;
+  duration: number;
+  vehicleCount: number;
+  roadName: string;
+  recommendation: string;
+  updatedAt: number;
+};
+
+type PoiKind = "hospital" | "mall" | "campus" | "parking" | "park";
+
+type PoiRecord = {
+  id: string;
+  kind: PoiKind;
+  title: string;
+  description: string;
+  address: string;
+  imageUrl: string;
+  rating: string;
+  icon: string;
+  lat: number;
+  lng: number;
+};
 
 // ─── Constants ──────────────────────────────────────────────────
 
@@ -52,14 +82,16 @@ const DEFAULT_CONFIG: Required<AppConfig> = {
   refreshMs: 5000,
 };
 
-// FIX: DEFAULT_CENTER sekarang hanya sebagai fallback awal sebelum snapshot dimuat.
-// Setelah snapshot dimuat, peta akan berpindah ke koordinat device pertama.
-const DEFAULT_CENTER: L.LatLngExpression = [-7.280734, 112.794963];
+// DEFAULT_CENTER — fallback jika tidak ada device. Akan di-override saat snapshot dimuat.
+// User harus set ITS_LATITUDE & ITS_LONGITUDE di env var controller untuk lokasi yang tepat.
+const DEFAULT_CENTER: L.LatLngExpression = [0, 0]; // Neutral; peta akan auto-pan ke marker pertama
 const DEFAULT_ZOOM = 17;
 const OFFLINE_AFTER_MS = 60_000;
 
 const BEARING_STEP = 90;
 const BEARING_SNAP = 5;
+const MAPLIBRE_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
+const MAPLIBRE_3D_PITCH = 60;
 
 // ─── DOM bootstrap ──────────────────────────────────────────────
 
@@ -103,7 +135,18 @@ const state = {
   cameraButton: null as HTMLButtonElement | null,
   modeBtnLabel: null as HTMLSpanElement | null,
   markers: new Map<string, L.Marker>(),
+  poiMarkers: new Map<string, L.Marker>(),
+  poiData: new Map<string, PoiRecord>(),
+  trafficById: new Map<string, TrafficState>(),
+  roadNameById: new Map<string, string>(),
+  maplibreMap: null as any,
+  maplibreContainer: null as HTMLDivElement | null,
+  maplibreSyncing: false,
+  activeModalDeviceId: null as string | null,
+  activeModalPoiId: null as string | null,
+  trafficRefreshTimer: 0,
   offlineReported: new Set<string>(),
+  overpassLayer: null as L.LayerGroup | null,
 };
 
 // ─── Tile layers ────────────────────────────────────────────────
@@ -121,6 +164,318 @@ const satelliteLayer = L.tileLayer(
 if (map.attributionControl) {
   try { map.attributionControl.setPrefix("ITS Maps"); } catch { /* ignore */ }
 }
+
+// Add Overpass vector layer for clickable features (kept separate from POI markers)
+state.overpassLayer = L.layerGroup().addTo(map);
+
+// ─── Scale Control ──────────────────────────────────────────────
+// Custom scale ruler yang dinamis sesuai zoom level
+const ScaleControl = L.Control.extend({
+  options: { position: "bottomleft" },
+  onAdd(): HTMLElement {
+    const container = L.DomUtil.create("div", "map-scale-control");
+    const updateScale = () => {
+      const bounds = map.getBounds();
+      const maxMeters = bounds.getNorthEast().distanceTo(bounds.getSouthWest()) / 2;
+      let dist: string, unit = "m";
+      if (maxMeters > 1000) {
+        dist = (maxMeters / 1000).toFixed(1);
+        unit = "km";
+      } else {
+        dist = Math.round(maxMeters).toString();
+      }
+      container.innerHTML = `<div class="scale-label">≈ ${dist} ${unit}</div>`;
+    };
+    map.on("moveend zoomend", updateScale);
+    updateScale();
+    return container;
+  },
+});
+new ScaleControl().addTo(map);
+
+// ─── POI Layer ─────────────────────────────────────────────────────
+
+const POI_LIBRARY: Record<PoiKind, {
+  rating: string;
+  imageUrl: string;
+  description: string;
+}> = {
+  hospital: {
+    rating: "4.7",
+    imageUrl: "https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&w=900&q=80",
+    description: "Layanan kesehatan dengan akses darurat, IGD, dan area parkir pasien.",
+  },
+  mall: {
+    rating: "4.5",
+    imageUrl: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=900&q=80",
+    description: "Area belanja, restoran, dan fasilitas publik yang ramai di jam sibuk.",
+  },
+  campus: {
+    rating: "4.8",
+    imageUrl: "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=900&q=80",
+    description: "Area pendidikan dengan gedung perkuliahan, kantor akademik, dan akses pejalan kaki.",
+  },
+  parking: {
+    rating: "4.2",
+    imageUrl: "https://images.unsplash.com/photo-1502877338535-766e1452684a?auto=format&fit=crop&w=900&q=80",
+    description: "Zona parkir kendaraan dengan akses masuk-keluar yang terkontrol.",
+  },
+  park: {
+    rating: "4.6",
+    imageUrl: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80",
+    description: "Ruang hijau untuk istirahat, jalan santai, dan titik orientasi di peta.",
+  },
+};
+
+function poiMarkerSizeByZoom(): number {
+  const zoom = map.getZoom();
+  return clamp(20 + (zoom - 13) * 1.6, 18, 34);
+}
+
+function makePoiIcon(poi: PoiRecord, size: number): L.DivIcon {
+  return L.divIcon({
+    className: "poi-marker-icon",
+    html: `<div class="poi-marker" title="${escapeHtml(poi.title)}"><span>${poi.icon}</span></div>`,
+    iconSize: [size, size],
+    iconAnchor: [Math.round(size / 2), Math.round(size / 2)],
+  });
+}
+
+function renderPoiModal(poi: PoiRecord): string {
+  return `
+    <div class="info-modal poi-modal" data-poi-id="${poi.id}">
+      <div class="modal-header poi-modal-header">
+        <button class="modal-close" data-action="close">×</button>
+        <h2 class="modal-title">${escapeHtml(poi.title)}</h2>
+      </div>
+      <div class="modal-content poi-modal-content">
+        <div class="poi-hero">
+          <img class="poi-hero-image" src="${escapeHtml(poi.imageUrl)}" alt="${escapeHtml(poi.title)}">
+          <div class="poi-hero-overlay">
+            <span class="poi-badge">${escapeHtml(poi.kind.toUpperCase())}</span>
+            <span class="poi-rating">★ ${escapeHtml(poi.rating)}</span>
+          </div>
+        </div>
+        <div class="poi-summary">
+          <div class="poi-icon-large">${poi.icon}</div>
+          <div>
+            <div class="poi-title">${escapeHtml(poi.title)}</div>
+            <div class="poi-address">${escapeHtml(poi.address)}</div>
+          </div>
+        </div>
+        <div class="poi-description">${escapeHtml(poi.description)}</div>
+        <div class="info-row"><span class="label">Kategori</span><span class="value">${escapeHtml(poi.kind)}</span></div>
+        <div class="info-row"><span class="label">Koordinat</span><span class="value">${poi.lat.toFixed(6)}, ${poi.lng.toFixed(6)}</span></div>
+      </div>
+    </div>`;
+}
+
+function openPoiModal(poi: PoiRecord): void {
+  closeModal();
+  state.activeModalPoiId = poi.id;
+  const container = document.createElement("div");
+  container.className = "modal-wrapper";
+  container.innerHTML = renderPoiModal(poi);
+  document.body.appendChild(container);
+
+  const modal = container.querySelector<HTMLElement>(".info-modal");
+  if (!modal) return;
+
+  modal.querySelector<HTMLButtonElement>(".modal-close")?.addEventListener("click", closeModal);
+  L.DomEvent.disableClickPropagation(container);
+  L.DomEvent.disableScrollPropagation(container);
+}
+
+function syncPoiMarkers(anchor: L.LatLngExpression): void {
+  const center = L.latLng(anchor);
+  const radiusMeters = 400; // search radius for nearby POIs
+
+  // Build a small bbox around center (approximate degrees)
+  const lat = center.lat;
+  const lng = center.lng;
+  const latDelta = radiusMeters / 111320; // ~ meters to degrees
+  const lngDelta = Math.abs(radiusMeters / (111320 * Math.cos((lat * Math.PI) / 180)));
+  const bounds = L.latLngBounds([lat - latDelta, lng - lngDelta], [lat + latDelta, lng + lngDelta]);
+
+  void fetchOverpassFeaturesForBounds(bounds).then((pois) => {
+    const keep = new Set<string>();
+    const iconSize = poiMarkerSizeByZoom();
+    pois.forEach((poi) => {
+      keep.add(poi.id);
+      state.poiData.set(poi.id, poi);
+      const existing = state.poiMarkers.get(poi.id);
+      const icon = makePoiIcon(poi, iconSize);
+      if (!existing) {
+        const marker = L.marker([poi.lat, poi.lng], {
+          icon,
+          interactive: true,
+          riseOnHover: true,
+          zIndexOffset: 500,
+        }).addTo(map);
+        marker.on("click", () => openPoiModal(poi));
+        state.poiMarkers.set(poi.id, marker);
+        return;
+      }
+      existing.setLatLng([poi.lat, poi.lng]);
+      existing.setIcon(icon);
+      existing.off("click");
+      existing.on("click", () => openPoiModal(poi));
+    });
+
+    // Remove stale POI markers
+    for (const [id, marker] of state.poiMarkers.entries()) {
+      if (!keep.has(id)) {
+        map.removeLayer(marker);
+        state.poiMarkers.delete(id);
+        state.poiData.delete(id);
+      }
+    }
+  }).catch(() => { /* ignore */ });
+}
+
+// ─── Overpass / Vector overlay for clickable raster-like features ─────────────────
+
+function buildOverpassBBoxString(bounds: L.LatLngBounds): string {
+  const s = bounds.getSouth();
+  const w = bounds.getWest();
+  const n = bounds.getNorth();
+  const e = bounds.getEast();
+  return `${s},${w},${n},${e}`;
+}
+
+async function fetchOverpassFeaturesForBounds(bounds: L.LatLngBounds): Promise<PoiRecord[]> {
+  const bbox = buildOverpassBBoxString(bounds);
+  // Query common POI tags; return nodes + ways + relations with center
+  const q = `
+    [out:json][timeout:15];
+    (
+      node["amenity"](${bbox});
+      way["amenity"](${bbox});
+      relation["amenity"](${bbox});
+      node["shop"](${bbox});
+      way["shop"](${bbox});
+      relation["shop"](${bbox});
+      node["tourism"](${bbox});
+      way["tourism"](${bbox});
+      relation["tourism"](${bbox});
+    );
+    out center tags;
+  `;
+
+  try {
+    const res = await fetch("https://overpass-api.de/api/interpreter", {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: q,
+    });
+    if (!res.ok) throw new Error(`Overpass HTTP ${res.status}`);
+    const data = await res.json();
+    const elements = Array.isArray(data.elements) ? data.elements : [];
+    const pois: PoiRecord[] = elements.map((el: any) => {
+      const tags = el.tags || {};
+      const name = tags.name || tags.official_name || tags['brand'] || tags['operator'] || tags.amenity || tags.shop || tags.tourism || `${tags.amenity || tags.shop || 'POI'}`;
+      const lat = el.type === 'node' ? el.lat : (el.center && el.center.lat) || el.lat || 0;
+      const lng = el.type === 'node' ? el.lon : (el.center && el.center.lon) || el.lon || 0;
+      const kind: PoiKind = tags.amenity === 'hospital' ? 'hospital'
+        : tags.shop ? 'mall'
+          : tags.tourism === 'university' ? 'campus'
+            : tags.amenity === 'parking' || tags.parking ? 'parking'
+              : tags.leisure === 'park' ? 'park'
+                : 'park';
+      const imageUrl = tags.image || tags['image:source'] || POI_LIBRARY[kind].imageUrl;
+      const description = tags.description || tags['note'] || POI_LIBRARY[kind].description;
+      const addressParts = [] as string[];
+      if (tags['addr:street']) addressParts.push(tags['addr:street']);
+      if (tags['addr:housenumber']) addressParts.push(tags['addr:housenumber']);
+      if (tags['addr:city']) addressParts.push(tags['addr:city']);
+      const address = addressParts.join(" ") || (tags['addr'] || "");
+      return {
+        id: `overpass-${el.type}-${el.id}`,
+        kind,
+        title: name || `POI ${el.id}`,
+        description: description || '',
+        address: address || '',
+        imageUrl: imageUrl || POI_LIBRARY[kind].imageUrl,
+        rating: POI_LIBRARY[kind].rating,
+        icon: tags.amenity === 'hospital' ? '🏥' : (tags.shop ? '🏬' : (tags.tourism ? '🎓' : '🌳')),
+        lat, lng,
+      };
+    }).filter((p: PoiRecord) => p.lat && p.lng && !Number.isNaN(p.lat) && !Number.isNaN(p.lng));
+    return pois;
+  } catch (err) {
+    console.warn("Overpass fetch failed:", err);
+    return [];
+  }
+}
+
+let lastOverpassFetchBounds: L.LatLngBounds | null = null;
+async function refreshOverpassLayer(): Promise<void> {
+  const bounds = map.getBounds();
+  // Avoid refetch if bounds similar
+  if (lastOverpassFetchBounds && lastOverpassFetchBounds.contains(bounds.getSouthWest()) && lastOverpassFetchBounds.contains(bounds.getNorthEast())) return;
+  lastOverpassFetchBounds = bounds.pad(0.2);
+  const pois = await fetchOverpassFeaturesForBounds(bounds);
+  if (!state.overpassLayer) state.overpassLayer = L.layerGroup().addTo(map);
+  state.overpassLayer.clearLayers();
+  pois.forEach((poi) => {
+    const marker = L.circleMarker([poi.lat, poi.lng], {
+      radius: 8,
+      color: '#2563eb',
+      weight: 1.5,
+      fillColor: '#3b82f6',
+      fillOpacity: 0.85,
+      interactive: true,
+      pane: 'overlayPane',
+    }).addTo(state.overpassLayer as L.LayerGroup);
+    marker.on('click', () => openPoiModal(poi));
+  });
+}
+
+// When user clicks on raster tile, query a small radius for nearby features and open modal
+map.on('click', async (ev: L.LeafletMouseEvent) => {
+  const lat = ev.latlng.lat;
+  const lng = ev.latlng.lng;
+  try {
+    const q = `
+      [out:json][timeout:10];
+      (
+        node(around:80,${lat},${lng})["amenity"];
+        way(around:80,${lat},${lng})["amenity"];
+        relation(around:80,${lat},${lng})["amenity"];
+        node(around:80,${lat},${lng})["shop"];
+        way(around:80,${lat},${lng})["shop"];
+        relation(around:80,${lat},${lng})["shop"];
+      );
+      out center tags;
+    `;
+    const res = await fetch("https://overpass-api.de/api/interpreter", {
+      method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: q,
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const el = (data.elements || [])[0];
+    if (!el) return;
+    const tags = el.tags || {};
+    const latR = el.type === 'node' ? el.lat : (el.center && el.center.lat) || el.lat;
+    const lngR = el.type === 'node' ? el.lon : (el.center && el.center.lon) || el.lon;
+    const poi: PoiRecord = {
+      id: `overpass-click-${el.type}-${el.id}`,
+      kind: 'park',
+      title: tags.name || tags.amenity || tags.shop || `Feature ${el.id}`,
+      description: tags.description || tags['note'] || '',
+      address: (tags['addr:street'] || '') + (tags['addr:city'] ? ', ' + tags['addr:city'] : ''),
+      imageUrl: tags.image || POI_LIBRARY.park.imageUrl,
+      rating: POI_LIBRARY.park.rating,
+      icon: tags.amenity === 'hospital' ? '🏥' : (tags.shop ? '🏬' : '📍'),
+      lat: latR, lng: lngR,
+    };
+    openPoiModal(poi);
+  } catch (err) {
+    // ignore
+  }
+});
+
+map.on('moveend', () => { void refreshOverpassLayer(); });
 
 // ─── Helpers ────────────────────────────────────────────────────
 
@@ -150,6 +505,88 @@ function escapeHtml(v: string): string {
     .replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 
+function hashString(input: string): number {
+  let hash = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = ((hash << 5) - hash) + input.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+function trafficColorLabel(color: TrafficColor): string {
+  if (color === "red") return "🔴 Tunggu sebentar";
+  if (color === "yellow") return "🟡 Bersiaplah";
+  return "🟢 Lewati sekarang";
+}
+
+function trafficColorFor(device: DeviceRecord): TrafficColor {
+  const seed = hashString(`${device.id}:${Math.floor(Date.now() / 4000)}`);
+  const colors: TrafficColor[] = ["red", "yellow", "green"];
+  return colors[seed % colors.length];
+}
+
+function trafficDurationFor(color: TrafficColor, device: DeviceRecord): number {
+  const seed = hashString(`${device.id}:${Math.floor(Date.now() / 4000)}:${color}`);
+  if (color === "red") return 8 + (seed % 18);
+  if (color === "yellow") return 3 + (seed % 4);
+  return 10 + (seed % 20);
+}
+
+function vehicleCountFor(device: DeviceRecord): number {
+  const seed = hashString(`${device.id}:${Math.floor(Date.now() / 5000)}`);
+  return 5 + (seed % 70);
+}
+
+function buildTrafficState(device: DeviceRecord): TrafficState {
+  const color = trafficColorFor(device);
+  const roadName = state.roadNameById.get(device.id) || device.roadName || device.roadHint || "Jalan tidak terdeteksi";
+  const vehicleCount = vehicleCountFor(device);
+  const duration = trafficDurationFor(color, device);
+  return {
+    color,
+    duration,
+    vehicleCount,
+    roadName,
+    recommendation: trafficColorLabel(color),
+    updatedAt: Date.now(),
+  };
+}
+
+async function resolveRoadName(device: DeviceRecord): Promise<string> {
+  const cached = state.roadNameById.get(device.id);
+  if (cached) return cached;
+
+  const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${device.position.lat}&lon=${device.position.lng}`;
+  try {
+    const res = await fetch(url, {
+      cache: "no-store",
+      headers: { "Accept": "application/json" },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json() as { address?: Record<string, string>; display_name?: string };
+    const address = data.address || {};
+    const road = address.road || address.pedestrian || address.footway || address.path || address.cycleway || address.service || address.residential;
+    const fallback = data.display_name?.split(",")[0]?.trim();
+    const resolved = road || fallback || device.roadName || device.label;
+    state.roadNameById.set(device.id, resolved);
+    return resolved;
+  } catch {
+    const fallback = device.roadName || device.roadHint || device.label;
+    state.roadNameById.set(device.id, fallback);
+    return fallback;
+  }
+}
+
+function markerSizeByZoom(): number {
+  const zoom = map.getZoom();
+  return clamp(24 + (zoom - 13) * 2.4, 22, 54);
+}
+
+function markerAnchorBySize(size: number): [number, number] {
+  return [Math.round(size / 2), Math.round(size * 1.5)];
+}
+
 // FIX: normalizeOneDevice — parser untuk satu raw device object langsung,
 // tidak membungkus ulang dalam Snapshot sehingga tidak ada double-wrapping.
 function normalizeOneDevice(raw: SnapshotDevice): DeviceRecord | null {
@@ -168,6 +605,15 @@ function normalizeOneDevice(raw: SnapshotDevice): DeviceRecord | null {
     lastSeenText: raw.lastSeenText?.trim() || undefined,
     note: raw.note?.trim() || undefined,
     cameraUrl: raw.cameraUrl?.trim() || undefined,
+    roadName: raw.roadName?.trim() || undefined,
+    roadHint: raw.roadHint?.trim() || undefined,
+    trafficColor: isDeviceStatus(raw.status) ? undefined : undefined,
+    trafficDuration: typeof (raw as Record<string, unknown>).trafficDuration === "number"
+      ? (raw as Record<string, unknown>).trafficDuration as number
+      : undefined,
+    vehicleCount: typeof (raw as Record<string, unknown>).vehicleCount === "number"
+      ? (raw as Record<string, unknown>).vehicleCount as number
+      : undefined,
     position: { lat: clamp(lat, -90, 90), lng: clamp(lng, -180, 180) },
   };
 }
@@ -208,49 +654,192 @@ function normalizeDevices(snapshot: Snapshot): DeviceRecord[] {
   return [];
 }
 
-// ─── Marker ─────────────────────────────────────────────────────
+// ─── Marker (Traffic Light) ─────────────────────────────────────
 
-function markerHtml(status: DeviceStatus): string {
-  return `<div class="marker-pin ${status}"><span class="marker-pulse"></span><span class="marker-core"></span></div>`;
+function trafficStateForDevice(device: DeviceRecord): TrafficState {
+  const cached = state.trafficById.get(device.id);
+  const roadName = state.roadNameById.get(device.id) || device.roadName || device.roadHint || device.label;
+  if (cached && cached.roadName === roadName && Date.now() - cached.updatedAt < 2500) {
+    return cached;
+  }
+
+  const next = buildTrafficState({ ...device, roadName });
+  state.trafficById.set(device.id, next);
+  return next;
 }
-function renderPopup(device: DeviceRecord): string {
+
+function makeTrafficLightSvg(state: TrafficState, size: number): string {
+  const colorMap: Record<TrafficColor, string> = {
+    red: "#ef4444",
+    yellow: "#facc15",
+    green: "#22c55e",
+  };
+  const active = colorMap[state.color];
+  const inactive = "#4b5563";
+  const bulb = (cx: number, cy: number, lit: boolean, fill: string) => `
+    <circle cx="${cx}" cy="${cy}" r="5.6" fill="${lit ? fill : inactive}" opacity="${lit ? 1 : 0.45}"/>
+    <circle cx="${cx}" cy="${cy}" r="2.4" fill="${lit ? "#fff" : "#9ca3af"}" opacity="${lit ? 0.35 : 0.2}"/>
+  `;
+  return `<svg viewBox="0 0 32 48" xmlns="http://www.w3.org/2000/svg" class="traffic-light-marker" width="${size}" height="${size * 1.5}">
+    <rect x="2" y="2" width="28" height="44" rx="6" fill="#111827" stroke="#374151" stroke-width="1.2"/>
+    ${bulb(16, 11, state.color === "red", active)}
+    ${bulb(16, 24, state.color === "yellow", active)}
+    ${bulb(16, 37, state.color === "green", active)}
+  </svg>`;
+}
+
+function renderDeviceModal(device: DeviceRecord, traffic: TrafficState): string {
+  const road = escapeHtml(traffic.roadName);
+  const recommendation = escapeHtml(traffic.recommendation);
   return `
-    <div class="popup-card">
-      <div class="popup-title">${escapeHtml(device.label)}</div>
-      <div class="popup-row"><span>ID</span><strong>${escapeHtml(device.id)}</strong></div>
-      <div class="popup-row"><span>Status</span><strong>${escapeHtml(device.status)}</strong></div>
-      <div class="popup-row"><span>Last seen</span><strong>${escapeHtml(device.lastSeenText || formatTime(device.lastSeen))}</strong></div>
-      <div class="popup-row"><span>Age</span><strong>${formatAge(device.lastSeen)}</strong></div>
-      <div class="popup-row"><span>Lat</span><strong>${device.position.lat.toFixed(6)}</strong></div>
-      <div class="popup-row"><span>Lng</span><strong>${device.position.lng.toFixed(6)}</strong></div>
-      ${device.note ? `<div class="popup-note">${escapeHtml(device.note)}</div>` : ""}
+    <div class="info-modal" data-device-id="${device.id}">
+      <div class="modal-header">
+        <button class="modal-close" data-action="close">×</button>
+        <h2 class="modal-title">${escapeHtml(device.label)}</h2>
+      </div>
+      <div class="modal-tabs">
+        <button class="modal-tab-btn active" data-tab="system">
+          <span class="tab-icon">ℹ️</span> Sistem
+        </button>
+        <button class="modal-tab-btn" data-tab="traffic">
+          <span class="tab-icon">🚦</span> Lalu Lintas
+        </button>
+      </div>
+      <div class="modal-content">
+        <div class="modal-tab-pane active" data-tab="system">
+          <div class="info-row"><span class="label">Lokasi</span><span class="value">${device.position.lat.toFixed(6)}, ${device.position.lng.toFixed(6)}</span></div>
+          <div class="info-row"><span class="label">ID Sistem</span><span class="value">${escapeHtml(device.id)}</span></div>
+          <div class="info-row"><span class="label">Status</span><span class="value status-${device.status}">${escapeHtml(device.status)}</span></div>
+          <div class="info-row"><span class="label">Last Seen</span><span class="value">${escapeHtml(device.lastSeenText || formatTime(device.lastSeen))}</span></div>
+          <div class="info-row"><span class="label">Age</span><span class="value">${formatAge(device.lastSeen)}</span></div>
+          <div class="info-row"><span class="label">Road</span><span class="value">${road}</span></div>
+        </div>
+        <div class="modal-tab-pane" data-tab="traffic">
+          <div class="info-row"><span class="label">Jalan</span><span class="value">${road}</span></div>
+          <div class="info-row"><span class="label">Jumlah Kendaraan</span><span class="value">${traffic.vehicleCount}</span></div>
+          <div class="info-row"><span class="label">Durasi Lampu</span><span class="value">${traffic.duration}s (${traffic.color})</span></div>
+          <div class="info-row"><span class="label">Rekomendasi</span><span class="value">${recommendation}</span></div>
+        </div>
+      </div>
     </div>`;
 }
+
+function closeModal(): void {
+  document.querySelectorAll(".modal-wrapper").forEach((m) => m.remove());
+  state.activeModalDeviceId = null;
+  state.activeModalPoiId = null;
+  window.clearInterval(state.trafficRefreshTimer);
+  state.trafficRefreshTimer = 0;
+}
+
+function openModal(device: DeviceRecord): void {
+  closeModal();
+  state.activeModalDeviceId = device.id;
+  state.activeModalPoiId = null;
+  const traffic = trafficStateForDevice(device);
+  const container = document.createElement("div");
+  container.className = "modal-wrapper";
+  container.innerHTML = renderDeviceModal(device, traffic);
+  document.body.appendChild(container);
+
+  const modal = container.querySelector<HTMLElement>(".info-modal");
+  if (!modal) return;
+
+  modal.querySelectorAll<HTMLButtonElement>(".modal-tab-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tabName = btn.dataset.tab;
+      modal.querySelectorAll(".modal-tab-btn").forEach((b) => b.classList.remove("active"));
+      modal.querySelectorAll(".modal-tab-pane").forEach((pane) => pane.classList.remove("active"));
+      btn.classList.add("active");
+      modal.querySelector<HTMLElement>(`.modal-tab-pane[data-tab="${tabName}"]`)?.classList.add("active");
+    });
+  });
+
+  modal.querySelector<HTMLButtonElement>(".modal-close")?.addEventListener("click", closeModal);
+  L.DomEvent.disableClickPropagation(container);
+  L.DomEvent.disableScrollPropagation(container);
+
+  window.clearInterval(state.trafficRefreshTimer);
+  state.trafficRefreshTimer = window.setInterval(() => {
+    const active = state.device;
+    const activeId = state.activeModalDeviceId;
+    if (!active || !activeId || active.id !== activeId) return;
+    const nextTraffic = trafficStateForDevice(active);
+    modal.outerHTML = renderDeviceModal(active, nextTraffic);
+    const nextModal = document.querySelector<HTMLElement>(".info-modal[data-device-id]");
+    if (nextModal) {
+      nextModal.querySelectorAll<HTMLButtonElement>(".modal-tab-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const tabName = btn.dataset.tab;
+          nextModal.querySelectorAll(".modal-tab-btn").forEach((b) => b.classList.remove("active"));
+          nextModal.querySelectorAll(".modal-tab-pane").forEach((pane) => pane.classList.remove("active"));
+          btn.classList.add("active");
+          nextModal.querySelector<HTMLElement>(`.modal-tab-pane[data-tab="${tabName}"]`)?.classList.add("active");
+        });
+      });
+      nextModal.querySelector<HTMLButtonElement>(".modal-close")?.addEventListener("click", closeModal);
+    }
+  }, 2500);
+}
+
 function ensureMarker(device: DeviceRecord): void {
+  const traffic = trafficStateForDevice(device);
+  const size = markerSizeByZoom();
   const icon = L.divIcon({
-    className: "raspi-marker",
-    html: markerHtml(device.status),
-    iconSize: [42, 54], iconAnchor: [21, 50], popupAnchor: [0, -42],
+    className: "traffic-light-marker-icon",
+    html: makeTrafficLightSvg(traffic, size),
+    iconSize: [size, Math.round(size * 1.5)],
+    iconAnchor: markerAnchorBySize(size),
+    popupAnchor: [0, -Math.round(size * 1.2)],
   });
   const existing = state.markers.get(device.id);
+
   if (!existing) {
-    const m = L.marker([device.position.lat, device.position.lng], { icon }).addTo(map);
-    m.bindPopup(renderPopup(device), {
-      closeButton: false, autoClose: true, closeOnClick: true,
-      className: "raspi-popup", offset: L.point(0, -14),
-    });
+    const m = L.marker([device.position.lat, device.position.lng], {
+      icon,
+      interactive: true,
+      zIndexOffset: 1000,
+      riseOnHover: true,
+    }).addTo(map);
     m.on("click", () => {
       state.device = device;
       renderCameraTile();
-      m.openPopup();
+      openModal(device);
     });
     state.markers.set(device.id, m);
     return;
   }
-  // FIX: update posisi marker setiap refresh jika koordinat berubah
+
   existing.setLatLng([device.position.lat, device.position.lng]);
   existing.setIcon(icon);
-  existing.setPopupContent(renderPopup(device));
+  existing.off("click");
+  existing.on("click", () => {
+    state.device = device;
+    renderCameraTile();
+    openModal(device);
+  });
+}
+
+function rescaleMarkers(): void {
+  const deviceSize = markerSizeByZoom();
+  for (const device of state.devices) {
+    const marker = state.markers.get(device.id);
+    if (!marker) continue;
+    marker.setIcon(L.divIcon({
+      className: "traffic-light-marker-icon",
+      html: makeTrafficLightSvg(trafficStateForDevice(device), deviceSize),
+      iconSize: [deviceSize, Math.round(deviceSize * 1.5)],
+      iconAnchor: markerAnchorBySize(deviceSize),
+      popupAnchor: [0, -Math.round(deviceSize * 1.2)],
+    }));
+  }
+
+  const poiSize = poiMarkerSizeByZoom();
+  for (const [id, poi] of state.poiData.entries()) {
+    const marker = state.poiMarkers.get(id);
+    if (!marker) continue;
+    marker.setIcon(makePoiIcon(poi, poiSize));
+  }
 }
 
 function removeMissingMarkers(activeIds: Set<string>): void {
@@ -310,19 +899,141 @@ function handleCompassClick(): void {
 
 // ─── Base map ───────────────────────────────────────────────────
 
-function setBaseMap(mode: BaseMapMode): void {
+async function ensureMapLibreMap(): Promise<any | null> {
+  if (state.maplibreMap) return state.maplibreMap;
+
+  try {
+    const maplibreglImport = await import("maplibre-gl");
+    const maplibregl = (maplibreglImport as any).default || maplibreglImport;
+
+    if (!state.maplibreContainer) {
+      const container = document.createElement("div");
+      container.className = "maplibre-overlay";
+      mapRoot.appendChild(container);
+      state.maplibreContainer = container;
+    }
+
+    const maplibreMap = new maplibregl.Map({
+      container: state.maplibreContainer,
+      style: MAPLIBRE_STYLE_URL,
+      center: map.getCenter(),
+      zoom: map.getZoom(),
+      bearing: map.getBearing?.() ?? 0,
+      pitch: MAPLIBRE_3D_PITCH,
+      attributionControl: false,
+      interactive: false,
+      preserveDrawingBuffer: false,
+      fadeDuration: 0,
+    });
+
+    maplibreMap.on("load", () => {
+      syncMapLibreView(true);
+    });
+    state.maplibreMap = maplibreMap;
+    return maplibreMap;
+  } catch (err) {
+    console.error("ensureMapLibreMap error:", err);
+    return null;
+  }
+}
+
+async function removeMapLibreMap(): Promise<void> {
+  if (!state.maplibreMap) return;
+  try {
+    state.maplibreMap.remove();
+  } catch {
+    /* ignore */
+  }
+  state.maplibreMap = null;
+  if (state.maplibreContainer) {
+    state.maplibreContainer.remove();
+    state.maplibreContainer = null;
+  }
+}
+
+function syncMapLibreView(force = false): void {
+  const maplibreMap = state.maplibreMap;
+  if (!maplibreMap) return;
+  if (state.maplibreSyncing && !force) return;
+
+  const center = map.getCenter();
+  const zoom = map.getZoom();
+  const bearing = map.getBearing?.() ?? 0;
+  const pitch = MAPLIBRE_3D_PITCH;
+
+  const currentCenter = maplibreMap.getCenter();
+  const currentZoom = maplibreMap.getZoom();
+  const currentBearing = maplibreMap.getBearing();
+  const currentPitch = maplibreMap.getPitch();
+
+  const centerChanged = currentCenter.lat !== center.lat || currentCenter.lng !== center.lng;
+  const zoomChanged = currentZoom !== zoom;
+  const bearingChanged = currentBearing !== bearing;
+  const pitchChanged = currentPitch !== pitch;
+
+  if (!force && !centerChanged && !zoomChanged && !bearingChanged && !pitchChanged) return;
+
+  state.maplibreSyncing = true;
+  try {
+    maplibreMap.jumpTo({
+      center,
+      zoom,
+      bearing,
+      pitch,
+      animate: false,
+    });
+  } finally {
+    state.maplibreSyncing = false;
+  }
+}
+
+async function setBaseMap(mode: BaseMapMode): Promise<void> {
   if (state.baseMode === mode) return;
+
+  // Reset any previous 3D CSS transform (legacy fallback)
+  const mapEl = mapRoot as HTMLElement;
+  mapEl.style.transform = "";
+  mapEl.style.transformOrigin = "";
+  mapEl.style.perspective = "";
+  (mapEl.parentElement as HTMLElement | null)?.style.setProperty("perspective", "");
+  mapEl.classList.remove("map-mode-3d");
+
   if (mode === "street") {
+    // remove any GL or satellite layer
+    await removeMapLibreMap();
     if (map.hasLayer(satelliteLayer)) map.removeLayer(satelliteLayer);
     if (!map.hasLayer(streetLayer)) streetLayer.addTo(map);
+  } else if (mode === "3d") {
+    // Prefer true 3D: render MapLibre GL above the Leaflet map.
+    if (map.hasLayer(satelliteLayer)) map.removeLayer(satelliteLayer);
+    if (map.hasLayer(streetLayer)) map.removeLayer(streetLayer);
+
+    const gl = await ensureMapLibreMap();
+    if (!gl) {
+      // fallback: use CSS tilt if MapLibre not available
+      if (!map.hasLayer(streetLayer)) streetLayer.addTo(map);
+      const wrapper = mapEl.parentElement as HTMLElement | null;
+      if (wrapper) wrapper.style.perspective = "800px";
+      mapEl.style.transform = "rotateX(45deg) scale(1.4)";
+      mapEl.style.transformOrigin = "50% 100%";
+      mapEl.style.transition = "transform 0.5s ease";
+      state.baseMode = "street";
+      if (state.modeBtnLabel) state.modeBtnLabel.textContent = "3D";
+      return;
+    }
+
+    mapEl.classList.add("map-mode-3d");
+    syncMapLibreView(true);
+    map.invalidateSize();
   } else {
+    // satellite
+    await removeMapLibreMap();
     if (map.hasLayer(streetLayer)) map.removeLayer(streetLayer);
     if (!map.hasLayer(satelliteLayer)) satelliteLayer.addTo(map);
   }
+
   state.baseMode = mode;
-  if (state.modeBtnLabel) {
-    state.modeBtnLabel.textContent = mode === "street" ? "3D" : "街";
-  }
+  if (state.modeBtnLabel) state.modeBtnLabel.textContent = mode === "3d" ? "2D" : "3D";
 }
 
 // ─── Camera tile ────────────────────────────────────────────────
@@ -362,8 +1073,9 @@ function locateUser(): void {
   );
 }
 
-function toggleBaseMap(): void {
-  setBaseMap(state.baseMode === "street" ? "satellite" : "street");
+async function toggleBaseMap(): Promise<void> {
+  if (state.baseMode === "3d") await setBaseMap("street");
+  else await setBaseMap("3d");
 }
 
 function openCameraPreview(): void {
@@ -487,7 +1199,7 @@ const BottomRightControl = L.Control.extend({
       btn.addEventListener("click", () => {
         const action = btn.dataset.action;
         if (action === "compass") handleCompassClick();
-        else if (action === "mode") toggleBaseMap();
+        else if (action === "mode") void toggleBaseMap();
         else if (action === "locate") locateUser();
         else if (action === "home") goHome();
         else if (action === "camera") openCameraPreview();
@@ -506,6 +1218,12 @@ new BottomRightControl().addTo(map);
 
 map.on("rotate", updateCompass);
 map.on("move zoom", updateCompass);
+map.on("zoomend", rescaleMarkers);
+map.on("move zoom rotate", () => syncMapLibreView());
+map.on("resize", () => {
+  state.maplibreMap?.resize();
+  syncMapLibreView(true);
+});
 
 // ─── Fetch & refresh ────────────────────────────────────────────
 
@@ -546,11 +1264,34 @@ function applyDevices(devices: DeviceRecord[]): void {
     : devices[0];
   state.device = selected;
   renderCameraTile();
+  devices.forEach((device) => {
+    void resolveRoadName(device).then(() => {
+      state.trafficById.set(device.id, buildTrafficState(device));
+      const marker = state.markers.get(device.id);
+      if (marker) {
+        const size = markerSizeByZoom();
+        marker.setIcon(L.divIcon({
+          className: "traffic-light-marker-icon",
+          html: makeTrafficLightSvg(trafficStateForDevice(device), size),
+          iconSize: [size, Math.round(size * 1.5)],
+          iconAnchor: markerAnchorBySize(size),
+          popupAnchor: [0, -Math.round(size * 1.2)],
+        }));
+      }
+      if (state.activeModalDeviceId === device.id && state.device?.id === device.id) {
+        closeModal();
+        openModal(device);
+      }
+    });
+  });
   if (!state.hasCentered) {
     map.setView([selected.position.lat, selected.position.lng],
       map.getZoom() || DEFAULT_ZOOM, { animate: false });
     state.hasCentered = true;
   }
+
+  syncPoiMarkers([selected.position.lat, selected.position.lng]);
+  rescaleMarkers();
 }
 
 function reportOfflineDevices(devices: DeviceRecord[]): void {

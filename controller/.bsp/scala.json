@@ -1,0 +1,29 @@
+{
+  "name": "scala",
+  "argv": [
+    "C:\\Program Files\\Java\\jdk-17\\bin\\java.exe",
+    "-jar",
+    "C:\\Users\\asus\\public\\scala3-3.8.1\\libexec\\scala-cli.jar",
+    "--cli-default-scala-version",
+    "3.8.1",
+    "--repository",
+    "file:///C:/Users/asus/public/scala3-3.8.1/maven2",
+    "--prog-name",
+    "scala",
+    "--skip-cli-updates",
+    "bsp",
+    "--json-options",
+    "C:\\Users\\asus\\public\\its-maps\\controller\\.scala-build\\ide-options-v2.json",
+    "--json-launcher-options",
+    "C:\\Users\\asus\\public\\its-maps\\controller\\.scala-build\\ide-launcher-options.json",
+    "--envs-file",
+    "C:\\Users\\asus\\public\\its-maps\\controller\\.scala-build\\ide-envs.json",
+    "C:\\Users\\asus\\public\\its-maps\\controller\\Main.scala"
+  ],
+  "version": "1.11.0",
+  "bspVersion": "2.1.1",
+  "languages": [
+    "scala",
+    "java"
+  ]
+}
