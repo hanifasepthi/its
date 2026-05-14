@@ -60,7 +60,7 @@ type TrafficState = {
   updatedAt: number;
 };
 
-type PoiKind = "hospital" | "mall" | "campus" | "parking" | "park";
+type PoiKind = "hospital" | "mall" | "campus" | "parking" | "park" | "worship" | "school" | "office" | "restaurant" | "monument" | "other";
 
 type PoiRecord = {
   id: string;
@@ -91,7 +91,7 @@ const OFFLINE_AFTER_MS = 60_000;
 const BEARING_STEP = 90;
 const BEARING_SNAP = 5;
 const MAPLIBRE_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
-const MAPLIBRE_3D_PITCH = 60;
+const MAPLIBRE_3D_PITCH = 52;
 
 // ─── DOM bootstrap ──────────────────────────────────────────────
 
@@ -133,7 +133,6 @@ const state = {
   compassBtn: null as HTMLButtonElement | null,
   cameraPreview: null as HTMLDivElement | null,
   cameraButton: null as HTMLButtonElement | null,
-  modeBtnLabel: null as HTMLSpanElement | null,
   markers: new Map<string, L.Marker>(),
   poiMarkers: new Map<string, L.Marker>(),
   poiData: new Map<string, PoiRecord>(),
@@ -225,17 +224,84 @@ const POI_LIBRARY: Record<PoiKind, {
     imageUrl: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80",
     description: "Ruang hijau untuk istirahat, jalan santai, dan titik orientasi di peta.",
   },
+  worship: {
+    rating: "4.7",
+    imageUrl: "https://images.unsplash.com/photo-1514222497938-d0edb2e47c23?auto=format&fit=crop&w=900&q=80",
+    description: "Tempat ibadah dan pusat kegiatan keagamaan di sekitar lokasi.",
+  },
+  school: {
+    rating: "4.4",
+    imageUrl: "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=900&q=80",
+    description: "Fasilitas pendidikan seperti sekolah dasar, menengah, dan setara.",
+  },
+  office: {
+    rating: "4.1",
+    imageUrl: "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=900&q=80",
+    description: "Bangunan kantor, administrasi, dan fasilitas kerja.",
+  },
+  restaurant: {
+    rating: "4.3",
+    imageUrl: "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=900&q=80",
+    description: "Tempat makan, kafe, atau layanan kuliner di area sekitar.",
+  },
+  monument: {
+    rating: "4.2",
+    imageUrl: "https://images.unsplash.com/photo-1508804185872-d7badad00f7d?auto=format&fit=crop&w=900&q=80",
+    description: "Landmark, monumen, atau penanda sejarah yang mudah dikenali.",
+  },
+  other: {
+    rating: "4.0",
+    imageUrl: "https://images.unsplash.com/photo-1524429656589-6633a470097c?auto=format&fit=crop&w=900&q=80",
+    description: "Titik orientasi umum di peta.",
+  },
 };
+
+const POI_VISUALS: Record<PoiKind, { icon: string; color: string }> = {
+  hospital: { icon: "🏥", color: "#ef4444" },
+  mall: { icon: "🏬", color: "#8b5cf6" },
+  campus: { icon: "🎓", color: "#0ea5e9" },
+  parking: { icon: "🅿️", color: "#64748b" },
+  park: { icon: "🌳", color: "#22c55e" },
+  worship: { icon: "🕌", color: "#f59e0b" },
+  school: { icon: "🏫", color: "#2563eb" },
+  office: { icon: "🏢", color: "#14b8a6" },
+  restaurant: { icon: "🍽️", color: "#fb7185" },
+  monument: { icon: "🗿", color: "#a16207" },
+  other: { icon: "📍", color: "#475569" },
+};
+
+function classifyPoiKind(tags: Record<string, string>): PoiKind {
+  const amenity = tags.amenity;
+  const tourism = tags.tourism;
+  if (amenity === "hospital") return "hospital";
+  if (amenity === "place_of_worship" || tags.religion) return "worship";
+  if (amenity === "school" || amenity === "kindergarten" || tags.education === "school") return "school";
+  if (amenity === "university" || amenity === "college" || tourism === "university") return "campus";
+  if (amenity === "restaurant" || amenity === "cafe" || amenity === "fast_food") return "restaurant";
+  if (amenity === "parking" || tags.parking) return "parking";
+  if (amenity === "office" || tags.office) return "office";
+  if (tags.shop) return "mall";
+  if (tags.historic === "monument" || tourism === "attraction" || tags.building === "monument") return "monument";
+  if (tags.leisure === "park") return "park";
+  return "other";
+}
+
+function poiVisual(kind: PoiKind): { icon: string; color: string } {
+  return POI_VISUALS[kind] || POI_VISUALS.other;
+}
 
 function poiMarkerSizeByZoom(): number {
   const zoom = map.getZoom();
-  return clamp(20 + (zoom - 13) * 1.6, 18, 34);
+  return clamp(12 + (zoom - 13) * 1.15, 12, 24);
 }
 
 function makePoiIcon(poi: PoiRecord, size: number): L.DivIcon {
+  const visual = poiVisual(poi.kind);
   return L.divIcon({
     className: "poi-marker-icon",
-    html: `<div class="poi-marker" title="${escapeHtml(poi.title)}"><span>${poi.icon}</span></div>`,
+    html: `<div class="poi-marker poi-kind-${poi.kind}" title="${escapeHtml(poi.title)}" style="--poi-accent:${visual.color}; --poi-size:${size}px;">
+      <span class="poi-marker-glyph">${visual.icon}</span>
+    </div>`,
     iconSize: [size, size],
     iconAnchor: [Math.round(size / 2), Math.round(size / 2)],
   });
@@ -243,47 +309,47 @@ function makePoiIcon(poi: PoiRecord, size: number): L.DivIcon {
 
 function renderPoiModal(poi: PoiRecord): string {
   return `
-    <div class="info-modal poi-modal" data-poi-id="${poi.id}">
-      <div class="modal-header poi-modal-header">
-        <button class="modal-close" data-action="close">×</button>
-        <h2 class="modal-title">${escapeHtml(poi.title)}</h2>
-      </div>
-      <div class="modal-content poi-modal-content">
-        <div class="poi-hero">
-          <img class="poi-hero-image" src="${escapeHtml(poi.imageUrl)}" alt="${escapeHtml(poi.title)}">
-          <div class="poi-hero-overlay">
-            <span class="poi-badge">${escapeHtml(poi.kind.toUpperCase())}</span>
-            <span class="poi-rating">★ ${escapeHtml(poi.rating)}</span>
-          </div>
+    <div class="modal-header poi-modal-header">
+      <button class="modal-close" data-action="close">×</button>
+      <h2 class="modal-title">${escapeHtml(poi.title)}</h2>
+    </div>
+    <div class="modal-content poi-modal-content">
+      <div class="poi-hero">
+        <img class="poi-hero-image" src="${escapeHtml(poi.imageUrl)}" alt="${escapeHtml(poi.title)}">
+        <div class="poi-hero-overlay">
+          <span class="poi-badge">${escapeHtml(poi.kind.toUpperCase())}</span>
+          <span class="poi-rating">★ ${escapeHtml(poi.rating)}</span>
         </div>
-        <div class="poi-summary">
-          <div class="poi-icon-large">${poi.icon}</div>
-          <div>
-            <div class="poi-title">${escapeHtml(poi.title)}</div>
-            <div class="poi-address">${escapeHtml(poi.address)}</div>
-          </div>
-        </div>
-        <div class="poi-description">${escapeHtml(poi.description)}</div>
-        <div class="info-row"><span class="label">Kategori</span><span class="value">${escapeHtml(poi.kind)}</span></div>
-        <div class="info-row"><span class="label">Koordinat</span><span class="value">${poi.lat.toFixed(6)}, ${poi.lng.toFixed(6)}</span></div>
       </div>
+      <div class="poi-summary">
+        <div class="poi-icon-large">${poi.icon}</div>
+        <div>
+          <div class="poi-title">${escapeHtml(poi.title)}</div>
+          <div class="poi-address">${escapeHtml(poi.address)}</div>
+        </div>
+      </div>
+      <div class="poi-description">${escapeHtml(poi.description)}</div>
+      <div class="info-row"><span class="label">Kategori</span><span class="value">${escapeHtml(poi.kind)}</span></div>
+      <div class="info-row"><span class="label">Koordinat</span><span class="value">${poi.lat.toFixed(6)}, ${poi.lng.toFixed(6)}</span></div>
     </div>`;
 }
 
 function openPoiModal(poi: PoiRecord): void {
   closeModal();
   state.activeModalPoiId = poi.id;
-  const container = document.createElement("div");
-  container.className = "modal-wrapper";
-  container.innerHTML = renderPoiModal(poi);
-  document.body.appendChild(container);
-
-  const modal = container.querySelector<HTMLElement>(".info-modal");
-  if (!modal) return;
-
-  modal.querySelector<HTMLButtonElement>(".modal-close")?.addEventListener("click", closeModal);
-  L.DomEvent.disableClickPropagation(container);
-  L.DomEvent.disableScrollPropagation(container);
+  const overlay = createSwipeableSheetModal(
+    "m-poi-modal",
+    "m-poi-sheet m-device-sheet",
+    `
+      <div class="m-sheet-handle-bar"></div>
+      ${renderPoiModal(poi)}
+    `,
+  );
+  overlay.querySelector(".m-layer-backdrop")!.addEventListener("click", closeModal);
+  const sheet = overlay.querySelector<HTMLElement>(".m-poi-sheet");
+  if (!sheet) return;
+  setupSheetSwipe(sheet, closeModal);
+  sheet.querySelector<HTMLButtonElement>(".modal-close")?.addEventListener("click", closeModal);
 }
 
 function syncPoiMarkers(anchor: L.LatLngExpression): void {
@@ -376,12 +442,7 @@ async function fetchOverpassFeaturesForBounds(bounds: L.LatLngBounds): Promise<P
       const name = tags.name || tags.official_name || tags['brand'] || tags['operator'] || tags.amenity || tags.shop || tags.tourism || `${tags.amenity || tags.shop || 'POI'}`;
       const lat = el.type === 'node' ? el.lat : (el.center && el.center.lat) || el.lat || 0;
       const lng = el.type === 'node' ? el.lon : (el.center && el.center.lon) || el.lon || 0;
-      const kind: PoiKind = tags.amenity === 'hospital' ? 'hospital'
-        : tags.shop ? 'mall'
-          : tags.tourism === 'university' ? 'campus'
-            : tags.amenity === 'parking' || tags.parking ? 'parking'
-              : tags.leisure === 'park' ? 'park'
-                : 'park';
+      const kind = classifyPoiKind(tags);
       const imageUrl = tags.image || tags['image:source'] || POI_LIBRARY[kind].imageUrl;
       const description = tags.description || tags['note'] || POI_LIBRARY[kind].description;
       const addressParts = [] as string[];
@@ -397,7 +458,7 @@ async function fetchOverpassFeaturesForBounds(bounds: L.LatLngBounds): Promise<P
         address: address || '',
         imageUrl: imageUrl || POI_LIBRARY[kind].imageUrl,
         rating: POI_LIBRARY[kind].rating,
-        icon: tags.amenity === 'hospital' ? '🏥' : (tags.shop ? '🏬' : (tags.tourism ? '🎓' : '🌳')),
+        icon: poiVisual(kind).icon,
         lat, lng,
       };
     }).filter((p: PoiRecord) => p.lat && p.lng && !Number.isNaN(p.lat) && !Number.isNaN(p.lng));
@@ -409,23 +470,51 @@ async function fetchOverpassFeaturesForBounds(bounds: L.LatLngBounds): Promise<P
 }
 
 let lastOverpassFetchBounds: L.LatLngBounds | null = null;
+
+// Helper: Update MapLibre POI layer with GeoJSON features
+function updateMapLibrePoiLayer(pois: PoiRecord[]): void {
+  const maplibreMap = state.maplibreMap;
+  if (!maplibreMap || state.baseMode !== "3d") return;
+
+  try {
+    const features = pois.map(poi => ({
+      type: "Feature",
+      properties: {
+        id: poi.id,
+        title: poi.title,
+        kind: poi.kind,
+        "icon-emoji": poi.icon // Use emoji from POI record
+      },
+      geometry: { type: "Point", coordinates: [poi.lng, poi.lat] }
+    }));
+
+    const source = maplibreMap.getSource("poi-source");
+    if (source && "setData" in source) {
+      (source as any).setData({ type: "FeatureCollection", features });
+    }
+  } catch (err) {
+    console.warn("Failed to update POI layer:", err);
+  }
+}
+
 async function refreshOverpassLayer(): Promise<void> {
   const bounds = map.getBounds();
   // Avoid refetch if bounds similar
   if (lastOverpassFetchBounds && lastOverpassFetchBounds.contains(bounds.getSouthWest()) && lastOverpassFetchBounds.contains(bounds.getNorthEast())) return;
   lastOverpassFetchBounds = bounds.pad(0.2);
   const pois = await fetchOverpassFeaturesForBounds(bounds);
+  
+  // Update MapLibre POI layer (for 3D)
+  updateMapLibrePoiLayer(pois);
+
   if (!state.overpassLayer) state.overpassLayer = L.layerGroup().addTo(map);
   state.overpassLayer.clearLayers();
   pois.forEach((poi) => {
-    const marker = L.circleMarker([poi.lat, poi.lng], {
-      radius: 8,
-      color: '#2563eb',
-      weight: 1.5,
-      fillColor: '#3b82f6',
-      fillOpacity: 0.85,
+    const marker = L.marker([poi.lat, poi.lng], {
+      icon: makePoiIcon(poi, poiMarkerSizeByZoom()),
       interactive: true,
-      pane: 'overlayPane',
+      riseOnHover: true,
+      zIndexOffset: 450,
     }).addTo(state.overpassLayer as L.LayerGroup);
     marker.on('click', () => openPoiModal(poi));
   });
@@ -435,6 +524,33 @@ async function refreshOverpassLayer(): Promise<void> {
 map.on('click', async (ev: L.LeafletMouseEvent) => {
   const lat = ev.latlng.lat;
   const lng = ev.latlng.lng;
+  
+  // In 3D mode, check if click is on a MapLibre POI
+  if (state.baseMode === '3d' && state.maplibreMap) {
+    try {
+      const features = state.maplibreMap.querySourceFeatures("poi-source", {
+        sourceLayer: undefined
+      }).filter((f: any) => {
+        if (!f.properties || !f.geometry) return false;
+        const [lng2, lat2] = f.geometry.coordinates;
+        const dist = Math.sqrt(Math.pow(lat2 - lat, 2) + Math.pow(lng2 - lng, 2));
+        return dist < 0.003; // ~300m at this zoom level
+      });
+      
+      if (features.length > 0) {
+        const feature = features[0];
+        const poi = state.poiData.get(feature.properties?.id);
+        if (poi) {
+          openPoiModal(poi);
+          return;
+        }
+      }
+    } catch (err) {
+      // ignore MapLibre query errors
+    }
+  }
+
+  // Fallback: query Overpass for nearby features
   try {
     const q = `
       [out:json][timeout:10];
@@ -458,15 +574,16 @@ map.on('click', async (ev: L.LeafletMouseEvent) => {
     const tags = el.tags || {};
     const latR = el.type === 'node' ? el.lat : (el.center && el.center.lat) || el.lat;
     const lngR = el.type === 'node' ? el.lon : (el.center && el.center.lon) || el.lon;
+    const kind = classifyPoiKind(tags);
     const poi: PoiRecord = {
       id: `overpass-click-${el.type}-${el.id}`,
-      kind: 'park',
+      kind,
       title: tags.name || tags.amenity || tags.shop || `Feature ${el.id}`,
       description: tags.description || tags['note'] || '',
       address: (tags['addr:street'] || '') + (tags['addr:city'] ? ', ' + tags['addr:city'] : ''),
-      imageUrl: tags.image || POI_LIBRARY.park.imageUrl,
-      rating: POI_LIBRARY.park.rating,
-      icon: tags.amenity === 'hospital' ? '🏥' : (tags.shop ? '🏬' : '📍'),
+      imageUrl: tags.image || POI_LIBRARY[kind].imageUrl,
+      rating: POI_LIBRARY[kind].rating,
+      icon: poiVisual(kind).icon,
       lat: latR, lng: lngR,
     };
     openPoiModal(poi);
@@ -475,7 +592,13 @@ map.on('click', async (ev: L.LeafletMouseEvent) => {
   }
 });
 
-map.on('moveend', () => { void refreshOverpassLayer(); });
+map.on('moveend', () => {
+  if (state.baseMode === '3d') {
+    if (state.overpassLayer) state.overpassLayer.clearLayers();
+    return;
+  }
+  void refreshOverpassLayer();
+});
 
 // ─── Helpers ────────────────────────────────────────────────────
 
@@ -692,44 +815,68 @@ function renderDeviceModal(device: DeviceRecord, traffic: TrafficState): string 
   const road = escapeHtml(traffic.roadName);
   const recommendation = escapeHtml(traffic.recommendation);
   return `
-    <div class="info-modal" data-device-id="${device.id}">
-      <div class="modal-header">
-        <button class="modal-close" data-action="close">×</button>
-        <h2 class="modal-title">${escapeHtml(device.label)}</h2>
+    <div class="modal-header">
+      <button class="modal-close" data-action="close">×</button>
+      <h2 class="modal-title">${escapeHtml(device.label)}</h2>
+    </div>
+    <div class="modal-tabs">
+      <button class="modal-tab-btn active" data-tab="system">
+        <span class="tab-icon">ℹ️</span> Sistem
+      </button>
+      <button class="modal-tab-btn" data-tab="traffic">
+        <span class="tab-icon">🚦</span> Lalu Lintas
+      </button>
+    </div>
+    <div class="modal-content">
+      <div class="modal-tab-pane active" data-tab="system">
+        <div class="info-row"><span class="label">Lokasi</span><span class="value" data-field="device-location">${device.position.lat.toFixed(6)}, ${device.position.lng.toFixed(6)}</span></div>
+        <div class="info-row"><span class="label">ID Sistem</span><span class="value" data-field="device-id">${escapeHtml(device.id)}</span></div>
+        <div class="info-row"><span class="label">Status</span><span class="value status-${device.status}" data-field="device-status">${escapeHtml(device.status)}</span></div>
+        <div class="info-row"><span class="label">Last Seen</span><span class="value" data-field="device-last-seen">${escapeHtml(device.lastSeenText || formatTime(device.lastSeen))}</span></div>
+        <div class="info-row"><span class="label">Age</span><span class="value" data-field="device-age">${formatAge(device.lastSeen)}</span></div>
+        <div class="info-row"><span class="label">Road</span><span class="value" data-field="device-road">${road}</span></div>
       </div>
-      <div class="modal-tabs">
-        <button class="modal-tab-btn active" data-tab="system">
-          <span class="tab-icon">ℹ️</span> Sistem
-        </button>
-        <button class="modal-tab-btn" data-tab="traffic">
-          <span class="tab-icon">🚦</span> Lalu Lintas
-        </button>
-      </div>
-      <div class="modal-content">
-        <div class="modal-tab-pane active" data-tab="system">
-          <div class="info-row"><span class="label">Lokasi</span><span class="value">${device.position.lat.toFixed(6)}, ${device.position.lng.toFixed(6)}</span></div>
-          <div class="info-row"><span class="label">ID Sistem</span><span class="value">${escapeHtml(device.id)}</span></div>
-          <div class="info-row"><span class="label">Status</span><span class="value status-${device.status}">${escapeHtml(device.status)}</span></div>
-          <div class="info-row"><span class="label">Last Seen</span><span class="value">${escapeHtml(device.lastSeenText || formatTime(device.lastSeen))}</span></div>
-          <div class="info-row"><span class="label">Age</span><span class="value">${formatAge(device.lastSeen)}</span></div>
-          <div class="info-row"><span class="label">Road</span><span class="value">${road}</span></div>
-        </div>
-        <div class="modal-tab-pane" data-tab="traffic">
-          <div class="info-row"><span class="label">Jalan</span><span class="value">${road}</span></div>
-          <div class="info-row"><span class="label">Jumlah Kendaraan</span><span class="value">${traffic.vehicleCount}</span></div>
-          <div class="info-row"><span class="label">Durasi Lampu</span><span class="value">${traffic.duration}s (${traffic.color})</span></div>
-          <div class="info-row"><span class="label">Rekomendasi</span><span class="value">${recommendation}</span></div>
-        </div>
+      <div class="modal-tab-pane" data-tab="traffic">
+        <div class="info-row"><span class="label">Jalan</span><span class="value" data-field="traffic-road">${road}</span></div>
+        <div class="info-row"><span class="label">Jumlah Kendaraan</span><span class="value" data-field="traffic-count">${traffic.vehicleCount}</span></div>
+        <div class="info-row"><span class="label">Durasi Lampu</span><span class="value" data-field="traffic-duration">${traffic.duration}s (${traffic.color})</span></div>
+        <div class="info-row"><span class="label">Rekomendasi</span><span class="value" data-field="traffic-recommendation">${recommendation}</span></div>
       </div>
     </div>`;
 }
 
 function closeModal(): void {
-  document.querySelectorAll(".modal-wrapper").forEach((m) => m.remove());
+  document.querySelectorAll(".modal-wrapper, #m-device-modal, #m-poi-modal").forEach((m) => m.remove());
   state.activeModalDeviceId = null;
   state.activeModalPoiId = null;
   window.clearInterval(state.trafficRefreshTimer);
   state.trafficRefreshTimer = 0;
+}
+
+function setSheetActiveTab(sheet: HTMLElement, tabName: string): void {
+  sheet.querySelectorAll(".modal-tab-btn").forEach((btn) => btn.classList.remove("active"));
+  sheet.querySelectorAll(".modal-tab-pane").forEach((pane) => pane.classList.remove("active"));
+  sheet.querySelector<HTMLButtonElement>(`.modal-tab-btn[data-tab="${tabName}"]`)?.classList.add("active");
+  sheet.querySelector<HTMLElement>(`.modal-tab-pane[data-tab="${tabName}"]`)?.classList.add("active");
+}
+
+function getActiveModalTab(sheet: HTMLElement): string {
+  return sheet.querySelector<HTMLButtonElement>(".modal-tab-btn.active")?.dataset.tab || "system";
+}
+
+function createSwipeableSheetModal(id: string, sheetClass: string, bodyHtml: string): HTMLElement {
+  const overlay = document.createElement("div");
+  overlay.id = id;
+  overlay.className = id;
+  overlay.innerHTML = `
+    <div class="m-layer-backdrop"></div>
+    <div class="${sheetClass}">${bodyHtml}</div>
+  `;
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("open"));
+  L.DomEvent.disableClickPropagation(overlay);
+  L.DomEvent.disableScrollPropagation(overlay);
+  return overlay;
 }
 
 function openModal(device: DeviceRecord): void {
@@ -737,49 +884,49 @@ function openModal(device: DeviceRecord): void {
   state.activeModalDeviceId = device.id;
   state.activeModalPoiId = null;
   const traffic = trafficStateForDevice(device);
-  const container = document.createElement("div");
-  container.className = "modal-wrapper";
-  container.innerHTML = renderDeviceModal(device, traffic);
-  document.body.appendChild(container);
 
-  const modal = container.querySelector<HTMLElement>(".info-modal");
-  if (!modal) return;
+  const overlay = createSwipeableSheetModal(
+    "m-device-modal",
+    "m-device-sheet",
+    `
+      <div class="m-sheet-handle-bar"></div>
+      ${renderDeviceModal(device, traffic)}
+    `,
+  );
 
-  modal.querySelectorAll<HTMLButtonElement>(".modal-tab-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const tabName = btn.dataset.tab;
-      modal.querySelectorAll(".modal-tab-btn").forEach((b) => b.classList.remove("active"));
-      modal.querySelectorAll(".modal-tab-pane").forEach((pane) => pane.classList.remove("active"));
-      btn.classList.add("active");
-      modal.querySelector<HTMLElement>(`.modal-tab-pane[data-tab="${tabName}"]`)?.classList.add("active");
-    });
+  overlay.querySelector(".m-layer-backdrop")!.addEventListener("click", closeModal);
+  const sheet = overlay.querySelector<HTMLElement>(".m-device-sheet");
+  if (!sheet) return;
+  setupSheetSwipe(sheet, closeModal);
+  sheet.querySelectorAll<HTMLButtonElement>(".modal-tab-btn").forEach((btn) => {
+    btn.addEventListener("click", () => setSheetActiveTab(sheet, btn.dataset.tab || "system"));
   });
-
-  modal.querySelector<HTMLButtonElement>(".modal-close")?.addEventListener("click", closeModal);
-  L.DomEvent.disableClickPropagation(container);
-  L.DomEvent.disableScrollPropagation(container);
+  sheet.querySelector<HTMLButtonElement>(".modal-close")?.addEventListener("click", closeModal);
 
   window.clearInterval(state.trafficRefreshTimer);
   state.trafficRefreshTimer = window.setInterval(() => {
     const active = state.device;
     const activeId = state.activeModalDeviceId;
     if (!active || !activeId || active.id !== activeId) return;
-    const nextTraffic = trafficStateForDevice(active);
-    modal.outerHTML = renderDeviceModal(active, nextTraffic);
-    const nextModal = document.querySelector<HTMLElement>(".info-modal[data-device-id]");
-    if (nextModal) {
-      nextModal.querySelectorAll<HTMLButtonElement>(".modal-tab-btn").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const tabName = btn.dataset.tab;
-          nextModal.querySelectorAll(".modal-tab-btn").forEach((b) => b.classList.remove("active"));
-          nextModal.querySelectorAll(".modal-tab-pane").forEach((pane) => pane.classList.remove("active"));
-          btn.classList.add("active");
-          nextModal.querySelector<HTMLElement>(`.modal-tab-pane[data-tab="${tabName}"]`)?.classList.add("active");
-        });
-      });
-      nextModal.querySelector<HTMLButtonElement>(".modal-close")?.addEventListener("click", closeModal);
-    }
+    refreshOpenDeviceModal(active);
   }, 2500);
+}
+
+function refreshOpenDeviceModal(device: DeviceRecord): void {
+  const sheet = document.querySelector<HTMLElement>(".m-device-sheet");
+  if (!sheet) return;
+
+  const activeTab = getActiveModalTab(sheet);
+  const nextTraffic = trafficStateForDevice(device);
+  sheet.innerHTML = `
+    <div class="m-sheet-handle-bar"></div>
+    ${renderDeviceModal(device, nextTraffic)}
+  `;
+  sheet.querySelector<HTMLButtonElement>(".modal-close")?.addEventListener("click", closeModal);
+  sheet.querySelectorAll<HTMLButtonElement>(".modal-tab-btn").forEach((btn) => {
+    btn.addEventListener("click", () => setSheetActiveTab(sheet, btn.dataset.tab || "system"));
+  });
+  setSheetActiveTab(sheet, activeTab);
 }
 
 function ensureMarker(device: DeviceRecord): void {
@@ -839,6 +986,17 @@ function rescaleMarkers(): void {
     const marker = state.poiMarkers.get(id);
     if (!marker) continue;
     marker.setIcon(makePoiIcon(poi, poiSize));
+  }
+
+  // Rescale MapLibre POI layer text size
+  const maplibreMap = state.maplibreMap;
+  if (maplibreMap && state.baseMode === "3d") {
+    try {
+      const scaledSize = 14 + (map.getZoom() - 13) * 1.2;
+      maplibreMap.setLayoutProperty("poi-symbols", "text-size", Math.min(Math.max(scaledSize, 10), 24));
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -928,6 +1086,155 @@ async function ensureMapLibreMap(): Promise<any | null> {
 
     maplibreMap.on("load", () => {
       syncMapLibreView(true);
+
+      // Some MapLibre builds do not implement setFog.
+      const maybeSetFog = (maplibreMap as any).setFog;
+      if (typeof maybeSetFog === "function") {
+        maybeSetFog.call(maplibreMap, {
+          "range": [0.5, 10],
+          "color": "#ffffff",
+          "high-color": "#245cdf",
+          "space-color": "#000000"
+        });
+      }
+
+      // Prevent noisy runtime warnings when style references icons not present
+      // in the remote sprite sheet.
+      maplibreMap.on("styleimagemissing", (e: any) => {
+        const id = e?.id;
+        if (!id || maplibreMap.hasImage(id)) return;
+        const transparentPixel = new Uint8Array([0, 0, 0, 0]);
+        maplibreMap.addImage(id, { width: 1, height: 1, data: transparentPixel });
+      });
+
+      // Add POI GeoJSON source for 3D rendering (prevents drift)
+      try {
+        if (!maplibreMap.getSource("poi-source")) {
+          maplibreMap.addSource("poi-source", {
+            type: "geojson",
+            data: { type: "FeatureCollection", features: [] }
+          });
+        }
+
+        // Add POI symbol layer using text labels with emoji icons (simple, no drift)
+        if (!maplibreMap.getLayer("poi-symbols")) {
+          maplibreMap.addLayer({
+            id: "poi-symbols",
+            type: "symbol",
+            source: "poi-source",
+            layout: {
+              "text-field": ["get", "icon-emoji"],
+              "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
+              "text-size": 18,
+              "text-offset": [0, 0],
+              "text-allow-overlap": true,
+              "text-ignore-placement": true
+            },
+            paint: {
+              "text-opacity": 1
+            }
+          }, "building");
+        }
+
+        // Add click handler for POI (allow MapLibre to detect clicks)
+        // Note: MapLibre is non-interactive by default, so we detect features via ray casting
+        // when Leaflet receives a click and is in 3D mode
+      } catch (err) {
+        console.warn("Failed to setup POI layer:", err);
+      }
+
+      const style = maplibreMap.getStyle();
+      if (style && style.layers) {
+        style.layers.forEach((layer: any) => {
+          const id = layer.id;
+          const sourceLayer = layer['source-layer'];
+
+          // 1. Mewarnai Tata Guna Lahan (Tanah Dasar)
+          if (sourceLayer === 'landuse' && layer.type === 'fill') {
+            try {
+              maplibreMap.setPaintProperty(id, 'fill-color', [
+                'match', ['get', 'class'],
+                'hospital', '#ffd6d6',
+                'school', '#fff4c2',
+                'education', '#fff4c2',
+                'residential', '#def7e3',
+                'commercial', '#ffe4c7',
+                'industrial', '#e2d9f3',
+                '#eef2f5'
+              ]);
+              maplibreMap.setPaintProperty(id, 'fill-opacity', 0.95);
+            } catch {
+              /* ignore layer incompatibility */
+            }
+          }
+
+          // Taman & Air
+          if ((sourceLayer === 'landcover' || sourceLayer === 'park') && layer.type === 'fill') {
+            try {
+              maplibreMap.setPaintProperty(id, 'fill-color', [
+                'match', ['get', 'class'],
+                'grass', '#d8efcf',
+                'wood', '#bde09b',
+                '#e9f7de'
+              ]);
+              maplibreMap.setPaintProperty(id, 'fill-opacity', 0.95);
+            } catch {
+              /* ignore layer incompatibility */
+            }
+          }
+          if (sourceLayer === 'water' && layer.type === 'fill') {
+            try {
+              maplibreMap.setPaintProperty(id, 'fill-color', '#8ec5f7');
+              maplibreMap.setPaintProperty(id, 'fill-opacity', 0.93);
+            } catch {
+              /* ignore layer incompatibility */
+            }
+          }
+
+          // 2. Mewarnai Jalan Tol dan Raya
+          if (sourceLayer === 'transportation' && layer.type === 'line') {
+            try {
+              maplibreMap.setPaintProperty(id, 'line-color', [
+                'match', ['get', 'class'],
+                'motorway', '#f59e0b',
+                'trunk', '#f59e0b',
+                'primary', '#ffffff',
+                '#f8fafc'
+              ]);
+            } catch {
+              /* ignore layer incompatibility */
+            }
+          }
+
+          // 3. Bangunan 3D Berwarna berdasarkan Tinggi Gedung
+          if (layer.type === 'fill-extrusion' || id.includes('building')) {
+            try {
+              maplibreMap.setPaintProperty(id, 'fill-extrusion-color', [
+                'interpolate',
+                ['linear'],
+                ['to-number', ['coalesce', ['get', 'render_height'], ['get', 'height'], ['*', ['to-number', ['coalesce', ['get', 'building:levels'], 0], 0], 3], 0], 0],
+                0, '#fbbf24',
+                10, '#4ade80',
+                25, '#60a5fa',
+                50, '#a78bfa',
+                100, '#f87171'
+              ]);
+              maplibreMap.setPaintProperty(id, 'fill-extrusion-opacity', 0.92);
+            } catch {
+              /* ignore layer incompatibility */
+            }
+          }
+
+          if ((sourceLayer === 'building' || id.includes('building')) && layer.type === 'fill') {
+            try {
+              maplibreMap.setPaintProperty(id, 'fill-color', '#d6e4d4');
+              maplibreMap.setPaintProperty(id, 'fill-opacity', 0.88);
+            } catch {
+              /* ignore layer incompatibility */
+            }
+          }
+        });
+      }
     });
     state.maplibreMap = maplibreMap;
     return maplibreMap;
@@ -976,12 +1283,51 @@ function syncMapLibreView(force = false): void {
   state.maplibreSyncing = true;
   try {
     maplibreMap.jumpTo({
+      animate: false,
       center,
       zoom,
       bearing,
-      pitch,
-      animate: false,
+      pitch: MAPLIBRE_3D_PITCH,
+
     });
+    if (state.baseMode === "3d") {
+      // Matikan overlay Overpass di 3D agar tidak terlihat geser terhadap bidang
+      // perspektif MapLibre. POI akan ditampilkan via MapLibre native layer.
+      if (state.overpassLayer) {
+        state.overpassLayer.getLayers().forEach((layer: any) => {
+          if (layer._path) layer._path.style.display = 'none';
+          if (layer._icon) layer._icon.style.display = 'none';
+        });
+      }
+      // Also hide Leaflet POI markers
+      for (const marker of state.poiMarkers.values()) {
+        (marker.getElement() as HTMLElement).style.display = 'none';
+      }
+    } else {
+      // Mode Street 2D Normal (Leaflet mengambil alih lagi)
+      if (state.overpassLayer) {
+        state.overpassLayer.getLayers().forEach((layer: any) => {
+          if (layer._path) layer._path.style.display = '';
+          if (layer._icon) layer._icon.style.display = '';
+        });
+      }
+      // Show Leaflet POI markers again
+      for (const marker of state.poiMarkers.values()) {
+        (marker.getElement() as HTMLElement).style.display = '';
+      }
+      // Clear MapLibre POI layer in 2D mode
+      const maplibreMap = state.maplibreMap;
+      if (maplibreMap) {
+        try {
+          const source = maplibreMap.getSource("poi-source");
+          if (source && "setData" in source) {
+            (source as any).setData({ type: "FeatureCollection", features: [] });
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    }
   } finally {
     state.maplibreSyncing = false;
   }
@@ -1018,7 +1364,6 @@ async function setBaseMap(mode: BaseMapMode): Promise<void> {
       mapEl.style.transformOrigin = "50% 100%";
       mapEl.style.transition = "transform 0.5s ease";
       state.baseMode = "street";
-      if (state.modeBtnLabel) state.modeBtnLabel.textContent = "3D";
       return;
     }
 
@@ -1033,7 +1378,6 @@ async function setBaseMap(mode: BaseMapMode): Promise<void> {
   }
 
   state.baseMode = mode;
-  if (state.modeBtnLabel) state.modeBtnLabel.textContent = mode === "3d" ? "2D" : "3D";
 }
 
 // ─── Camera tile ────────────────────────────────────────────────
@@ -1071,11 +1415,6 @@ function locateUser(): void {
     () => { /* silent */ },
     { enableHighAccuracy: true, timeout: 8000, maximumAge: 30_000 },
   );
-}
-
-async function toggleBaseMap(): Promise<void> {
-  if (state.baseMode === "3d") await setBaseMap("street");
-  else await setBaseMap("3d");
 }
 
 function openCameraPreview(): void {
@@ -1130,14 +1469,40 @@ function makeCompassSvg(): string {
 const BottomRightControl = L.Control.extend({
   options: { position: "bottomright" },
   onAdd(): HTMLElement {
-    const container = L.DomUtil.create("div", "map-toolbar");
-    container.innerHTML = `
+    const mobile = isMobile();
+    const container = L.DomUtil.create("div", mobile ? "map-toolbar map-toolbar-mobile" : "map-toolbar");
+    container.innerHTML = mobile ? `
       <button type="button" class="toolbar-compass" data-action="compass"
               title="Kompas – klik untuk putar peta">
         ${makeCompassSvg()}
       </button>
-      <button type="button" class="toolbar-btn" data-action="mode" title="Ganti tampilan peta">
-        <span class="mode-label">3D</span>
+      <button type="button" class="toolbar-btn" data-action="locate" title="Lokasi saya">
+        <svg viewBox="0 0 20 20" fill="none" width="16" height="16">
+          <circle cx="10" cy="10" r="3.2" stroke="currentColor" stroke-width="1.7"/>
+          <path d="M10 1.5v2.8M10 15.7v2.8M1.5 10h2.8M15.7 10h2.8"
+                stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <button type="button" class="toolbar-btn" data-action="home" title="Kembali ke posisi device">
+        <svg viewBox="0 0 20 20" fill="none" width="16" height="16">
+          <path d="M3 9.5L10 3l7 6.5V17a1 1 0 01-1 1H5a1 1 0 01-1-1V9.5z"
+                stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+          <path d="M7.5 18v-5h5v5"
+                stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <div class="toolbar-divider"></div>
+      <button type="button" class="toolbar-btn toolbar-zoom" data-action="zoom-in"  title="Zoom in">+</button>
+      <button type="button" class="toolbar-btn toolbar-zoom" data-action="zoom-out" title="Zoom out">−</button>
+      <div class="toolbar-divider"></div>
+      <button type="button" class="toolbar-camera" data-action="camera" title="Camera preview">
+        <div class="camera-thumb-wrap"></div>
+        <span class="camera-tile-label">全景</span>
+      </button>
+    ` : `
+      <button type="button" class="toolbar-compass" data-action="compass"
+              title="Kompas – klik untuk putar peta">
+        ${makeCompassSvg()}
       </button>
       <button type="button" class="toolbar-btn" data-action="locate" title="Lokasi saya">
         <svg viewBox="0 0 20 20" fill="none" width="16" height="16">
@@ -1193,16 +1558,21 @@ const BottomRightControl = L.Control.extend({
     state.compassBtn = container.querySelector<HTMLButtonElement>(".toolbar-compass");
     state.cameraPreview = container.querySelector<HTMLDivElement>(".camera-thumb-wrap");
     state.cameraButton = container.querySelector<HTMLButtonElement>(".toolbar-camera");
-    state.modeBtnLabel = container.querySelector<HTMLSpanElement>(".mode-label");
 
     container.querySelectorAll<HTMLButtonElement>("button[data-action]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const action = btn.dataset.action;
         if (action === "compass") handleCompassClick();
-        else if (action === "mode") void toggleBaseMap();
         else if (action === "locate") locateUser();
         else if (action === "home") goHome();
-        else if (action === "camera") openCameraPreview();
+        else if (action === "camera") {
+          if (isMobile()) {
+            switchMobileTab("its");
+            focusITSVideoSection();
+          } else {
+            openCameraPreview();
+          }
+        }
         else if (action === "zoom-in") map.zoomIn();
         else if (action === "zoom-out") map.zoomOut();
       });
@@ -1279,8 +1649,7 @@ function applyDevices(devices: DeviceRecord[]): void {
         }));
       }
       if (state.activeModalDeviceId === device.id && state.device?.id === device.id) {
-        closeModal();
-        openModal(device);
+        refreshOpenDeviceModal(device);
       }
     });
   });
@@ -1372,4 +1741,691 @@ window.addEventListener("beforeunload", () => {
   map.remove();
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// MOBILE UI PATCH — VERSI FIXED (semua error TS6133 sudah diperbaiki)
+// Ganti seluruh blok mobile patch di main.ts dengan file ini
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── Mobile Detection ───────────────────────────────────────────────────────
+
+function isMobile(): boolean {
+  return window.innerWidth <= 768 || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+}
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+type MobileTab = "peta" | "its" | "profil";
+type LayerMode = "street" | "satellite" | "3d";
+
+const mobileState = {
+  activeTab: "peta" as MobileTab,
+  layerModalOpen: false,
+};
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
+
+// ─── 1. Bottom Navigation (Blur) ─────────────────────────────────────────────
+
+function createMobileBottomNav(): HTMLElement {
+  const nav = document.createElement("nav");
+  nav.id = "m-bottom-nav";
+  nav.innerHTML = `
+    <button class="m-nav-tab active" data-tab="peta">
+      <span class="m-nav-icon">
+        <img src="/petaits.png" alt="" width="22" height="22"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+        <svg style="display:none" viewBox="0 0 24 24" fill="none" width="22" height="22">
+          <path d="M3 6l7-3 4 2 7-3v15l-7 3-4-2-7 3V6z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+          <path d="M10 3v15M14 5v15" stroke="currentColor" stroke-width="1.5"/>
+        </svg>
+      </span>
+      <span class="m-nav-label">Peta</span>
+    </button>
+    <button class="m-nav-tab" data-tab="its">
+      <span class="m-nav-icon">
+        <img src="/itss.png" alt="" width="22" height="22"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+        <svg style="display:none" viewBox="0 0 24 24" fill="none" width="22" height="22">
+          <rect x="2" y="3" width="20" height="14" rx="2" stroke="currentColor" stroke-width="1.8"/>
+          <path d="M8 21h8M12 17v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <span class="m-nav-label">ITS</span>
+    </button>
+    <button class="m-nav-tab" data-tab="profil">
+      <span class="m-nav-icon">
+        <svg viewBox="0 0 24 24" fill="none" width="22" height="22">
+          <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/>
+          <path d="M4 20c0-3.314 3.582-6 8-6s8 2.686 8 6"
+                stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <span class="m-nav-label">Profil</span>
+    </button>
+  `;
+
+  nav.querySelectorAll<HTMLButtonElement>(".m-nav-tab").forEach(btn => {
+    btn.addEventListener("click", () => switchMobileTab(btn.dataset.tab as MobileTab));
+  });
+
+  return nav;
+}
+
+function switchMobileTab(tab: MobileTab): void {
+  mobileState.activeTab = tab;
+
+  document.querySelectorAll(".m-nav-tab").forEach(b => b.classList.remove("active"));
+  document.querySelector<HTMLButtonElement>(`.m-nav-tab[data-tab="${tab}"]`)?.classList.add("active");
+
+  if (tab === "peta") {
+    closeITSSheet();
+  } else if (tab === "its") {
+    openITSSheet();
+  } else if (tab === "profil") {
+    closeITSSheet();
+    openProfilSheet();
+  }
+}
+
+// ─── 2. Layer Button + Swipeable Layer Modal ──────────────────────────────────
+
+function createLayerButton(): HTMLElement {
+  const btn = document.createElement("button");
+  btn.id = "m-layer-btn";
+  btn.setAttribute("aria-label", "Ganti lapisan peta");
+  btn.innerHTML = `
+    <img src="/lapisan.svg" alt="Lapisan" width="20" height="20"
+         onerror="this.outerHTML='<svg viewBox=\\'0 0 24 24\\' fill=\\'none\\' width=\\'20\\' height=\\'20\\'><path d=\\'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5\\' stroke=\\'currentColor\\' stroke-width=\\'1.8\\' stroke-linejoin=\\'round\\'/></svg>'">
+  `;
+  // Prevent clicks on the layer button from propagating to the map (which
+  // could trigger marker popups underneath). Also stop default to avoid
+  // unexpected map interactions.
+  L.DomEvent.disableClickPropagation(btn);
+  L.DomEvent.disableScrollPropagation(btn);
+  btn.addEventListener("click", (e) => { e.stopPropagation(); e.preventDefault(); openLayerModal(); });
+  return btn;
+}
+
+function openLayerModal(): void {
+  if (document.getElementById("m-layer-modal")) return;
+  mobileState.layerModalOpen = true;
+
+  const overlay = document.createElement("div");
+  overlay.id = "m-layer-modal";
+  overlay.innerHTML = `
+    <div class="m-layer-backdrop"></div>
+    <div class="m-layer-sheet">
+      <div class="m-sheet-handle-bar"></div>
+      <div class="m-layer-title">Pilih Tampilan Peta</div>
+      <div class="m-layer-options">
+        <button class="m-layer-opt ${state.baseMode === 'street' ? 'active' : ''}" data-mode="street">
+          <div class="m-layer-icon">🗺️</div>
+          <span>Normal</span>
+        </button>
+        <button class="m-layer-opt ${state.baseMode === 'satellite' ? 'active' : ''}" data-mode="satellite">
+          <div class="m-layer-icon">🛰️</div>
+          <span>Satelit</span>
+        </button>
+        <button class="m-layer-opt ${state.baseMode === '3d' ? 'active' : ''}" data-mode="3d">
+          <div class="m-layer-icon">🏙️</div>
+          <span>3D</span>
+        </button>
+      </div>
+    </div>
+  `;
+
+  overlay.querySelector(".m-layer-backdrop")!.addEventListener("click", closeLayerModal);
+
+  overlay.querySelectorAll<HTMLButtonElement>(".m-layer-opt").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const mode = btn.dataset.mode as LayerMode;
+      overlay.querySelectorAll(".m-layer-opt").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      await setBaseMap(mode);
+      setTimeout(closeLayerModal, 280);
+    });
+  });
+
+  setupSheetSwipe(
+    overlay.querySelector<HTMLElement>(".m-layer-sheet")!,
+    closeLayerModal
+  );
+
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("open"));
+}
+
+function closeLayerModal(): void {
+  const modal = document.getElementById("m-layer-modal");
+  if (!modal) return;
+  modal.classList.remove("open");
+  modal.classList.add("closing");
+  setTimeout(() => modal.remove(), 320);
+  mobileState.layerModalOpen = false;
+}
+
+// ─── 3. Generic Sheet Swipe Handler ──────────────────────────────────────────
+
+function setupSheetSwipe(sheetEl: HTMLElement, onClose: () => void): void {
+  let startY = 0;
+  let currentY = 0;
+
+  const onTouchStart = (e: TouchEvent) => {
+    startY = e.touches[0].clientY;
+    currentY = 0;
+    sheetEl.style.transition = "none";
+  };
+
+  const onTouchMove = (e: TouchEvent) => {
+    const delta = e.touches[0].clientY - startY;
+    currentY = Math.max(0, delta);
+    sheetEl.style.transform = `translateY(${currentY}px)`;
+  };
+
+  const onTouchEnd = () => {
+    sheetEl.style.transition = "";
+    if (currentY > 80) {
+      onClose();
+    } else {
+      sheetEl.style.transform = "";
+    }
+  };
+
+  sheetEl.addEventListener("touchstart", onTouchStart, { passive: true });
+  sheetEl.addEventListener("touchmove", onTouchMove, { passive: true });
+  sheetEl.addEventListener("touchend", onTouchEnd);
+}
+
+// ─── 4. ITS Sheet (Swipeable, Dynamic Map Resize) ────────────────────────────
+
+const ITS_SNAP = {
+  closed: 0,
+  peek: () => Math.round((window.innerHeight - 64) * 0.65),
+  full: () => Math.round((window.innerHeight - 64) * 0.85),
+};
+
+// FIX 1: hapus itsSheetDragY yang tidak pernah dipakai
+let itsCurrentSnap: "closed" | "peek" | "full" = "closed";
+
+function getMapEl(): HTMLElement | null {
+  return document.getElementById("map");
+}
+
+function setMapHeight(heightPx: number): void {
+  const mapEl = getMapEl();
+  if (!mapEl) return;
+  const total = window.innerHeight - 64;
+  const mapH = Math.max(60, total - heightPx);
+  document.documentElement.style.setProperty("--its-sheet-height", `${Math.max(0, heightPx)}px`);
+  mapEl.style.height = `${mapH}px`;
+  mapEl.style.transition = "height 0.32s cubic-bezier(0.32,0.72,0,1)";
+  mapEl.classList.toggle("its-open", heightPx > 0);
+  map.invalidateSize();
+}
+
+function openITSSheet(): void {
+  let sheet = document.getElementById("m-its-sheet");
+  if (!sheet) {
+    sheet = createITSSheet();
+    document.getElementById("app")!.appendChild(sheet);
+  }
+  document.body.classList.add("its-sheet-open");
+  renderITSSheetContent();
+  snapITSSheet("peek");
+}
+
+function closeITSSheet(): void {
+  snapITSSheet("closed");
+  document.body.classList.remove("its-sheet-open");
+  setTimeout(() => {
+    const mapEl = getMapEl();
+    if (mapEl) {
+      mapEl.style.height = "";
+      map.invalidateSize();
+    }
+    document.getElementById("m-its-sheet")?.remove();
+  }, 340);
+}
+
+function snapITSSheet(snap: "closed" | "peek" | "full"): void {
+  const sheet = document.getElementById("m-its-sheet");
+  if (!sheet) return;
+  itsCurrentSnap = snap;
+
+  const h = snap === "closed" ? 0 : snap === "peek" ? ITS_SNAP.peek() : ITS_SNAP.full();
+
+  sheet.style.transition = "transform 0.34s cubic-bezier(0.32,0.72,0,1)";
+  sheet.style.transform = `translateY(${window.innerHeight - h - 64}px)`;
+
+  setMapHeight(h);
+}
+
+function createITSSheet(): HTMLElement {
+  const sheet = document.createElement("div");
+  sheet.id = "m-its-sheet";
+
+  let touchStartY = 0;
+  let touchStartTranslate = 0;
+
+  sheet.addEventListener("touchstart", (e: TouchEvent) => {
+    const target = e.target as HTMLElement;
+    if (!target.closest(".m-its-handle-zone")) return;
+    touchStartY = e.touches[0].clientY;
+    const matrix = new DOMMatrix(getComputedStyle(sheet).transform);
+    touchStartTranslate = matrix.m42;
+    sheet.style.transition = "none";
+  }, { passive: true });
+
+  sheet.addEventListener("touchmove", (e: TouchEvent) => {
+    const target = e.target as HTMLElement;
+    if (!target.closest(".m-its-handle-zone")) return;
+    const delta = e.touches[0].clientY - touchStartY;
+    const rawY = touchStartTranslate + delta;
+    const minY = window.innerHeight - ITS_SNAP.full() - 64;
+    const maxY = window.innerHeight - 64;
+    const clampedY = Math.max(minY, Math.min(maxY, rawY));
+    sheet.style.transform = `translateY(${clampedY}px)`;
+    const sheetH = window.innerHeight - 64 - clampedY;
+    setMapHeight(Math.max(0, sheetH));
+  }, { passive: true });
+
+  sheet.addEventListener("touchend", () => {
+    const matrix = new DOMMatrix(getComputedStyle(sheet).transform);
+    const currentY = matrix.m42;
+    const sheetH = window.innerHeight - 64 - currentY;
+    const peekH = ITS_SNAP.peek();
+    const fullH = ITS_SNAP.full();
+
+    let snap: "closed" | "peek" | "full";
+    if (sheetH < peekH * 0.4) {
+      closeITSSheet();
+      setTimeout(() => {
+        document.querySelectorAll(".m-nav-tab").forEach(b => b.classList.remove("active"));
+        document.querySelector<HTMLButtonElement>('.m-nav-tab[data-tab="peta"]')?.classList.add("active");
+        mobileState.activeTab = "peta";
+      }, 340);
+      return;
+    } else if (sheetH < lerp(peekH, fullH, 0.55)) {
+      snap = "peek";
+    } else {
+      snap = "full";
+    }
+
+    snapITSSheet(snap);
+  });
+
+  sheet.innerHTML = `
+    <div class="m-its-handle-zone">
+      <div class="m-its-handle-bar"></div>
+    </div>
+    <div class="m-its-scroll-content" id="m-its-scroll"></div>
+  `;
+
+  sheet.style.transform = `translateY(${window.innerHeight - 64}px)`;
+  return sheet;
+}
+
+function focusITSVideoSection(): void {
+  if (!isMobile()) return;
+  const target = document.getElementById("m-its-video");
+  if (!target) return;
+  requestAnimationFrame(() => {
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
+function renderITSSheetContent(): void {
+  const scroll = document.getElementById("m-its-scroll");
+  if (!scroll) return;
+
+  const device = state.device;
+  const traffic = device ? trafficStateForDevice(device) : null;
+  const cameraUrl = device?.cameraUrl;
+
+  const colorMap: Record<string, string> = {
+    red: "#ef4444", yellow: "#facc15", green: "#22c55e",
+  };
+  const bulbColor = traffic ? colorMap[traffic.color] : "#9ca3af";
+
+  scroll.innerHTML = `
+    <div class="m-its-section" id="m-its-video">
+      <div class="m-its-section-title">Video Realtime</div>
+      <div class="m-its-camera-box">
+        ${cameraUrl
+      ? `<img src="${escapeHtml(cameraUrl)}" class="m-camera-img" alt="Camera">`
+      : `<div class="m-camera-placeholder">
+               <svg viewBox="0 0 48 48" fill="none" width="36" height="36">
+                 <rect x="4" y="12" width="34" height="26" rx="4" stroke="#9ca3af" stroke-width="2"/>
+                 <path d="M38 20l6-4v16l-6-4V20z" stroke="#9ca3af" stroke-width="2" stroke-linejoin="round"/>
+               </svg>
+               <span>Belum ada kamera</span>
+             </div>`
+    }
+        <button class="m-camera-fullscreen" aria-label="Fullscreen">
+          <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
+            <path d="M1 6V1h5M10 1h5v5M15 10v5h-5M6 15H1v-5"
+                  stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="m-its-section">
+      <div class="m-its-section-title">Data Scan</div>
+      <div class="m-its-chart-wrap">
+        <canvas id="m-traffic-chart" width="320" height="180"></canvas>
+      </div>
+    </div>
+
+    ${traffic ? `
+    <div class="m-its-section">
+      <div class="m-its-section-title">Status Lalu Lintas</div>
+      <div class="m-its-traffic-row">
+        <div class="m-traffic-light-col">
+          ${makeTrafficLightSvg(traffic, 32)}
+        </div>
+        <div class="m-traffic-info-col">
+          <div class="m-traffic-road">${escapeHtml(traffic.roadName)}</div>
+          <div class="m-traffic-recom" style="color:${bulbColor}">${escapeHtml(traffic.recommendation)}</div>
+          <div class="m-traffic-meta">
+            <span>🚗 ${traffic.vehicleCount} kendaraan</span>
+            <span>⏱ ${traffic.duration}s</span>
+          </div>
+        </div>
+      </div>
+    </div>` : ""}
+
+    <div class="m-its-section">
+      <div class="m-its-section-title">Perangkat (${state.devices.length})</div>
+      ${state.devices.map(d => {          // FIX 2: hapus parameter idx yang tidak dipakai
+      const t = trafficStateForDevice(d);
+      const c = colorMap[t.color];
+      return `<div class="m-device-row" data-id="${d.id}">
+          <span class="m-device-bulb" style="background:${c}"></span>
+          <span class="m-device-name">${escapeHtml(d.label)}</span>
+          <span class="m-device-status status-${d.status}">${d.status}</span>
+        </div>`;
+    }).join("")}
+    </div>
+
+    <div style="height:24px"></div>
+  `;
+
+  requestAnimationFrame(() => drawTrafficChart());
+
+  scroll.querySelectorAll<HTMLDivElement>(".m-device-row").forEach(row => {
+    row.addEventListener("click", () => {
+      const id = row.dataset.id;
+      const d = state.devices.find(x => x.id === id);
+      if (!d) return;
+      snapITSSheet("peek");
+      setTimeout(() => {
+        map.setView([d.position.lat, d.position.lng], 17, { animate: true });
+      }, 200);
+    });
+  });
+}
+
+function drawTrafficChart(): void {
+  const canvas = document.getElementById("m-traffic-chart") as HTMLCanvasElement | null;
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  ctx.fillStyle = "#0f172a";
+  ctx.fillRect(0, 0, W, H);
+
+  const points: { x: number; y: number }[] = [];
+  for (let i = 0; i < 12; i++) {
+    const seed = hashString(`chart:${i}:${Math.floor(Date.now() / 8000)}`);
+    points.push({ x: 5 + (seed % 95), y: 3 + ((seed * 7) % 40) });
+  }
+  state.devices.forEach(d => {
+    const t = trafficStateForDevice(d);
+    points.push({ x: t.vehicleCount, y: t.duration });
+  });
+
+  const padL = 42, padB = 30, padT = 14, padR = 16;
+  const chartW = W - padL - padR;
+  const chartH = H - padT - padB;
+  const maxX = 120, maxY = 45;
+
+  const toScreen = (x: number, y: number) => ({
+    sx: padL + (x / maxX) * chartW,
+    sy: padT + chartH - (y / maxY) * chartH,
+  });
+
+  ctx.strokeStyle = "#1e293b";
+  ctx.lineWidth = 1;
+  for (let y = 0; y <= maxY; y += 5) {
+    const { sy } = toScreen(0, y);
+    ctx.beginPath(); ctx.moveTo(padL, sy); ctx.lineTo(W - padR, sy); ctx.stroke();
+  }
+
+  ctx.fillStyle = "#94a3b8";
+  ctx.font = "10px monospace";
+  ctx.textAlign = "right";
+  for (let y = 0; y <= maxY; y += 10) {
+    const { sy } = toScreen(0, y);
+    ctx.fillText(String(y), padL - 4, sy + 3);
+  }
+
+  ctx.textAlign = "center";
+  [4, 20, 60, 100].forEach(x => {
+    const { sx } = toScreen(x, 0);
+    ctx.fillText(String(x), sx, H - 6);
+  });
+
+  ctx.save();
+  ctx.translate(10, H / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillStyle = "#64748b";
+  ctx.font = "9px monospace";
+  ctx.textAlign = "center";
+  ctx.fillText("Waktu Hijau", 0, 0);
+  ctx.restore();
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#64748b";
+  ctx.font = "9px monospace";
+  ctx.fillText("Jumlah Kendaraan", W / 2, H - 1);
+
+  ctx.setLineDash([3, 3]);
+  ctx.strokeStyle = "#334155";
+  ctx.lineWidth = 1;
+  const { sy: threshSy } = toScreen(0, 8);
+  ctx.beginPath(); ctx.moveTo(padL, threshSy); ctx.lineTo(W - padR, threshSy); ctx.stroke();
+  ctx.setLineDash([]);
+
+  points.forEach(p => {
+    const { sx, sy } = toScreen(p.x, p.y);
+    ctx.fillStyle = "#f8fafc";
+    ctx.fillRect(sx - 2, sy - 5, 4, 10);
+  });
+
+  const colorMap: Record<string, string> = { red: "#ef4444", yellow: "#facc15", green: "#22c55e" };
+  state.devices.forEach(d => {
+    const t = trafficStateForDevice(d);
+    const { sx, sy } = toScreen(t.vehicleCount, t.duration);
+    ctx.beginPath();
+    ctx.arc(sx, sy, 4, 0, Math.PI * 2);
+    ctx.fillStyle = colorMap[t.color] || "#60a5fa";
+    ctx.fill();
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  });
+}
+
+// ─── 5. Profil Sheet ─────────────────────────────────────────────────────────
+
+function openProfilSheet(): void {
+  if (document.getElementById("m-profil-sheet")) return;
+
+  const sheet = document.createElement("div");
+  sheet.id = "m-profil-sheet";
+
+  const online = state.devices.filter(d => d.status === "online").length;
+  const offline = state.devices.filter(d => d.status === "offline").length;
+
+  sheet.innerHTML = `
+    <div class="m-layer-backdrop"></div>
+    <div class="m-profil-inner">
+      <div class="m-sheet-handle-bar" style="margin:0 auto 16px"></div>
+      <div class="m-profil-avatar">
+        <svg viewBox="0 0 64 64" fill="none" width="56" height="56">
+          <circle cx="32" cy="24" r="14" fill="#3b82f6" opacity="0.15"/>
+          <circle cx="32" cy="24" r="10" stroke="#3b82f6" stroke-width="2"/>
+          <path d="M8 56c0-11 10.745-20 24-20s24 8.955 24 20"
+                stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="m-profil-name">Operator ITS Maps</div>
+      <div class="m-profil-role">Sistem Manajemen Lalu Lintas</div>
+      <div class="m-profil-stats">
+        <div class="m-stat">
+          <span class="m-stat-val">${state.devices.length}</span>
+          <span class="m-stat-lbl">Perangkat</span>
+        </div>
+        <div class="m-stat">
+          <span class="m-stat-val" style="color:#22c55e">${online}</span>
+          <span class="m-stat-lbl">Online</span>
+        </div>
+        <div class="m-stat">
+          <span class="m-stat-val" style="color:#ef4444">${offline}</span>
+          <span class="m-stat-lbl">Offline</span>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const goBackToPeta = () => {
+    sheet.remove();
+    document.querySelectorAll(".m-nav-tab").forEach(b => b.classList.remove("active"));
+    document.querySelector<HTMLButtonElement>('.m-nav-tab[data-tab="peta"]')?.classList.add("active");
+    mobileState.activeTab = "peta";
+  };
+
+  sheet.querySelector(".m-layer-backdrop")!.addEventListener("click", goBackToPeta);
+  setupSheetSwipe(sheet.querySelector<HTMLElement>(".m-profil-inner")!, goBackToPeta);
+
+  document.body.appendChild(sheet);
+  requestAnimationFrame(() => sheet.classList.add("open"));
+}
+
+// ─── 6. Repositioning Leaflet Controls untuk Mobile ──────────────────────────
+
+// FIX 3, 4, 5: hapus const zoomIn, zoomOut, compassBtn yang tidak dipakai
+function repositionLeafletControls(): void {
+  if (!isMobile()) return;
+  const toolbar = document.querySelector<HTMLElement>(".map-toolbar");
+  if (toolbar) {
+    // Keep mobile toolbar as-is; individual controls are positioned by CSS
+    // Do NOT add m-toolbar-repositioned which bundles controls into one column
+  }
+}
+
+// ─── 7. Init ──────────────────────────────────────────────────────────────────
+
+function initMobileUI(): void {
+  if (!isMobile()) return;
+
+  const appEl = document.getElementById("app");
+  if (!appEl) return;
+
+  appEl.appendChild(createMobileBottomNav());
+
+  const mapEl = document.getElementById("map");
+  if (mapEl) {
+    // Do not force calc-based height; allow JS `setMapHeight` to control height
+    // to ensure the map fills the viewport on initial load
+    mapEl.classList.add("m-map");
+    mapEl.appendChild(createLayerButton());
+  }
+
+  repositionLeafletControls();
+
+  // FIX 6: hapus const _orig yang tidak dipakai
+  setInterval(() => {
+    if (mobileState.activeTab === "its" && document.getElementById("m-its-scroll")) {
+      renderITSSheetContent();
+    }
+  }, 4000);
+
+  window.addEventListener("resize", () => {
+    if (itsCurrentSnap !== "closed") snapITSSheet(itsCurrentSnap);
+  });
+
+  map.invalidateSize();
+}
+initMobileUI();
 void refreshSnapshot();
+
+// ─── PWA: Service Worker registration and install prompt handler ─────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', async () => {
+    try {
+      await navigator.serviceWorker.register('/sw.js');
+      console.log('[PWA] Service Worker registered');
+    } catch (err) {
+      console.warn('[PWA] Service Worker registration failed', err);
+    }
+  });
+}
+
+let deferredPrompt: any = null;
+function createInstallButton(): HTMLButtonElement {
+  const btn = document.createElement('button');
+  btn.id = 'pwa-install-btn';
+  btn.className = 'pwa-install-btn';
+  btn.textContent = 'Pasang Aplikasi';
+  Object.assign(btn.style, {
+    position: 'fixed',
+    right: '12px',
+    bottom: '84px',
+    zIndex: '9999',
+    padding: '8px 12px',
+    background: '#2563eb',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '8px',
+    boxShadow: '0 6px 14px rgba(37,99,235,0.24)',
+    cursor: 'pointer'
+  });
+
+  btn.addEventListener('click', async () => {
+    if (!deferredPrompt) return;
+    try {
+      deferredPrompt.prompt();
+      const choice = await deferredPrompt.userChoice;
+      console.log('[PWA] install outcome', choice.outcome);
+      if (choice.outcome === 'accepted') btn.style.display = 'none';
+    } catch (e) {
+      console.warn('[PWA] prompt error', e);
+    }
+    deferredPrompt = null;
+  });
+  return btn;
+}
+
+window.addEventListener('beforeinstallprompt', (e: Event) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  if (!document.getElementById('pwa-install-btn')) {
+    const btn = createInstallButton();
+    document.body.appendChild(btn);
+  } else {
+    (document.getElementById('pwa-install-btn') as HTMLElement).style.display = 'block';
+  }
+});
+
+window.addEventListener('appinstalled', () => {
+  console.log('[PWA] appinstalled');
+  const b = document.getElementById('pwa-install-btn');
+  if (b) b.remove();
+});

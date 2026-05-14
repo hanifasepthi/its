@@ -253,10 +253,7 @@ body {
   fill: #d92b2b;
 }
 
-.compass-needle-group {
-  transform-box: fill-box;
-  transform-origin: center;
-}
+.compass-needle-group {}
 
 .compass-needle-shadow {
   fill: rgba(15, 23, 42, 0.18);
@@ -425,6 +422,50 @@ body {
   max-height: 70vh;
   overflow: hidden;
 }
+
+/* Device modal as bottom-sheet (mobile) */
+#m-device-modal,
+#m-poi-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 12010;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+#m-device-modal .m-layer-backdrop,
+#m-poi-modal .m-layer-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0);
+  transition: background 0.28s;
+}
+
+#m-device-modal.open .m-layer-backdrop,
+#m-poi-modal.open .m-layer-backdrop {
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.m-device-sheet,
+.m-poi-sheet {
+  position: relative;
+  background: #fff;
+  border-radius: 20px 20px 0 0;
+  padding: 12px 16px 28px;
+  transform: translateY(100%);
+  transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+  z-index: 1;
+  max-height: 88vh;
+  overflow: auto;
+  padding-bottom: max(32px, calc(env(safe-area-inset-bottom) + 12px));
+}
+
+#m-device-modal.open .m-device-sheet,
+#m-poi-modal.open .m-poi-sheet {
+  transform: translateY(0);
+}
+
 
 .info-modal {
   background: #fff;
@@ -669,8 +710,64 @@ body {
 }
 
 .poi-marker {
-  font-size: 24px;
-  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.2));
+  width: var(--poi-size, 16px);
+  height: var(--poi-size, 16px);
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--poi-accent, #3b82f6) 14%, white);
+  border: 1.5px solid color-mix(in srgb, var(--poi-accent, #3b82f6) 72%, black);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.22);
+  filter: none;
+}
+
+.poi-marker-glyph {
+  font-size: clamp(10px, calc(var(--poi-size, 16px) * 0.72), 16px);
+  line-height: 1;
+}
+
+.poi-kind-hospital {
+  --poi-accent: #ef4444;
+}
+
+.poi-kind-mall {
+  --poi-accent: #8b5cf6;
+}
+
+.poi-kind-campus {
+  --poi-accent: #0ea5e9;
+}
+
+.poi-kind-parking {
+  --poi-accent: #64748b;
+}
+
+.poi-kind-park {
+  --poi-accent: #22c55e;
+}
+
+.poi-kind-worship {
+  --poi-accent: #f59e0b;
+}
+
+.poi-kind-school {
+  --poi-accent: #2563eb;
+}
+
+.poi-kind-office {
+  --poi-accent: #14b8a6;
+}
+
+.poi-kind-restaurant {
+  --poi-accent: #fb7185;
+}
+
+.poi-kind-monument {
+  --poi-accent: #a16207;
+}
+
+.poi-kind-other {
+  --poi-accent: #475569;
 }
 
 .toolbar-compass:hover .toolbar-tip,
@@ -739,4 +836,681 @@ body {
 .camera-caption {
   font-size: 12px;
   opacity: 0.8;
+}
+
+/* mobile */
+
+/* Peta mobile — tinggi dinamis dikontrol JS */
+#map.m-map {
+  position: absolute !important;
+  top: 0;
+  left: 0;
+  right: 0;
+  /* height diset oleh JS */
+  transition: height 0.32s cubic-bezier(0.32, 0.72, 0, 1), border-radius 0.32s cubic-bezier(0.32, 0.72, 0, 1),
+    left 0.32s cubic-bezier(0.32, 0.72, 0, 1), right 0.32s cubic-bezier(0.32, 0.72, 0, 1),
+    width 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+  z-index: 1;
+}
+
+#map.m-map.its-open {
+  left: 8px;
+  right: 8px;
+  width: auto;
+  border-radius: 0 0 28px 28px;
+  overflow: hidden;
+}
+
+/* ── Bottom Nav ───────────────────────────────────────────────────────────── */
+
+#m-bottom-nav {
+  position: fixed;
+  bottom: 22px;
+  left: 50%;
+  right: auto;
+  height: 64px;
+  width: min(80vw, 520px);
+  display: flex;
+  align-items: stretch;
+  z-index: 9400;
+
+  /* Blur glass */
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  border-top: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 -1px 0 rgba(0, 0, 0, 0.06), 0 -8px 24px rgba(0, 0, 0, 0.06);
+  border-radius: 18px;
+  transform: translateX(-50%);
+  overflow: hidden;
+  transition: transform 0.34s cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 0.34s cubic-bezier(0.32, 0.72, 0, 1), z-index 0s 0.34s;
+
+  /* iPhone safe area */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+body.its-sheet-open #m-bottom-nav {
+  transform: translateX(-50%) translateY(80px);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 8999;
+}
+
+.m-nav-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0 4px;
+  color: #94a3b8;
+  transition: color 0.18s;
+  -webkit-tap-highlight-color: transparent;
+  position: relative;
+  outline: none;
+}
+
+.m-nav-tab.active {
+  color: #2563eb;
+}
+
+/* Active indicator */
+.m-nav-tab.active::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 36px;
+  height: 3px;
+  border-radius: 2px 2px 0 0;
+  background: #2563eb;
+}
+
+/* Active icon container — pill background */
+.m-nav-tab.active .m-nav-icon {
+  background: rgba(37, 99, 235, 0.10);
+  border-radius: 10px;
+}
+
+.m-nav-icon {
+  width: 36px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.18s;
+}
+
+.m-nav-icon img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+/* Tint blue on active */
+.m-nav-tab.active .m-nav-icon img {
+  filter: invert(25%) sepia(98%) saturate(1600%) hue-rotate(210deg) brightness(90%);
+}
+
+.m-nav-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* ── Layer Button ─────────────────────────────────────────────────────────── */
+
+#m-layer-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 800;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: #fff;
+  border: none;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.12s;
+}
+
+#m-layer-btn:active {
+  transform: scale(0.91);
+}
+
+/* ── Layer Modal (Swipeable Sheet) ────────────────────────────────────────── */
+
+#m-layer-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.m-layer-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0);
+  transition: background 0.3s;
+  cursor: pointer;
+}
+
+#m-layer-modal.open .m-layer-backdrop {
+  background: rgba(0, 0, 0, 0.32);
+}
+
+.m-layer-sheet {
+  position: relative;
+  background: #fff;
+  border-radius: 20px 20px 0 0;
+  padding: 12px 20px 32px;
+  transform: translateY(100%);
+  transition: transform 0.34s cubic-bezier(0.32, 0.72, 0, 1);
+  z-index: 1;
+  /* Safe area */
+  padding-bottom: max(32px, calc(env(safe-area-inset-bottom) + 20px));
+}
+
+#m-layer-modal.open .m-layer-sheet {
+  transform: translateY(0);
+}
+
+#m-layer-modal.closing .m-layer-sheet {
+  transform: translateY(100%);
+}
+
+.m-sheet-handle-bar {
+  width: 36px;
+  height: 4px;
+  background: #e2e8f0;
+  border-radius: 2px;
+  margin: 0 auto 16px;
+}
+
+.m-layer-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.m-layer-options {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.m-layer-opt {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 8px;
+  border-radius: 14px;
+  border: 2px solid #e2e8f0;
+  background: #f8fafc;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color 0.15s, background 0.15s, transform 0.12s;
+}
+
+.m-layer-opt:active {
+  transform: scale(0.95);
+}
+
+.m-layer-opt.active {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.m-layer-icon {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.m-layer-opt span {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.m-layer-opt.active span {
+  color: #2563eb;
+}
+
+/* ── ITS Sheet ────────────────────────────────────────────────────────────── */
+
+#m-its-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  /* Top: setinggi layar (akan digeser JS) */
+  top: 0;
+  bottom: 0;
+  background: #f1f5f9;
+  border-radius: 20px 20px 0 0;
+  z-index: 9100;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.12);
+  will-change: transform;
+}
+
+.m-its-handle-zone {
+  padding: 10px 0 4px;
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: grab;
+  /* Larger touch target */
+  min-height: 32px;
+}
+
+.m-its-handle-zone:active {
+  cursor: grabbing;
+}
+
+.m-its-handle-bar {
+  width: 36px;
+  height: 4px;
+  background: #cbd5e1;
+  border-radius: 2px;
+}
+
+.m-its-scroll-content {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 0 0 80px 0;
+}
+
+.m-its-section {
+  padding: 14px 16px 0;
+}
+
+.m-its-section-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 10px;
+}
+
+/* Camera Box */
+.m-its-camera-box {
+  width: 100%;
+  aspect-ratio: 16/9;
+  border-radius: 14px;
+  background: #e2e8f0;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.m-camera-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.m-camera-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.m-camera-fullscreen {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.36);
+  border: none;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Chart */
+.m-its-chart-wrap {
+  background: #0f172a;
+  border-radius: 14px;
+  overflow: hidden;
+  padding: 4px;
+}
+
+#m-traffic-chart {
+  width: 100% !important;
+  height: auto !important;
+  display: block;
+}
+
+/* Traffic info */
+.m-its-traffic-row {
+  display: flex;
+  gap: 14px;
+  background: #fff;
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.m-traffic-light-col {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.m-traffic-info-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.m-traffic-road {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.m-traffic-recom {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.m-traffic-meta {
+  display: flex;
+  gap: 10px;
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+/* Device row */
+.m-device-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #fff;
+  border-radius: 10px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: transform 0.1s;
+}
+
+.m-device-row:active {
+  transform: scale(0.98);
+}
+
+.m-device-bulb {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.m-device-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.m-device-status {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 99px;
+  text-transform: uppercase;
+}
+
+/* ── Profil Sheet ─────────────────────────────────────────────────────────── */
+
+#m-profil-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.m-profil-inner {
+  position: relative;
+  background: #fff;
+  border-radius: 24px 24px 0 0;
+  padding: 16px 24px max(32px, calc(env(safe-area-inset-bottom) + 20px));
+  transform: translateY(100%);
+  transition: transform 0.34s cubic-bezier(0.32, 0.72, 0, 1);
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+#m-profil-sheet.open .m-profil-inner {
+  transform: translateY(0);
+}
+
+.m-profil-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: #eff6ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 5px #dbeafe;
+  margin-bottom: 4px;
+}
+
+.m-profil-name {
+  font-size: 18px;
+  font-weight: 800;
+  color: #1e293b;
+}
+
+.m-profil-role {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.m-profil-stats {
+  display: flex;
+  gap: 0;
+  width: 100%;
+  margin-top: 8px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+.m-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 14px 8px;
+  gap: 2px;
+  border-right: 1px solid #e2e8f0;
+}
+
+.m-stat:last-child {
+  border-right: none;
+}
+
+.m-stat-val {
+  font-size: 22px;
+  font-weight: 800;
+  color: #2563eb;
+}
+
+.m-stat-lbl {
+  font-size: 10px;
+  color: #94a3b8;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── Reposition Leaflet toolbar untuk mobile ─────────────────────────────── */
+
+.map-toolbar-mobile {
+  position: fixed;
+  inset: 0;
+  z-index: 800;
+  pointer-events: none;
+  margin: 0;
+}
+
+.map-toolbar-mobile .toolbar-compass,
+.map-toolbar-mobile .toolbar-btn,
+.map-toolbar-mobile .toolbar-camera {
+  pointer-events: auto;
+  transition: bottom 0.32s cubic-bezier(0.32, 0.72, 0, 1),
+    left 0.32s cubic-bezier(0.32, 0.72, 0, 1),
+    right 0.32s cubic-bezier(0.32, 0.72, 0, 1),
+    transform 0.32s cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 0.2s ease;
+}
+
+.map-toolbar-mobile .toolbar-compass {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  width: 44px;
+  height: 44px;
+  z-index: 820;
+}
+
+.map-toolbar-mobile .toolbar-btn[data-action="locate"] {
+  position: fixed;
+  left: 12px;
+  bottom: 90px;
+  z-index: 820;
+}
+
+.map-toolbar-mobile .toolbar-btn[data-action="home"] {
+  position: fixed;
+  left: 12px;
+  bottom: 138px;
+  z-index: 820;
+}
+
+.map-toolbar-mobile .toolbar-camera {
+  position: fixed;
+  right: 12px;
+  bottom: 90px;
+  width: 46px;
+  height: 40px;
+  z-index: 820;
+}
+
+.map-toolbar-mobile .toolbar-btn[data-action="locate"] {
+  position: fixed;
+  left: 12px;
+  bottom: 120px;
+  z-index: 820;
+}
+
+.map-toolbar-mobile .toolbar-btn[data-action="home"] {
+  position: fixed;
+  left: 12px;
+  bottom: 168px;
+  z-index: 820;
+}
+
+.map-toolbar-mobile .toolbar-camera {
+  position: fixed;
+  right: 12px;
+  bottom: 120px;
+  width: 46px;
+  height: 40px;
+  z-index: 820;
+}
+
+.map-toolbar-mobile .toolbar-btn[data-action="zoom-in"] {
+  position: fixed;
+  right: 12px;
+  bottom: 216px;
+  z-index: 820;
+}
+
+.map-toolbar-mobile .toolbar-btn[data-action="zoom-out"] {
+  position: fixed;
+  right: 12px;
+  bottom: 168px;
+  z-index: 820;
+}
+
+/* Pindah toolbar ke kanan tengah vertikal */
+.leaflet-bottom.leaflet-right .map-toolbar.m-toolbar-repositioned {
+  bottom: auto !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  right: 8px !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+}
+
+/* Kompas — tetap kiri atas tapi lebih kecil */
+.leaflet-top.leaflet-left {
+  top: 12px !important;
+  left: 12px !important;
+}
+
+/* Sembunyikan scale control yang kurang berguna di mobile */
+.map-scale-control {
+  display: none;
+}
+
+/* ── Status badge colors ─────────────────────────────────────────────────── */
+
+.status-online {
+  background: #dcfce7 !important;
+  color: #15803d !important;
+}
+
+.status-offline {
+  background: #fee2e2 !important;
+  color: #b91c1c !important;
+}
+
+.status-degraded {
+  background: #fef9c3 !important;
+  color: #b45309 !important;
 }

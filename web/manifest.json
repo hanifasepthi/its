@@ -1,0 +1,16 @@
+{
+  "name": "ITS Maps",
+  "short_name": "ITSMaps",
+  "description": "Dashboard peta ITS untuk Raspberry Pi controller dan traffic",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f2f7ff",
+  "theme_color": "#f2f7ff",
+  "icons": [
+    {
+      "src": "./favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
