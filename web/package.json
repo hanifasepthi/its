@@ -153,5 +153,8 @@
       "name": "its-maps-windows",
       "version": "1.0.50"
     }
+  },
+  "dependencies": {
+    "katex": "^0.17.0"
   }
 }

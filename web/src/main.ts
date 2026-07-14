@@ -16,6 +16,41 @@ import {
   type BrowserRfDetrDetection,
   type BrowserRfDetrResult,
 } from "./browserRfDetr";
+import { publicResearchAgent } from "./publicResearchAgent";
+import { mountAgentLiveActivity } from "./agentLiveActivity";
+import {
+  disposeBrowserTextWorker,
+  generateBrowserText,
+  isBrowserTextModelReady,
+  warmBrowserTextModel,
+} from "./ai/browserTextModelClient";
+import { mapDetailCache } from "./map-detail/MapDetailCache";
+import {
+  detailGroupsForZoom,
+  EMPTY_MAP_DETAIL_COLLECTION,
+  ensureMapDetailStyle,
+  setMapDetailData,
+  type MapDetailFeatureCollection,
+} from "./map-detail/MapDetailStyle";
+
+type ItsWebMcpTool = {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+  annotations?: Record<string, boolean>;
+  execute: (input: Record<string, unknown>) => unknown | Promise<unknown>;
+};
+
+type ItsWebMcpModelContext = {
+  registerTool: (
+    tool: ItsWebMcpTool,
+    options?: Record<string, unknown>,
+  ) => void | Promise<void>;
+};
+
+type ItsWebMcpHost = {
+  modelContext?: ItsWebMcpModelContext;
+};
 
 const APP_SCREENSHOT_MODULES = import.meta.glob("./ss/**/*.{png,jpg,jpeg,webp,avif,svg}", {
   eager: true,
@@ -60,6 +95,10 @@ const FREE_MAP_SERVICE_STACK = [
 
 const AI_SERVICE_STACK = [
   ["RF-DETR", "Deteksi objek COCO pada video/snapshot browser dengan model transformer ONNX dari Hugging Face.", "https://hf.co/onnx-community/rfdetr_medium-ONNX"],
+  ["SmolLM2 135M Instruct", "Model bahasa ONNX q4 yang berjalan lokal di browser untuk memahami pertanyaan bebas tanpa mengirim percakapan ke layanan AI eksternal.", "https://huggingface.co/onnx-community/SmolLM2-135M-Instruct-ONNX"],
+  ["Qwen2.5 0.5B Instruct", "Model riset ONNX q4 lokal yang menyusun ringkasan hanya dari bukti hasil pencarian terstruktur.", "https://huggingface.co/onnx-community/Qwen2.5-0.5B-Instruct"],
+  ["Crossref, OpenAlex, Europe PMC", "Indeks metadata ilmiah publik untuk judul, penulis, DOI, abstrak, sitasi, dan tautan open-access. ITS Maps tidak mengunggah PDF jurnal.", "https://www.crossref.org/documentation/retrieve-metadata/rest-api/"],
+  ["Wikipedia dan Wikimedia Commons", "Pencarian konteks web dan gambar terbuka dengan URL sumber serta atribusi lisensi yang ditampilkan pada jawaban.", "https://www.mediawiki.org/wiki/API:Cross-site_requests"],
   ["Transformers.js", "Pipeline object-detection RF-DETR di browser, termasuk preprocessing dan postprocessing bounding box.", "https://huggingface.co/docs/transformers.js"],
   ["ONNX Runtime Web", "Runtime inference ONNX di browser untuk RF-DETR dan fallback model lokal.", "https://onnxruntime.ai/docs/"],
   ["Transformers.js / Hugging Face", "Dipakai untuk fitur vision peta eksperimental yang membaca segmentasi visual saat mode CV peta diaktifkan.", "https://huggingface.co/docs/transformers.js"],
@@ -370,6 +409,12 @@ type CrossingGuideRecord = {
   type: "rail" | "road";
 };
 
+type MapPointGuideRecord = {
+  id: string;
+  name: string;
+  latlng: L.LatLng;
+};
+
 type WaterGuideRecord = {
   id: string;
   name: string;
@@ -390,6 +435,8 @@ type RoadGuideBundle = {
   crossings: CrossingGuideRecord[];
   waterways: WaterGuideRecord[];
   greens: GreenGuideRecord[];
+  signals: MapPointGuideRecord[];
+  trees: MapPointGuideRecord[];
 };
 
 type VisionFeatureKind = "road" | "sidewalk" | "vegetation" | "water" | "building";
@@ -488,14 +535,85 @@ const HLS_JS_URL = "https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js";
 const WEBRTC_POLL_MS = 700;
 const WEBRTC_HEARTBEAT_MS = 5_000;
 const WEBRTC_ANSWER_TIMEOUT_MS = 18_000;
+type ItsProfileSource = {
+  label: string;
+  url: string;
+  type: "project" | "github" | "education" | "portfolio" | "other";
+};
+
+type ItsCreatorEducation = {
+  institution: string;
+  program: string;
+  period?: string;
+  sourceUrl?: string;
+};
+
+type ItsVerifiedCreatorProfile = {
+  name: string;
+  role: string;
+  publisher: string;
+  summary: string;
+  photoUrl: string;
+  education: ItsCreatorEducation[];
+  skills: string[];
+  sources: ItsProfileSource[];
+};
+
+const ITS_CREATOR_PROFILE: ItsVerifiedCreatorProfile = {
+  name: "Hanifa Septhi Larasati",
+  role: "Pencipta aplikasi ITS Maps",
+  publisher: "Hanifa Teams",
+  summary:
+    "Merancang konsep, alur aplikasi, integrasi Raspberry Pi, pemantauan lalu lintas, AI deteksi objek, dan antarmuka ITS Maps.",
+  photoUrl: profileAssetUrl(0),
+
+  // Isi hanya berdasarkan data yang memang Anda izinkan untuk dipublikasikan.
+  education: [
+    {
+      institution: "Telkom University",
+      program: "ISI PROGRAM STUDI YANG BENAR",
+      period: "ISI PERIODE JIKA AKAN DITAMPILKAN",
+      sourceUrl: "",
+    },
+  ],
+
+  skills: [
+    "Intelligent Transport System",
+    "Raspberry Pi",
+    "TypeScript",
+    "Leaflet",
+    "RF-DETR",
+    "Computer Vision",
+    "Firebase Realtime Database",
+  ],
+
+  sources: [
+    {
+      label: "Repository ITS Maps",
+      url: "https://github.com/hanifasepthi/its",
+      type: "project",
+    },
+    {
+      label: "Profil GitHub",
+      url: "https://github.com/hanifasepthi",
+      type: "github",
+    },
+    {
+      label: "Dokumentasi ITS Maps",
+      url: "https://itstelkom.web.app/documentation",
+      type: "portfolio",
+    },
+  ],
+};
+
 const WEBRTC_ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
 ];
 
 const BEARING_STEP = 90;
 const BEARING_SNAP = 5;
-const MAPLIBRE_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
-const MAPLIBRE_3D_PITCH = 66;
+const MAPLIBRE_STYLE_URL = "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json";
+const MAPLIBRE_3D_PITCH = 60;
 const VISION_SEGMENTATION_MODEL = "Xenova/segformer-b0-finetuned-ade-512-512";
 const VISION_MIN_ZOOM = 16;
 const VISION_CANVAS_SIZE = 512;
@@ -906,45 +1024,40 @@ function bindStaticDocumentation(): void {
 function renderStaticMath(): void {
   const root = document.querySelector<HTMLElement>(".static-content");
   if (!root) return;
-  const run = () => {
-    const w = window as Window & {
-      katex?: { render?: (expression: string, element: Element, options?: Record<string, unknown>) => void };
-    };
-    if (!w.katex?.render) return;
+  renderMathIn(root);
+}
+
+let katexModulePromise: Promise<typeof import("katex")> | null = null;
+
+function renderMathIn(root: ParentNode): void {
+  const inlineNodes = Array.from(root.querySelectorAll<HTMLElement>("[data-katex-inline]"));
+  const displayNodes = Array.from(root.querySelectorAll<HTMLElement>("[data-katex-display]"));
+  if (!inlineNodes.length && !displayNodes.length) return;
+  inlineNodes.forEach((node) => {
+    if (!node.textContent) node.textContent = node.dataset.katexInline || "";
+  });
+  displayNodes.forEach((node) => {
+    if (!node.textContent) node.textContent = node.dataset.katexDisplay || "";
+  });
+  if (!katexModulePromise) {
+    void import("katex/dist/katex.min.css");
+    katexModulePromise = import("katex");
+  }
+  void katexModulePromise.then((module) => {
+    const renderer = module.default;
     root.querySelectorAll<HTMLElement>("[data-katex-inline]").forEach((node) => {
       const expression = node.dataset.katexInline;
       if (!expression || node.dataset.katexDone === "true") return;
-      w.katex?.render?.(expression, node, { throwOnError: false });
+      renderer.render(expression, node, { throwOnError: false });
       node.dataset.katexDone = "true";
     });
     root.querySelectorAll<HTMLElement>("[data-katex-display]").forEach((node) => {
       const expression = node.dataset.katexDisplay;
       if (!expression || node.dataset.katexDone === "true") return;
-      w.katex?.render?.(expression, node, { throwOnError: false, displayMode: true });
+      renderer.render(expression, node, { throwOnError: false, displayMode: true });
       node.dataset.katexDone = "true";
     });
-  };
-  if (!document.getElementById("its-katex-style")) {
-    const style = document.createElement("link");
-    style.id = "its-katex-style";
-    style.rel = "stylesheet";
-    style.href = "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css";
-    style.crossOrigin = "anonymous";
-    document.head.appendChild(style);
-  }
-  const existingScript = document.getElementById("its-katex-script") as HTMLScriptElement | null;
-  if (existingScript) {
-    if ((window as Window & { katex?: unknown }).katex) run();
-    else existingScript.addEventListener("load", run, { once: true });
-    return;
-  }
-  const script = document.createElement("script");
-  script.id = "its-katex-script";
-  script.src = "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js";
-  script.defer = true;
-  script.crossOrigin = "anonymous";
-  script.addEventListener("load", run, { once: true });
-  document.head.appendChild(script);
+  }).catch((error) => console.warn("KaTeX lokal gagal dimuat; formula TeX tetap ditampilkan.", error));
 }
 
 function newsPageHtml(): string {
@@ -1143,6 +1256,7 @@ if (staticRoute) {
     maplibreMap: null as any,
     maplibreContainer: null as HTMLDivElement | null,
     maplibreSyncing: false,
+    maplibreSyncFrame: 0,
     // Tablet / routing helpers
     vehicleMarker: null as L.Marker | null,
     tabletCategoryIndex: null as number | null,
@@ -1182,16 +1296,23 @@ if (staticRoute) {
     } as WebRtcRuntime,
   };
 
-  const OVERPASS_TIMEOUT_MS = 8000;
+  const OVERPASS_TIMEOUT_MS = 16_000;
   const OVERPASS_COOLDOWN_MS = 5 * 60 * 1000;
+  const OVERPASS_ENDPOINTS = [
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
+    "https://overpass-api.de/api/interpreter",
+  ] as const;
   const OVERPASS_NETWORK_ENABLED = (() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("overpass") === "1") return true;
     if (params.get("overpass") === "0") return false;
-    return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+    return true;
   })();
   let overpassPoiCooldownUntil = 0;
   let overpassRoadCooldownUntil = 0;
+  type OverpassInFlight = { query: string; request: Promise<any> };
+  let overpassPoiInFlight: OverpassInFlight | null = null;
+  let overpassRoadInFlight: OverpassInFlight | null = null;
 
   function fetchTimeoutSignal(ms: number): AbortSignal | undefined {
     const signalWithTimeout = AbortSignal as typeof AbortSignal & { timeout?: (timeout: number) => AbortSignal };
@@ -1214,6 +1335,10 @@ if (staticRoute) {
 
   const CARTO_TILE_URL = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
   const CARTO_ATTRIBUTION = [
+    '<a class="map-license-link" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
+    '<span class="map-license-separator" aria-hidden="true">|</span>',
+    '<a class="map-license-link" href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>',
+    '<span class="map-license-separator" aria-hidden="true">|</span>',
     '<button type="button" class="map-license-link" data-map-license>Lisensi Peta</button>',
     '<span class="map-license-separator" aria-hidden="true">|</span>',
     '<button type="button" class="map-license-link" data-ai-license>Lisensi AI</button>',
@@ -1233,7 +1358,7 @@ if (staticRoute) {
     maxZoom: 20,
     subdomains: "abcd",
     className: "its-carto-map-tile",
-    attribution: CARTO_ATTRIBUTION,
+    attribution: "",
   } as L.TileLayerOptions & { className: string; subdomains: string }).addTo(map);
 
   const satelliteLayer = L.tileLayer(
@@ -1242,7 +1367,10 @@ if (staticRoute) {
   );
 
   if (map.attributionControl) {
-    try { map.attributionControl.setPrefix("ITS Maps"); } catch { /* ignore */ }
+    try {
+      map.attributionControl.setPrefix("ITS Maps");
+      map.attributionControl.addAttribution(CARTO_ATTRIBUTION);
+    } catch { /* Attribution is best-effort in older WebView builds. */ }
   }
 
   // Add Overpass vector layer for clickable features (kept separate from POI markers)
@@ -1881,13 +2009,7 @@ if (staticRoute) {
       let pois = await fetchOverpassFeaturesForBounds(bounds).catch(() => [] as PoiRecord[]);
       if (token !== nearbyFetchToken) return;
       if (!pois.length) {
-        const c = currentPos;
-        pois = [
-          { id: 'ar-local-terminal', kind: 'terminal', title: 'Terminal Terdekat', description: '', address: '', imageUrl: POI_LIBRARY.terminal.imageUrl, rating: POI_LIBRARY.terminal.rating, icon: poiVisual('terminal').icon, lat: c.lat + 0.0014, lng: c.lng + 0.0011 },
-          { id: 'ar-local-station', kind: 'station', title: 'Stasiun Terdekat', description: '', address: '', imageUrl: POI_LIBRARY.station.imageUrl, rating: POI_LIBRARY.station.rating, icon: poiVisual('station').icon, lat: c.lat - 0.0011, lng: c.lng + 0.0016 },
-          { id: 'ar-local-shelter', kind: 'shelter', title: 'Shelter / Halte', description: '', address: '', imageUrl: POI_LIBRARY.shelter.imageUrl, rating: POI_LIBRARY.shelter.rating, icon: poiVisual('shelter').icon, lat: c.lat + 0.0009, lng: c.lng - 0.0015 },
-          { id: 'ar-local-cemetery', kind: 'cemetery', title: 'Pemakaman', description: '', address: '', imageUrl: POI_LIBRARY.cemetery.imageUrl, rating: POI_LIBRARY.cemetery.rating, icon: poiVisual('cemetery').icon, lat: c.lat - 0.0018, lng: c.lng - 0.0010 },
-        ];
+        setStatus("POI OSM belum tersedia untuk area ini");
       }
       pois = pois.slice(0, 12);
       activePoiLookup = new Map(pois.map((p) => [p.id, p]));
@@ -2141,6 +2263,12 @@ if (staticRoute) {
   }
 
   function syncPoiMarkers(anchor: L.LatLngExpression): void {
+    if (state.maplibreMap && state.baseMode !== "satellite") {
+      for (const marker of state.poiMarkers.values()) map.removeLayer(marker);
+      state.poiMarkers.clear();
+      return;
+    }
+
     const center = L.latLng(anchor);
     const radiusMeters = 400; // search radius for nearby POIs
 
@@ -2151,19 +2279,7 @@ if (staticRoute) {
     const lngDelta = Math.abs(radiusMeters / (111320 * Math.cos((lat * Math.PI) / 180)));
     const bounds = L.latLngBounds([lat - latDelta, lng - lngDelta], [lat + latDelta, lng + lngDelta]);
     void fetchOverpassFeaturesForBounds(bounds).then((pois) => {
-      let finalPois = pois;
-      // If Overpass returned no POIs for this area, always fall back to local sample POIs
-      // so the UI remains usable offline or when the API times out.
-      if (!pois || pois.length === 0) {
-        // fallback local POIs
-        const c = center;
-        finalPois = [
-          { id: 'local-school-1', kind: 'campus', title: 'SD Negeri 1', description: '', address: '', imageUrl: POI_LIBRARY.campus.imageUrl, rating: POI_LIBRARY.campus.rating, icon: poiVisual('campus').icon, lat: c.lat + 0.0012, lng: c.lng + 0.0012 },
-          { id: 'local-mall-1', kind: 'mall', title: 'Pusat Perbelanjaan', description: '', address: '', imageUrl: POI_LIBRARY.mall.imageUrl, rating: POI_LIBRARY.mall.rating, icon: poiVisual('mall').icon, lat: c.lat - 0.0014, lng: c.lng + 0.0018 },
-          { id: 'local-hospital-1', kind: 'hospital', title: 'Klinik Sehat', description: '', address: '', imageUrl: POI_LIBRARY.hospital.imageUrl, rating: POI_LIBRARY.hospital.rating, icon: poiVisual('hospital').icon, lat: c.lat + 0.0020, lng: c.lng - 0.0010 },
-          { id: 'local-parking-1', kind: 'parking', title: 'Parkir Umum', description: '', address: '', imageUrl: POI_LIBRARY.parking.imageUrl, rating: POI_LIBRARY.parking.rating, icon: poiVisual('parking').icon, lat: c.lat - 0.0018, lng: c.lng - 0.0015 },
-        ];
-      }
+      const finalPois = pois;
 
       const keep = new Set<string>();
       const iconSize = poiMarkerSizeByZoom();
@@ -2235,6 +2351,16 @@ if (staticRoute) {
       || fallback;
   }
 
+  function poiExplicitNameFromTags(tags: Record<string, string>): string {
+    return tags["name:id"]
+      || tags.name
+      || tags.official_name
+      || tags.short_name
+      || tags.brand
+      || tags.operator
+      || "";
+  }
+
   function poiAddressFromTags(tags: Record<string, string>): string {
     const parts = [
       tags["addr:street"],
@@ -2269,29 +2395,99 @@ if (staticRoute) {
 
   function visiblePoiLimit(): number {
     const zoom = map.getZoom();
-    if (zoom < 14) return 52;
-    if (zoom < 16) return 110;
-    if (zoom < 18) return 180;
-    return 240;
+    if (zoom < 14) return 24;
+    if (zoom < 16) return 56;
+    if (zoom < 18) return 110;
+    return 180;
+  }
+
+  async function fetchOverpassJson(query: string, kind: "poi" | "road"): Promise<any> {
+    const active = kind === "poi" ? overpassPoiInFlight : overpassRoadInFlight;
+    if (active?.query === query) return active.request;
+    const request = (async () => {
+      let lastError: unknown = new Error(`Overpass ${kind} tidak tersedia`);
+      const body = new URLSearchParams({ data: query }).toString();
+      for (const endpoint of OVERPASS_ENDPOINTS) {
+        try {
+          const res = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+              Accept: "application/json",
+            },
+            body,
+            signal: fetchTimeoutSignal(OVERPASS_TIMEOUT_MS),
+          });
+          if (!res.ok) {
+            rememberOverpassHttpStatus(kind, res.status);
+            lastError = new Error(`Overpass ${kind} HTTP ${res.status}`);
+            continue;
+          }
+          const data = await res.json();
+          clearOverpassCooldown(kind);
+          return data;
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      throw lastError;
+    })();
+    const entry = { query, request };
+    if (kind === "poi") overpassPoiInFlight = entry;
+    else overpassRoadInFlight = entry;
+    try {
+      return await request;
+    } finally {
+      if (kind === "poi" && overpassPoiInFlight === entry) overpassPoiInFlight = null;
+      if (kind === "road" && overpassRoadInFlight === entry) overpassRoadInFlight = null;
+    }
+  }
+
+  function clearOverpassCooldown(kind: "poi" | "road"): void {
+    if (kind === "poi") overpassPoiCooldownUntil = 0;
+    else overpassRoadCooldownUntil = 0;
   }
 
   function rankPoisForView(pois: PoiRecord[]): PoiRecord[] {
     const center = map.getCenter();
-    return pois
+    const zoom = map.getZoom();
+    const size = map.getSize();
+    const cellSize = zoom >= 18 ? 46 : zoom >= 16 ? 58 : 76;
+    const occupied = new Set<string>();
+    const ranked = pois
       .filter((poi) => isValidCoordinate(poi.lat, poi.lng))
+      .filter((poi) => zoom >= 15 || ["station", "terminal", "hospital", "campus"].includes(poi.kind))
       .sort((a, b) => {
         const priority = poiPriority(a) - poiPriority(b);
         if (priority !== 0) return priority;
         const da = center.distanceTo([a.lat, a.lng]);
         const db = center.distanceTo([b.lat, b.lng]);
         return da - db;
-      })
-      .slice(0, visiblePoiLimit());
+      });
+    const selected: PoiRecord[] = [];
+    for (const poi of ranked) {
+      const point = map.latLngToContainerPoint([poi.lat, poi.lng]);
+      if (point.x < -40 || point.y < -40 || point.x > size.x + 40 || point.y > size.y + 40) continue;
+      const key = `${Math.floor(point.x / cellSize)}:${Math.floor(point.y / cellSize)}`;
+      if (occupied.has(key)) continue;
+      occupied.add(key);
+      selected.push(poi);
+      if (selected.length >= visiblePoiLimit()) break;
+    }
+    return selected;
   }
 
   async function fetchOverpassFeaturesForBounds(bounds: L.LatLngBounds): Promise<PoiRecord[]> {
-    if (!OVERPASS_NETWORK_ENABLED) return [];
-    if (shouldSkipOverpass("poi")) return [];
+    const zoom = Math.max(13, Math.min(18, Math.floor(map.getZoom())));
+    const center = bounds.getCenter();
+    const scale = 2 ** zoom;
+    const tileX = Math.floor(((center.lng + 180) / 360) * scale);
+    const latitude = Math.max(-85.0511, Math.min(85.0511, center.lat)) * Math.PI / 180;
+    const tileY = Math.floor((1 - Math.asinh(Math.tan(latitude)) / Math.PI) / 2 * scale);
+    const cacheKey = `poi:${zoom}:${tileX}:${tileY}`;
+    const cached = await mapDetailCache.get<PoiRecord[]>(cacheKey, 24 * 60 * 60 * 1000);
+    const validCached = cached?.length ? cached : null;
+    if (!OVERPASS_NETWORK_ENABLED || shouldSkipOverpass("poi")) return validCached || [];
     const bbox = buildOverpassBBoxString(bounds);
     // Query common POI tags; return nodes + ways + relations with center
     const q = `
@@ -2346,21 +2542,11 @@ if (staticRoute) {
 `;
 
     try {
-      const res = await fetch("https://overpass-api.de/api/interpreter", {
-        method: "POST",
-        headers: { "Content-Type": "text/plain" },
-        body: q,
-        signal: fetchTimeoutSignal(OVERPASS_TIMEOUT_MS),
-      });
-      if (!res.ok) {
-        rememberOverpassHttpStatus("poi", res.status);
-        throw new Error(`Overpass HTTP ${res.status}`);
-      }
-      const data = await res.json();
+      const data = await fetchOverpassJson(q, "poi");
       const elements = Array.isArray(data.elements) ? data.elements : [];
       const pois: PoiRecord[] = elements.map((el: any) => {
         const tags = el.tags || {};
-        const name = poiNameFromTags(tags, `POI ${el.id}`);
+        const name = poiExplicitNameFromTags(tags);
         const lat = el.type === 'node' ? el.lat : (el.center && el.center.lat) || el.lat || 0;
         const lng = el.type === 'node' ? el.lon : (el.center && el.center.lon) || el.lon || 0;
         const kind = classifyPoiKind(tags);
@@ -2370,7 +2556,7 @@ if (staticRoute) {
         return {
           id: `overpass-${el.type}-${el.id}`,
           kind,
-          title: name || `POI ${el.id}`,
+          title: name,
           description: description || '',
           address: address || '',
           imageUrl: imageUrl || ITS_APP_ICON,
@@ -2378,11 +2564,13 @@ if (staticRoute) {
           icon: poiVisual(kind).icon,
           lat, lng,
         };
-      }).filter((p: PoiRecord) => isValidCoordinate(p.lat, p.lng));
-      return rankPoisForView(pois);
+      }).filter((p: PoiRecord) => Boolean(p.title) && isValidCoordinate(p.lat, p.lng));
+      const ranked = rankPoisForView(pois);
+      if (ranked.length) void mapDetailCache.set(cacheKey, ranked);
+      return ranked;
     } catch (err) {
-      console.debug("Overpass fetch failed, using local POI fallback:", err);
-      return [];
+      console.debug("Overpass fetch failed; no POI is fabricated:", err);
+      return validCached || [];
     }
   }
 
@@ -2492,8 +2680,14 @@ if (staticRoute) {
   }
 
   function mapLibrePitchByZoom(zoom: number): number {
-    if (zoom < 14) return 38;
-    return clamp(42 + (zoom - 14) * 6, 42, MAPLIBRE_3D_PITCH);
+    if (state.baseMode !== "3d") return 0;
+    const startZoom = 13.6;
+    const fullZoom = 17.2;
+    if (zoom <= startZoom) return 0;
+    if (zoom >= fullZoom) return MAPLIBRE_3D_PITCH;
+    const normalized = (zoom - startZoom) / (fullZoom - startZoom);
+    const smooth = normalized * normalized * (3 - 2 * normalized);
+    return MAPLIBRE_3D_PITCH * smooth;
   }
 
   function roadMedianStyle(road: RoadGuideRecord): L.PolylineOptions {
@@ -2655,38 +2849,44 @@ if (staticRoute) {
   }
 
   async function fetchRoadGuidesForBounds(bounds: L.LatLngBounds): Promise<RoadGuideBundle> {
-    if (!OVERPASS_NETWORK_ENABLED) return { roads: [], rails: [], crossings: [], waterways: [], greens: [] };
-    if (shouldSkipOverpass("road")) return { roads: [], rails: [], crossings: [], waterways: [], greens: [] };
+    const emptyBundle = (): RoadGuideBundle => ({
+      roads: [], rails: [], crossings: [], waterways: [], greens: [], signals: [], trees: [],
+    });
+    if (!OVERPASS_NETWORK_ENABLED) return emptyBundle();
+    if (shouldSkipOverpass("road")) return emptyBundle();
     const bbox = buildOverpassBBoxString(bounds);
+    const zoom = map.getZoom();
+    const roadClasses = zoom >= 15
+      ? "motorway|trunk|primary|secondary|tertiary|residential|unclassified|service|living_street|pedestrian|footway|path|cycleway|steps"
+      : "motorway|trunk|primary|secondary|tertiary";
+    const finePointQueries = zoom >= 15
+      ? `node["railway"~"level_crossing|crossing|tram_crossing"](${bbox});\n    node["highway"="crossing"](${bbox});`
+      : "";
+    const trafficSignalQuery = zoom >= 16 ? `node["highway"="traffic_signals"](${bbox});` : "";
+    const treeQueries = zoom >= 17
+      ? `way["natural"="tree_row"](${bbox});${zoom >= 18 ? `\n    node["natural"="tree"](${bbox});` : ""}`
+      : "";
     const q = `
   [out:json][timeout:18];
   (
-    way["highway"~"motorway|trunk|primary|secondary|tertiary|residential|unclassified|service|living_street|pedestrian|footway|path|cycleway|steps"](${bbox});
+    way["highway"~"${roadClasses}"](${bbox});
     way["railway"~"rail|light_rail|tram|subway|narrow_gauge"](${bbox});
-    node["railway"~"level_crossing|crossing|tram_crossing"](${bbox});
+    ${finePointQueries}
+    ${trafficSignalQuery}
+    ${treeQueries}
     way["waterway"~"river|stream|canal|drain|ditch"](${bbox});
     way["man_made"~"canal|drain|ditch"](${bbox});
     way["natural"="water"](${bbox});
     way["water"~"river|stream|canal|drain|ditch|pond|lake|reservoir"](${bbox});
     way["leisure"~"park|garden|recreation_ground"](${bbox});
     way["landuse"~"grass|forest|meadow|village_green|recreation_ground"](${bbox});
-    way["natural"~"wood|grassland|scrub|tree_row"](${bbox});
+    way["natural"~"wood|grassland|scrub"](${bbox});
   );
   out tags geom 650;
 `;
 
     try {
-      const res = await fetch("https://overpass-api.de/api/interpreter", {
-        method: "POST",
-        headers: { "Content-Type": "text/plain" },
-        body: q,
-        signal: fetchTimeoutSignal(OVERPASS_TIMEOUT_MS),
-      });
-      if (!res.ok) {
-        rememberOverpassHttpStatus("road", res.status);
-        throw new Error(`Overpass road HTTP ${res.status}`);
-      }
-      const data = await res.json();
+      const data = await fetchOverpassJson(q, "road");
       const elements = Array.isArray(data.elements) ? data.elements : [];
       const bundle: RoadGuideBundle = {
         roads: [],
@@ -2694,6 +2894,8 @@ if (staticRoute) {
         crossings: [],
         waterways: [],
         greens: [],
+        signals: [],
+        trees: [],
       };
 
       elements.forEach((el: any) => {
@@ -2702,12 +2904,32 @@ if (staticRoute) {
         if (el.type === "node") {
           const lat = Number(el.lat);
           const lng = Number(el.lon);
-          if (isValidCoordinate(lat, lng) && /level_crossing|crossing|tram_crossing/.test(tags.railway || "")) {
+          if (!isValidCoordinate(lat, lng)) return;
+          if (/level_crossing|crossing|tram_crossing/.test(tags.railway || "")) {
             bundle.crossings.push({
               id: `crossing-${el.id}`,
               name: tags.name || tags.ref || "Perlintasan kereta",
               latlng: L.latLng(lat, lng),
               type: "rail",
+            });
+          } else if (tags.highway === "traffic_signals") {
+            bundle.signals.push({
+              id: `signal-${el.id}`,
+              name: tags.name || tags.ref || "Lampu lalu lintas",
+              latlng: L.latLng(lat, lng),
+            });
+          } else if (tags.highway === "crossing") {
+            bundle.crossings.push({
+              id: `crossing-${el.id}`,
+              name: tags.name || tags.ref || "Penyeberangan",
+              latlng: L.latLng(lat, lng),
+              type: "road",
+            });
+          } else if (tags.natural === "tree") {
+            bundle.trees.push({
+              id: `tree-${el.id}`,
+              name: tags.name || "",
+              latlng: L.latLng(lat, lng),
             });
           }
           return;
@@ -2721,6 +2943,10 @@ if (staticRoute) {
           const lanes = numberTag(tags, "lanes") || (numberTag(tags, "lanes:forward") + numberTag(tags, "lanes:backward"));
           const roadType = detectRoadType(tags, name);
           const isRoundabout = tags.junction === "roundabout" || tags.junction === "circular";
+          const hasMappedMedian = tags.dual_carriageway === "yes"
+            || Boolean(tags.divider && tags.divider !== "no");
+          const hasMappedTreeLine = tags.tree_lined === "yes"
+            || tags["tree_lined:both"] === "yes";
           bundle.roads.push({
             id: `road-${el.id}`,
             name,
@@ -2728,14 +2954,9 @@ if (staticRoute) {
             highway: tags.highway,
             oneway: tags.oneway === "yes" || tags.oneway === "1" || isRoundabout,
             hasSidewalk: Boolean(tags.sidewalk && tags.sidewalk !== "no") || /footway|pedestrian|path/.test(tags.highway),
-            hasMedian: tags.dual_carriageway === "yes"
-              || Boolean(tags.divider && tags.divider !== "no")
-              || roadType === "avenue"
-              || roadType === "expressway",
-            treeLined: tags.tree_lined === "yes"
-              || tags["tree_lined:both"] === "yes"
-              || (roadType === "avenue" && !/flyover|bridge/.test(tags.layer || "")),
-            waterMedian: tags.waterway === "stream" || tags.water === "canal" || /\b(kali|sungai|kanal|sunter)\b/i.test(name),
+            hasMedian: hasMappedMedian,
+            treeLined: hasMappedTreeLine,
+            waterMedian: tags.waterway === "stream" || tags.water === "canal",
             isRoundabout,
             lanes,
             surface: tags.surface || "",
@@ -2777,14 +2998,143 @@ if (staticRoute) {
 
       return bundle;
     } catch (err) {
-      console.debug("Overpass road guide failed, using local road fallback:", err);
-      return { roads: [], rails: [], crossings: [], waterways: [], greens: [] };
+      console.debug("Overpass road guide failed; no map detail is fabricated:", err);
+      return emptyBundle();
     }
+  }
+
+  function mapDetailCollection(bundle: RoadGuideBundle): MapDetailFeatureCollection {
+    const features: MapDetailFeatureCollection["features"] = [];
+    const lineCoordinates = (points: L.LatLng[]) => points.map((point) => [point.lng, point.lat]);
+    const addLine = (id: string, kind: string, name: string, points: L.LatLng[], properties: Record<string, unknown> = {}) => {
+      if (points.length < 2) return;
+      features.push({
+        type: "Feature",
+        id,
+        properties: { kind, name, confidence: "verified", ...properties },
+        geometry: { type: "LineString", coordinates: lineCoordinates(points) },
+      });
+    };
+
+    bundle.roads.forEach((road) => {
+      const pedestrian = /footway|path|pedestrian|steps|cycleway/.test(road.highway);
+      addLine(road.id, pedestrian ? "pedestrian" : "road", road.name || road.ref, road.points, {
+        roadType: road.roadType,
+        highway: road.highway,
+        lanes: road.lanes,
+        oneway: road.oneway,
+        surface: road.surface,
+      });
+      if (road.hasMedian) addLine(`${road.id}-median`, "median", "", road.points);
+    });
+
+    bundle.rails.forEach((rail) => {
+      addLine(rail.id, "railway", rail.name, rail.points, { railway: rail.railway });
+    });
+
+    bundle.waterways.forEach((water) => {
+      const coordinates = lineCoordinates(water.points);
+      const polygon = water.points.length >= 4 && isClosedGuideRing(water.points);
+      features.push({
+        type: "Feature",
+        id: water.id,
+        properties: { kind: "waterway", name: water.name, waterway: water.waterway, confidence: "verified" },
+        geometry: polygon
+          ? { type: "Polygon", coordinates: [coordinates] }
+          : { type: "LineString", coordinates },
+      });
+    });
+
+    bundle.greens.forEach((green) => {
+      if (green.kind === "tree_row") {
+        addLine(green.id, "tree_row", green.name, green.points);
+        return;
+      }
+      if (green.points.length < 4 || !isClosedGuideRing(green.points)) return;
+      features.push({
+        type: "Feature",
+        id: green.id,
+        properties: { kind: "green", name: green.name, greenType: green.kind, confidence: "verified" },
+        geometry: { type: "Polygon", coordinates: [lineCoordinates(green.points)] },
+      });
+    });
+
+    bundle.crossings.forEach((crossing) => {
+      features.push({
+        type: "Feature",
+        id: crossing.id,
+        properties: { kind: "crossing", name: crossing.name, crossingType: crossing.type, confidence: "verified" },
+        geometry: { type: "Point", coordinates: [crossing.latlng.lng, crossing.latlng.lat] },
+      });
+    });
+
+    bundle.signals.forEach((signal) => {
+      features.push({
+        type: "Feature",
+        id: signal.id,
+        properties: { kind: "traffic_signal", name: signal.name, confidence: "verified" },
+        geometry: { type: "Point", coordinates: [signal.latlng.lng, signal.latlng.lat] },
+      });
+    });
+
+    bundle.trees.forEach((tree) => {
+      features.push({
+        type: "Feature",
+        id: tree.id,
+        properties: { kind: "tree", name: tree.name, confidence: "verified" },
+        geometry: { type: "Point", coordinates: [tree.latlng.lng, tree.latlng.lat] },
+      });
+    });
+
+    return { type: "FeatureCollection", features };
+  }
+
+  function mapDetailTileKey(bounds: L.LatLngBounds, zoom: number): string {
+    const zoomBucket = Math.max(11, Math.min(18, Math.floor(zoom)));
+    const center = bounds.getCenter();
+    const scale = 2 ** zoomBucket;
+    const tileX = Math.floor(((center.lng + 180) / 360) * scale);
+    const latitude = Math.max(-85.0511, Math.min(85.0511, center.lat)) * Math.PI / 180;
+    const tileY = Math.floor((1 - Math.asinh(Math.tan(latitude)) / Math.PI) / 2 * scale);
+    return `details:${zoomBucket}:${tileX}:${tileY}:${detailGroupsForZoom(zoom).join(",")}`;
+  }
+
+  let lastMapDetailKey = "";
+  let mapDetailRequestSequence = 0;
+
+  async function refreshMapLibreDetailLayer(force = false): Promise<void> {
+    const maplibreMap = state.maplibreMap;
+    if (!maplibreMap || state.baseMode === "satellite") return;
+    if (typeof maplibreMap.isStyleLoaded === "function" && !maplibreMap.isStyleLoaded()) return;
+    const zoom = map.getZoom();
+    if (zoom < 11) {
+      setMapDetailData(maplibreMap, EMPTY_MAP_DETAIL_COLLECTION);
+      return;
+    }
+
+    const bounds = map.getBounds();
+    const key = mapDetailTileKey(bounds, zoom);
+    if (!force && key === lastMapDetailKey) return;
+    lastMapDetailKey = key;
+    const requestId = ++mapDetailRequestSequence;
+    const cached = await mapDetailCache.get<MapDetailFeatureCollection>(key, 14 * 24 * 60 * 60 * 1000);
+    const validCached = cached?.features?.length ? cached : null;
+    if (validCached && requestId === mapDetailRequestSequence) setMapDetailData(maplibreMap, validCached);
+
+    const bundle = await fetchRoadGuidesForBounds(bounds.pad(0.12));
+    if (requestId !== mapDetailRequestSequence) return;
+    const collection = mapDetailCollection(bundle);
+    if (!collection.features.length) {
+      if (!validCached) setMapDetailData(maplibreMap, EMPTY_MAP_DETAIL_COLLECTION);
+      return;
+    }
+    setMapDetailData(maplibreMap, collection);
+    void mapDetailCache.set(key, collection);
   }
 
   async function refreshRoadGuideLayer(force = false): Promise<void> {
     if (!state.roadGuideLayer) state.roadGuideLayer = L.layerGroup().addTo(map);
-    if (state.baseMode !== "street") {
+    if (state.baseMode !== "street" || state.maplibreMap) {
       state.roadGuideLayer.clearLayers();
       return;
     }
@@ -3285,7 +3635,7 @@ if (staticRoute) {
       state.visionLayer.clearLayers();
       return;
     }
-    if (state.baseMode !== "street" || map.getZoom() < VISION_MIN_ZOOM) {
+    if (state.baseMode !== "street" || state.maplibreMap || map.getZoom() < VISION_MIN_ZOOM) {
       state.visionLayer.clearLayers();
       return;
     }
@@ -3325,11 +3675,12 @@ if (staticRoute) {
   }
 
   let lastOverpassFetchBounds: L.LatLngBounds | null = null;
+  let overpassLayerRequestSequence = 0;
 
   // Helper: Update MapLibre POI layer with GeoJSON features
   function updateMapLibrePoiLayer(pois: PoiRecord[]): void {
     const maplibreMap = state.maplibreMap;
-    if (!maplibreMap || state.baseMode !== "3d") return;
+    if (!maplibreMap || state.baseMode === "satellite") return;
 
     try {
       const features = pois.map(poi => ({
@@ -3338,7 +3689,8 @@ if (staticRoute) {
           id: poi.id,
           title: poi.title,
           kind: poi.kind,
-          "icon-emoji": poi.icon // Use emoji from POI record
+          priority: poiPriority(poi),
+          "icon-emoji": poi.icon,
         },
         geometry: { type: "Point", coordinates: [poi.lng, poi.lat] }
       }));
@@ -3357,29 +3709,30 @@ if (staticRoute) {
     // Avoid refetch if bounds similar
     if (lastOverpassFetchBounds && lastOverpassFetchBounds.contains(bounds.getSouthWest()) && lastOverpassFetchBounds.contains(bounds.getNorthEast())) return;
     lastOverpassFetchBounds = bounds.pad(0.2);
+    const requestId = ++overpassLayerRequestSequence;
     const pois = await fetchOverpassFeaturesForBounds(bounds);
+    if (requestId !== overpassLayerRequestSequence) return;
 
-    // If Overpass returned empty and we have no POI data yet, provide a local fallback
-    let finalPois = pois;
-    if (!pois || pois.length === 0) {
-      console.info("Overpass empty — using local POI fallback.");
-      const c = map.getCenter();
-      finalPois = [
-        { id: 'local-school-1', kind: 'campus', title: 'SD Negeri 1', description: '', address: '', imageUrl: POI_LIBRARY.campus.imageUrl, rating: POI_LIBRARY.campus.rating, icon: poiVisual('campus').icon, lat: c.lat + 0.0012, lng: c.lng + 0.0012 },
-        { id: 'local-worship-1', kind: 'worship', title: 'Masjid Al Furqan', description: '', address: '', imageUrl: POI_LIBRARY.worship.imageUrl, rating: POI_LIBRARY.worship.rating, icon: poiVisual('worship').icon, lat: c.lat - 0.0010, lng: c.lng - 0.0016 },
-        { id: 'local-mall-1', kind: 'mall', title: 'Pusat Perbelanjaan', description: '', address: '', imageUrl: POI_LIBRARY.mall.imageUrl, rating: POI_LIBRARY.mall.rating, icon: poiVisual('mall').icon, lat: c.lat - 0.0014, lng: c.lng + 0.0018 },
-        { id: 'local-hospital-1', kind: 'hospital', title: 'Klinik Sehat', description: '', address: '', imageUrl: POI_LIBRARY.hospital.imageUrl, rating: POI_LIBRARY.hospital.rating, icon: poiVisual('hospital').icon, lat: c.lat + 0.0020, lng: c.lng - 0.0010 },
-        { id: 'local-parking-1', kind: 'parking', title: 'Parkir Umum', description: '', address: '', imageUrl: POI_LIBRARY.parking.imageUrl, rating: POI_LIBRARY.parking.rating, icon: poiVisual('parking').icon, lat: c.lat - 0.0018, lng: c.lng - 0.0015 },
-      ];
-    }
+    // Keep verified OSM records during transient API failures. Do not invent
+    // nearby names or coordinates.
+    let finalPois = pois.length
+      ? pois
+      : Array.from(state.poiData.values()).filter((poi) => bounds.contains([poi.lat, poi.lng]));
 
     finalPois = rankPoisForView(finalPois);
+
+    if (pois.length) state.poiData.clear();
+    finalPois.forEach((poi) => state.poiData.set(poi.id, poi));
 
     // Update MapLibre POI layer (for 3D)
     updateMapLibrePoiLayer(finalPois);
 
     if (!state.overpassLayer) state.overpassLayer = L.layerGroup().addTo(map);
     state.overpassLayer.clearLayers();
+    if (state.maplibreMap && state.baseMode !== "satellite") {
+      updateTabletCategoryView();
+      return;
+    }
     finalPois.filter((poi) => poi.kind !== "other").forEach((poi) => {
       const marker = L.marker([poi.lat, poi.lng], {
         icon: makePoiIcon(poi, poiMarkerSizeByZoom()),
@@ -3405,16 +3758,12 @@ if (staticRoute) {
     const lat = ev.latlng.lat;
     const lng = ev.latlng.lng;
 
-    // In 3D mode, check if click is on a MapLibre POI
-    if (state.baseMode === '3d' && state.maplibreMap) {
+    // Resolve visible MapLibre POIs while Leaflet remains the interaction plane.
+    if (state.baseMode !== "satellite" && state.maplibreMap) {
       try {
-        const features = state.maplibreMap.querySourceFeatures("poi-source", {
-          sourceLayer: undefined
-        }).filter((f: any) => {
-          if (!f.properties || !f.geometry) return false;
-          const [lng2, lat2] = f.geometry.coordinates;
-          const dist = Math.sqrt(Math.pow(lat2 - lat, 2) + Math.pow(lng2 - lng, 2));
-          return dist < 0.003; // ~300m at this zoom level
+        const point = state.maplibreMap.project([lng, lat]);
+        const features = state.maplibreMap.queryRenderedFeatures(point, {
+          layers: ["poi-symbols", "poi-halo"],
         });
 
         if (features.length > 0) {
@@ -3452,11 +3801,7 @@ if (staticRoute) {
     );
     out center tags;
   `;
-      const res = await fetch("https://overpass-api.de/api/interpreter", {
-        method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: q,
-      });
-      if (!res.ok) return;
-      const data = await res.json();
+      const data = await fetchOverpassJson(q, "poi");
       const el = (data.elements || [])[0];
       if (!el) return;
       const tags = el.tags || {};
@@ -3481,10 +3826,12 @@ if (staticRoute) {
   });
 
   map.on('moveend', () => {
-    if (state.baseMode === '3d') {
-      if (state.overpassLayer) state.overpassLayer.clearLayers();
+    if (state.maplibreMap && state.baseMode !== "satellite") {
+      state.overpassLayer?.clearLayers();
       if (state.roadGuideLayer) state.roadGuideLayer.clearLayers();
       if (state.visionLayer) state.visionLayer.clearLayers();
+      void refreshOverpassLayer();
+      void refreshMapLibreDetailLayer();
       return;
     }
     void refreshOverpassLayer();
@@ -4950,6 +5297,10 @@ if (staticRoute) {
 
   // ─── Base map ───────────────────────────────────────────────────
 
+  function mapLibreSurfaceReady(): boolean {
+    return Boolean(state.maplibreContainer?.classList.contains("is-ready"));
+  }
+
   async function ensureMapLibreMap(): Promise<any | null> {
     if (state.maplibreMap) return state.maplibreMap;
 
@@ -4976,9 +5327,27 @@ if (staticRoute) {
         preserveDrawingBuffer: false,
         fadeDuration: 0,
       });
+      state.maplibreMap = maplibreMap;
+
+      let surfaceRevealed = false;
+      const revealRenderedSurface = () => {
+        if (surfaceRevealed || !state.maplibreContainer?.isConnected) return;
+        if (typeof maplibreMap.isStyleLoaded === "function" && !maplibreMap.isStyleLoaded()) return;
+        if (typeof maplibreMap.areTilesLoaded === "function" && !maplibreMap.areTilesLoaded()) return;
+        surfaceRevealed = true;
+        state.maplibreContainer.classList.add("is-ready");
+        if (state.baseMode !== "satellite" && map.hasLayer(streetLayer)) map.removeLayer(streetLayer);
+      };
+      maplibreMap.on("idle", revealRenderedSurface);
+      maplibreMap.on("render", revealRenderedSurface);
 
       maplibreMap.on("load", () => {
+        state.roadGuideLayer?.clearLayers();
+        state.visionLayer?.clearLayers();
         syncMapLibreView(true);
+        ensureMapDetailStyle(maplibreMap);
+        void refreshOverpassLayer();
+        void refreshMapLibreDetailLayer(true);
 
         // Some MapLibre builds do not implement setFog.
         const maybeSetFog = (maplibreMap as any).setFog;
@@ -5005,7 +5374,41 @@ if (staticRoute) {
           if (!maplibreMap.getSource("poi-source")) {
             maplibreMap.addSource("poi-source", {
               type: "geojson",
-              data: { type: "FeatureCollection", features: [] }
+              data: { type: "FeatureCollection", features: [] },
+              cluster: true,
+              clusterMaxZoom: 15,
+              clusterRadius: 46,
+            });
+          }
+
+          if (!maplibreMap.getLayer("poi-clusters")) {
+            maplibreMap.addLayer({
+              id: "poi-clusters",
+              type: "circle",
+              source: "poi-source",
+              filter: ["has", "point_count"],
+              paint: {
+                "circle-radius": ["step", ["get", "point_count"], 15, 8, 19, 20, 24],
+                "circle-color": "#ffffff",
+                "circle-stroke-color": "#2563eb",
+                "circle-stroke-width": 2,
+                "circle-opacity": 0.94,
+              },
+            });
+          }
+
+          if (!maplibreMap.getLayer("poi-cluster-count")) {
+            maplibreMap.addLayer({
+              id: "poi-cluster-count",
+              type: "symbol",
+              source: "poi-source",
+              filter: ["has", "point_count"],
+              layout: {
+                "text-field": ["get", "point_count_abbreviated"],
+                "text-size": 11,
+                "text-allow-overlap": true,
+              },
+              paint: { "text-color": "#0f172a" },
             });
           }
 
@@ -5014,6 +5417,7 @@ if (staticRoute) {
               id: "poi-halo",
               type: "circle",
               source: "poi-source",
+              filter: ["!", ["has", "point_count"]],
               paint: {
                 "circle-radius": ["interpolate", ["linear"], ["zoom"], 14, 4, 18, 10],
                 "circle-color": [
@@ -5044,13 +5448,19 @@ if (staticRoute) {
               id: "poi-symbols",
               type: "symbol",
               source: "poi-source",
+              filter: ["!", ["has", "point_count"]],
+              minzoom: 13,
               layout: {
-                "text-field": ["get", "icon-emoji"],
+                "text-field": ["get", "title"],
                 "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
-                "text-size": 18,
-                "text-offset": [0, 0],
-                "text-allow-overlap": true,
-                "text-ignore-placement": true
+                "text-size": ["interpolate", ["linear"], ["zoom"], 13, 11, 18, 14],
+                "text-offset": [0, 1.25],
+                "text-anchor": "top",
+                "text-max-width": 12,
+                "text-allow-overlap": false,
+                "text-ignore-placement": false,
+                "text-optional": true,
+                "symbol-sort-key": ["get", "priority"],
               },
               paint: {
                 "text-color": "#111827",
@@ -5132,7 +5542,7 @@ if (staticRoute) {
             }
 
             // 3. Bangunan 3D Berwarna berdasarkan Tinggi Gedung
-            if (layer.type === 'fill-extrusion' || id.includes('building')) {
+            if (layer.type === 'fill-extrusion') {
               try {
                 const buildingHeightExpression = [
                   "interpolate", ["linear"], ["zoom"],
@@ -5167,9 +5577,33 @@ if (staticRoute) {
               }
             }
           });
+
+          const buildingFill = style.layers.find((layer: any) =>
+            layer.type === "fill" && (layer["source-layer"] === "building" || String(layer.id).includes("building")));
+          if (buildingFill && !maplibreMap.getLayer("its-building-extrusion")) {
+            const firstSymbol = style.layers.find((layer: any) => layer.type === "symbol")?.id;
+            maplibreMap.addLayer({
+              id: "its-building-extrusion",
+              type: "fill-extrusion",
+              source: buildingFill.source,
+              "source-layer": buildingFill["source-layer"],
+              minzoom: 14.2,
+              ...(Array.isArray(buildingFill.filter) ? { filter: buildingFill.filter } : {}),
+              paint: {
+                "fill-extrusion-color": "#d8dee8",
+                "fill-extrusion-height": [
+                  "interpolate", ["linear"], ["zoom"],
+                  14.2, 0,
+                  17.2, ["to-number", ["coalesce", ["get", "render_height"], ["get", "height"], ["*", ["to-number", ["coalesce", ["get", "building:levels"], 2]], 3], 6]],
+                ],
+                "fill-extrusion-base": ["to-number", ["coalesce", ["get", "render_min_height"], ["get", "min_height"], 0]],
+                "fill-extrusion-opacity": 0.88,
+              },
+            }, firstSymbol);
+          }
+          updateMapLibrePoiLayer(Array.from(state.poiData.values()));
         }
       });
-      state.maplibreMap = maplibreMap;
       return maplibreMap;
     } catch (err) {
       console.error("ensureMapLibreMap error:", err);
@@ -5194,6 +5628,14 @@ if (staticRoute) {
   function syncMapLibreView(force = false): void {
     const maplibreMap = state.maplibreMap;
     if (!maplibreMap) return;
+    if (!force) {
+      if (state.maplibreSyncFrame) return;
+      state.maplibreSyncFrame = window.requestAnimationFrame(() => {
+        state.maplibreSyncFrame = 0;
+        syncMapLibreView(true);
+      });
+      return;
+    }
     if (state.maplibreSyncing && !force) return;
 
     const center = map.getCenter();
@@ -5223,16 +5665,16 @@ if (staticRoute) {
         pitch,
 
       });
-      // Do not hide Leaflet POI markers in 3D — prefer custom Leaflet icons consistently
+      // MapLibre owns POI labels while active; Leaflet remains the interaction plane.
       if (state.overpassLayer) {
         state.overpassLayer.getLayers().forEach((layer: any) => {
-          if (layer._path) layer._path.style.display = '';
-          if (layer._icon) layer._icon.style.display = '';
+          if (layer._path) layer._path.style.display = "none";
+          if (layer._icon) layer._icon.style.display = "none";
         });
       }
       for (const marker of state.poiMarkers.values()) {
         const el = marker.getElement() as HTMLElement | null;
-        if (el) el.style.display = '';
+        if (el) el.style.display = "none";
       }
     } finally {
       state.maplibreSyncing = false;
@@ -5240,54 +5682,52 @@ if (staticRoute) {
   }
 
   async function setBaseMap(mode: BaseMapMode): Promise<void> {
-    if (state.baseMode === mode) return;
+    if (state.baseMode === mode && (mode === "satellite" || state.maplibreMap)) return;
 
-    // Reset any previous 3D CSS transform (legacy fallback)
     const mapEl = mapRoot as HTMLElement;
     mapEl.style.transform = "";
     mapEl.style.transformOrigin = "";
     mapEl.style.perspective = "";
     (mapEl.parentElement as HTMLElement | null)?.style.setProperty("perspective", "");
     mapEl.classList.remove("map-mode-3d");
+    state.baseMode = mode;
 
-    if (mode === "street") {
-      // remove any GL or satellite layer
-      await removeMapLibreMap();
-      if (map.hasLayer(satelliteLayer)) map.removeLayer(satelliteLayer);
-      if (!map.hasLayer(streetLayer)) streetLayer.addTo(map);
-    } else if (mode === "3d") {
-      // Prefer true 3D: render MapLibre GL above the Leaflet map.
-      if (map.hasLayer(satelliteLayer)) map.removeLayer(satelliteLayer);
-      if (map.hasLayer(streetLayer)) map.removeLayer(streetLayer);
-
-      const gl = await ensureMapLibreMap();
-      if (!gl) {
-        // fallback: use CSS tilt if MapLibre not available
-        if (!map.hasLayer(streetLayer)) streetLayer.addTo(map);
-        const wrapper = mapEl.parentElement as HTMLElement | null;
-        if (wrapper) wrapper.style.perspective = "800px";
-        mapEl.style.transform = "rotateX(45deg) scale(1.4)";
-        mapEl.style.transformOrigin = "50% 100%";
-        mapEl.style.transition = "transform 0.5s ease";
-        state.baseMode = "street";
-        return;
-      }
-
-      mapEl.classList.add("map-mode-3d");
-      syncMapLibreView(true);
-      map.invalidateSize();
-    } else {
-      // satellite
+    if (mode === "satellite") {
       await removeMapLibreMap();
       if (map.hasLayer(streetLayer)) map.removeLayer(streetLayer);
       if (!map.hasLayer(satelliteLayer)) satelliteLayer.addTo(map);
+    } else {
+      if (map.hasLayer(satelliteLayer)) map.removeLayer(satelliteLayer);
+      if (!mapLibreSurfaceReady() && !map.hasLayer(streetLayer)) streetLayer.addTo(map);
+      const gl = await ensureMapLibreMap();
+      if (!gl) {
+        if (!map.hasLayer(streetLayer)) streetLayer.addTo(map);
+        state.baseMode = "street";
+      } else {
+        if (mapLibreSurfaceReady() && map.hasLayer(streetLayer)) map.removeLayer(streetLayer);
+        mapEl.classList.toggle("map-mode-3d", mode === "3d");
+        const center = map.getCenter();
+        gl.easeTo({
+          center: [center.lng, center.lat],
+          zoom: map.getZoom(),
+          bearing: map.getBearing?.() ?? 0,
+          pitch: mapLibrePitchByZoom(map.getZoom()),
+          duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 520,
+          essential: true,
+        });
+        updateMapLibrePoiLayer(Array.from(state.poiData.values()));
+      }
     }
 
-    state.baseMode = mode;
     updateModeControlButtons();
-    void refreshRoadGuideLayer(true);
-    if (mode === "street") void refreshVisionLayer(true);
-    else state.visionLayer?.clearLayers();
+    if (!state.maplibreMap && state.baseMode === "street") {
+      void refreshRoadGuideLayer(true);
+      void refreshVisionLayer(true);
+    } else {
+      state.roadGuideLayer?.clearLayers();
+      state.visionLayer?.clearLayers();
+    }
+    map.invalidateSize();
   }
 
   // ─── Camera tile ────────────────────────────────────────────────
@@ -8046,6 +8486,39 @@ if (staticRoute) {
         .setContent(escapeHtml(label))
         .openOn(map);
     },
+    goHome: () => {
+      const primary = state.devices[0] ?? state.device;
+
+      const fallbackCenter = DEFAULT_CENTER as [number, number];
+
+      const lat =
+        primary?.position.lat ??
+        Number(fallbackCenter[0]);
+
+      const lng =
+        primary?.position.lng ??
+        Number(fallbackCenter[1]);
+
+      goHome();
+
+      return {
+        ok: true,
+        deviceId: primary?.id ?? null,
+        lat,
+        lng,
+        zoom: DEFAULT_ZOOM,
+      };
+    },
+
+    closeAiHistory: () => {
+      const sheet =
+        document.getElementById("m-ai-history-sheet");
+
+      if (!sheet) return false;
+
+      closeAiHistorySheet();
+      return true;
+    },
   } satisfies ItsMapsRuntimeBridge);
 
   function makeCompassSvg(): string {
@@ -10651,10 +11124,21 @@ if (staticRoute) {
   }
   initMobileUI();
   void refreshSnapshot();
-  // Also fetch nearby POIs immediately so tablet filters have data even if devices are empty
-  void refreshOverpassLayer();
-  void refreshRoadGuideLayer(true);
-  void refreshVisionLayer(true);
+  // Start the CARTO vector renderer immediately. Leaflet remains the control and
+  // marker plane, so existing app interactions keep working without two visible bases.
+  void ensureMapLibreMap().then((gl) => {
+    if (gl && state.baseMode !== "satellite" && mapLibreSurfaceReady()) {
+      if (map.hasLayer(streetLayer)) map.removeLayer(streetLayer);
+      state.roadGuideLayer?.clearLayers();
+      state.visionLayer?.clearLayers();
+    }
+    lastOverpassFetchBounds = null;
+    void refreshOverpassLayer();
+    if (!gl) {
+      void refreshRoadGuideLayer(true);
+      void refreshVisionLayer(true);
+    }
+  });
 }
 
 // ─── PWA: Service Worker registration and install prompt handler ─────
@@ -10784,9 +11268,12 @@ function installPromptWheelDismiss(sheetEl: HTMLElement, onClose: () => void): v
 }
 
 function closeFloatingMapPanels(): void {
-  document.querySelectorAll("#windows-download-modal, #map-license-modal, #ai-license-modal, #roadmap-story-modal, #privacy-info-modal, #app-license-info-modal, #about-site-info-modal, #its-ai-chat-modal, #m-device-modal, #m-poi-modal").forEach((modal) => modal.remove());
+  document.querySelectorAll("#windows-download-modal, #map-license-modal, #ai-license-modal, #roadmap-story-modal, #privacy-info-modal, #app-license-info-modal, #about-site-info-modal, #its-ai-chat-modal, #m-device-modal, #m-poi-modal").forEach((modal) => {
+    if (itsAgentPanelTransitionActive && modal.id === "its-ai-chat-modal") return;
+    modal.remove();
+  });
   document.body.classList.remove("app-download-panel-open", "map-license-panel-open", "map-modal-panel-open");
-  clearPromptSidePanelWidth(0);
+  if (!itsAgentPanelTransitionActive) clearPromptSidePanelWidth(0);
 }
 
 document.addEventListener("click", (event) => {
@@ -10849,10 +11336,16 @@ function itsShowRoadmapStoryModal(): void {
   `;
   document.body.appendChild(modal);
   let closeRoadmapModal: () => void = () => undefined;
+  let roadmapClosing = false;
   const keyHandler = (keyEvent: KeyboardEvent) => {
     if (keyEvent.key === "Escape") closeRoadmapModal();
   };
   closeRoadmapModal = () => {
+    if (roadmapClosing) return;
+    roadmapClosing = true;
+    if (modal.classList.contains("its-ai-agent-target-stacked")) {
+      itsReleaseAgentPanelStack();
+    }
     window.removeEventListener("keydown", keyHandler);
     modal.classList.remove("open");
     document.body.classList.remove("map-license-panel-open");
@@ -10931,10 +11424,16 @@ function itsShowSiteInfoModal(kind: SiteInfoModalKind): void {
   `;
   document.body.appendChild(modal);
   let closeInfoModal: () => void = () => undefined;
+  let infoModalClosing = false;
   const keyHandler = (keyEvent: KeyboardEvent) => {
     if (keyEvent.key === "Escape") closeInfoModal();
   };
   closeInfoModal = () => {
+    if (infoModalClosing) return;
+    infoModalClosing = true;
+    if (modal.classList.contains("its-ai-agent-target-stacked")) {
+      itsReleaseAgentPanelStack();
+    }
     window.removeEventListener("keydown", keyHandler);
     modal.classList.remove("open");
     document.body.classList.remove("map-license-panel-open");
@@ -10980,10 +11479,16 @@ function itsShowMapLicenseModal(): void {
   `;
   document.body.appendChild(modal);
   let closeLicenseModal: () => void = () => undefined;
+  let mapLicenseClosing = false;
   const keyHandler = (keyEvent: KeyboardEvent) => {
     if (keyEvent.key === "Escape") closeLicenseModal();
   };
   closeLicenseModal = () => {
+    if (mapLicenseClosing) return;
+    mapLicenseClosing = true;
+    if (modal.classList.contains("its-ai-agent-target-stacked")) {
+      itsReleaseAgentPanelStack();
+    }
     window.removeEventListener("keydown", keyHandler);
     modal.classList.remove("open");
     document.body.classList.remove("map-license-panel-open");
@@ -11029,10 +11534,16 @@ function itsShowAiLicenseModal(): void {
   `;
   document.body.appendChild(modal);
   let closeLicenseModal: () => void = () => undefined;
+  let aiLicenseClosing = false;
   const keyHandler = (keyEvent: KeyboardEvent) => {
     if (keyEvent.key === "Escape") closeLicenseModal();
   };
   closeLicenseModal = () => {
+    if (aiLicenseClosing) return;
+    aiLicenseClosing = true;
+    if (modal.classList.contains("its-ai-agent-target-stacked")) {
+      itsReleaseAgentPanelStack();
+    }
     window.removeEventListener("keydown", keyHandler);
     modal.classList.remove("open");
     document.body.classList.remove("map-license-panel-open");
@@ -11700,20 +12211,27 @@ async function itsShowWindowsDownloadModal(): Promise<void> {
 
 function setupPromptSheetSwipe(sheetEl: HTMLElement, onClose: () => void): void {
   let startAxis = 0;
+  let startCrossAxis = 0;
   let currentAxis = 0;
   let dragging = false;
+  let directionLocked = false;
   let pointerId = -1;
   let startedAt = 0;
 
   sheetEl.addEventListener("pointerdown", (event) => {
     const target = event.target as HTMLElement;
     const startsOnHandle = promptSheetSwipeHandleTarget(target);
-    if (!startsOnHandle && target.closest("button, a, input, label, select, textarea")) return;
+    // Header areas double as swipe handles, but their controls must retain the
+    // original pointer target. Capturing a close-button pointer on the sheet
+    // retargets the click to <section> and makes the button appear unresponsive.
+    if (target.closest("button, a, input, label, select, textarea")) return;
     const horizontal = window.matchMedia("(min-width: 721px)").matches;
     if (!startsOnHandle && !promptCanStartDismiss(target, sheetEl, horizontal)) return;
     startAxis = horizontal ? event.clientX : event.clientY;
+    startCrossAxis = horizontal ? event.clientY : event.clientX;
     currentAxis = 0;
     dragging = true;
+    directionLocked = false;
     pointerId = event.pointerId;
     startedAt = performance.now();
     sheetEl.dataset.swipeAxis = horizontal ? "x" : "y";
@@ -11725,9 +12243,23 @@ function setupPromptSheetSwipe(sheetEl: HTMLElement, onClose: () => void): void 
     if (!dragging || event.pointerId !== pointerId) return;
     const horizontal = sheetEl.dataset.swipeAxis === "x";
     const axis = horizontal ? event.clientX : event.clientY;
-    currentAxis = Math.max(0, axis - startAxis);
+    const crossAxis = horizontal ? event.clientY : event.clientX;
+    const primaryDelta = axis - startAxis;
+    const crossDelta = crossAxis - startCrossAxis;
+    if (!directionLocked) {
+      if (Math.max(Math.abs(primaryDelta), Math.abs(crossDelta)) < 8) return;
+      if (Math.abs(crossDelta) > Math.abs(primaryDelta)) {
+        dragging = false;
+        sheetEl.style.transition = "";
+        sheetEl.style.transform = "";
+        return;
+      }
+      directionLocked = true;
+    }
+    currentAxis = Math.max(0, primaryDelta);
     if (currentAxis > 2) event.preventDefault();
     sheetEl.style.transform = horizontal ? `translateX(${currentAxis}px)` : `translateY(${currentAxis}px)`;
+    sheetEl.style.opacity = String(Math.max(0.72, 1 - currentAxis / Math.max(480, sheetEl.clientWidth * 2)));
     if (horizontal) {
       const remaining = Math.max(0, sheetEl.getBoundingClientRect().width - currentAxis);
       setPromptSidePanelWidth(remaining);
@@ -11739,6 +12271,7 @@ function setupPromptSheetSwipe(sheetEl: HTMLElement, onClose: () => void): void 
     dragging = false;
     pointerId = -1;
     sheetEl.style.transition = "";
+    sheetEl.style.opacity = "";
     const elapsed = Math.max(1, performance.now() - startedAt);
     const velocity = currentAxis / elapsed;
     if (currentAxis > 56 || velocity > 0.55) onClose();
@@ -11755,14 +12288,32 @@ function setupPromptSheetSwipe(sheetEl: HTMLElement, onClose: () => void): void 
 
 type ItsWebMcpResource = "home" | "documentation" | "method" | "privacy" | "licence" | "ai-license" | "roadmap" | "pdf" | "llms" | "about";
 
-let itsChatGenerator: any = null;
 let itsWebMcpListenersInstalled = false;
 let itsWebMcpImperativeRegistered = false;
 let itsAgentModeEnabled = false;
+let itsAgentPanelTransitionActive = false;
+let itsAgentStackCleanup: (() => void) | null = null;
+let itsLastRealPointer = { x: Math.max(16, window.innerWidth - 72), y: Math.max(16, window.innerHeight - 72), valid: false };
+
+const ITS_MODEL_IDS = {
+  control: "onnx-community/SmolLM2-135M-Instruct-ONNX",
+  research: "onnx-community/Qwen2.5-0.5B-Instruct",
+  vision: RF_DETR_ANDROID_MODEL_ID,
+} as const;
+
+document.addEventListener("pointermove", (event) => {
+  if ((event.target as HTMLElement | null)?.closest("#its-agent-cursor")) return;
+  itsLastRealPointer = { x: event.clientX, y: event.clientY, valid: true };
+}, { passive: true });
 
 type ItsAssistantResponse = {
   text: string;
   html?: string;
+};
+
+type ItsChatTurn = {
+  role: "user" | "assistant";
+  content: string;
 };
 
 type ItsAssistantDetectionDetail = {
@@ -11793,6 +12344,15 @@ type ItsMapsRuntimeBridge = {
   applyUserLocation?: (lat: number, lng: number, accuracy?: number, center?: boolean, source?: string) => void;
   focusPoi?: (poiId: string, lat: number, lng: number) => void;
   focusLatLng?: (lat: number, lng: number, label?: string) => void;
+  goHome?: () => {
+    ok: boolean;
+    deviceId: string | null;
+    lat: number;
+    lng: number;
+    zoom: number;
+  };
+
+  closeAiHistory?: () => boolean;
 };
 
 const itsChatDetectionDetails = new Map<string, ItsAssistantDetectionDetail>();
@@ -12197,46 +12757,709 @@ async function itsSearchTrafficLocation(location: string): Promise<Record<string
   };
 }
 
-async function ensureItsChatModel(): Promise<any> {
-  if (itsChatGenerator) return itsChatGenerator;
-  const transformers = await import("@huggingface/transformers") as any;
-  transformers.env.allowLocalModels = false;
-  const hasWebGpu = "gpu" in navigator;
-  itsChatGenerator = await transformers.pipeline(
-    "text-generation",
-    "onnx-community/Qwen2.5-0.5B-Instruct",
-    { dtype: "q4", device: hasWebGpu ? "webgpu" : "wasm" },
-  );
-  return itsChatGenerator;
+window.addEventListener("pagehide", () => {
+  disposeBrowserTextWorker();
+}, { once: true });
+
+function itsNormalizeResearchText(value: string): string {
+  return value
+    .replace(/\u0000/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-function itsWithTimeout<T>(task: Promise<T>, ms: number, message: string): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timer = window.setTimeout(() => reject(new Error(message)), ms);
-    task.then(
-      (value) => {
-        window.clearTimeout(timer);
-        resolve(value);
-      },
-      (error) => {
-        window.clearTimeout(timer);
-        reject(error);
-      },
-    );
-  });
-}
+type ItsResearchMode = "journal" | "profile" | "website" | "image";
 
-function itsExtractGeneratedAnswer(output: unknown, prompt: string): string {
-  const first = Array.isArray(output) ? output[0] : output;
-  const generated = (first as { generated_text?: unknown })?.generated_text;
-  if (Array.isArray(generated)) {
-    const last = generated.at(-1) as { content?: unknown } | undefined;
-    if (typeof last?.content === "string") return last.content.trim();
+type ItsResearchFact = {
+  label: string;
+  value: string;
+};
+
+type ItsResearchEvidence = {
+  id: string;
+  taskId: string;
+  kind: ItsResearchMode;
+  provider: string;
+  title: string;
+  url: string;
+  excerpt: string;
+  authors: string[];
+  publisher: string;
+  year: string;
+  doi: string;
+  pdfUrl: string;
+  imageUrl: string;
+  imageSourceUrl: string;
+  license: string;
+  sourceType: string;
+  citedByCount: number;
+  facts: ItsResearchFact[];
+  retrievedAt: number;
+};
+
+type ItsResearchTask = {
+  id: string;
+  question: string;
+  mode: ItsResearchMode;
+  queries: string[];
+  sourceIds: string[];
+  createdAt: number;
+};
+
+type ItsResearchResult = {
+  taskId: string;
+  text: string;
+  html: string;
+  bibliography: string[];
+  sources: ItsResearchEvidence[];
+};
+
+const ITS_RESEARCH_TASK_STORAGE = "its-webmcp-research-tasks:v2";
+const ITS_RESEARCH_EVIDENCE_STORAGE = "its-webmcp-research-evidence:v2";
+const ITS_RESEARCH_CACHE_TTL = 15 * 60 * 1000;
+const itsResearchSearchCache = new Map<string, { at: number; sources: ItsResearchEvidence[] }>();
+
+function itsLoadStoredArray<T>(key: string): T[] {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(key) || "[]");
+    return Array.isArray(parsed) ? parsed as T[] : [];
+  } catch {
+    return [];
   }
-  if (typeof generated === "string") return generated.replace(prompt, "").trim();
-  if (typeof first === "string") return first.replace(prompt, "").trim();
-  return "";
 }
+
+let itsResearchTasks = itsLoadStoredArray<ItsResearchTask>(ITS_RESEARCH_TASK_STORAGE);
+let itsResearchEvidence = itsLoadStoredArray<ItsResearchEvidence>(ITS_RESEARCH_EVIDENCE_STORAGE);
+
+function itsSaveResearchState(): void {
+  try {
+    localStorage.setItem(ITS_RESEARCH_TASK_STORAGE, JSON.stringify(itsResearchTasks.slice(-30)));
+    localStorage.setItem(ITS_RESEARCH_EVIDENCE_STORAGE, JSON.stringify(itsResearchEvidence.slice(-180)));
+  } catch (error) {
+    console.warn("[ITS] Research state could not be saved", error);
+  }
+}
+
+function itsResearchId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function itsPlainResearchMarkup(value: unknown): string {
+  const raw = typeof value === "string" ? value : "";
+  if (!raw) return "";
+  const parsed = new DOMParser().parseFromString(raw, "text/html");
+  return itsNormalizeResearchText(parsed.body.textContent || raw).slice(0, 8000);
+}
+
+function itsResearchStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 30);
+}
+
+function itsResearchFacts(value: unknown): ItsResearchFact[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const record = objectRecord(item);
+      return { label: String(record.label || "").trim(), value: String(record.value || "").trim() };
+    })
+    .filter((item) => item.label && item.value)
+    .slice(0, 30);
+}
+
+function itsIsPrivateOrLocalHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return host === "localhost" || host === "127.0.0.1" || host === "::1" ||
+    /^10\./.test(host) || /^192\.168\./.test(host) || /^172\.(1[6-9]|2\d|3[01])\./.test(host);
+}
+
+function itsSafeResearchUrl(value: unknown, optional = false): string {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text && optional) return "";
+  if (!text) throw new Error("URL sumber wajib diisi.");
+  const url = new URL(text, window.location.href);
+  if (!/^https?:$/.test(url.protocol) || itsIsPrivateOrLocalHost(url.hostname)) {
+    throw new Error("URL sumber publik tidak valid.");
+  }
+  return url.href;
+}
+
+async function itsFetchResearchJson<T>(url: string, timeout = 16000): Promise<T> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeout);
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      mode: "cors",
+      credentials: "omit",
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) throw new Error(`${new URL(url).hostname}: HTTP ${response.status}`);
+    return await response.json() as T;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+function itsResearchYear(value: unknown): string {
+  if (typeof value === "number" && value > 1000 && value < 3000) return String(value);
+  if (Array.isArray(value)) {
+    const first = value.flat(3).find((item) => Number(item) > 1000 && Number(item) < 3000);
+    return first ? String(first) : "";
+  }
+  const match = String(value || "").match(/\b(19|20)\d{2}\b/);
+  return match?.[0] || "";
+}
+
+function itsNormalizeDoi(value: unknown): string {
+  return String(value || "")
+    .trim()
+    .replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "")
+    .replace(/^doi:\s*/i, "");
+}
+
+function itsResearchEvidenceBase(
+  provider: string,
+  mode: ItsResearchMode,
+  values: Partial<ItsResearchEvidence>,
+): ItsResearchEvidence | null {
+  const title = itsNormalizeResearchText(String(values.title || ""));
+  const url = String(values.url || "").trim();
+  if (!title || !url) return null;
+  try {
+    return {
+      id: values.id || itsResearchId("source"),
+      taskId: values.taskId || "",
+      kind: mode,
+      provider,
+      title,
+      url: itsSafeResearchUrl(url),
+      excerpt: itsPlainResearchMarkup(values.excerpt).slice(0, 2400),
+      authors: itsResearchStringArray(values.authors),
+      publisher: String(values.publisher || "").trim(),
+      year: itsResearchYear(values.year),
+      doi: itsNormalizeDoi(values.doi),
+      pdfUrl: itsSafeResearchUrl(values.pdfUrl, true),
+      imageUrl: itsSafeResearchUrl(values.imageUrl, true),
+      imageSourceUrl: itsSafeResearchUrl(values.imageSourceUrl, true),
+      license: itsPlainResearchMarkup(values.license).slice(0, 200),
+      sourceType: String(values.sourceType || "").trim(),
+      citedByCount: Math.max(0, Math.round(Number(values.citedByCount) || 0)),
+      facts: itsResearchFacts(values.facts),
+      retrievedAt: values.retrievedAt || Date.now(),
+    };
+  } catch (error) {
+    console.warn(`[ITS] Ignoring invalid ${provider} source`, error);
+    return null;
+  }
+}
+
+async function itsSearchCrossref(query: string): Promise<ItsResearchEvidence[]> {
+  const url = new URL("https://api.crossref.org/works");
+  url.searchParams.set("query.bibliographic", query);
+  url.searchParams.set("rows", "8");
+  const payload = await itsFetchResearchJson<{ message?: { items?: Array<Record<string, any>> } }>(url.href);
+  return (payload.message?.items || []).map((item) => {
+    const doi = itsNormalizeDoi(item.DOI);
+    const links = Array.isArray(item.link) ? item.link : [];
+    const pdf = links.find((link: Record<string, unknown>) => String(link["content-type"] || "").includes("pdf"));
+    const authors = (Array.isArray(item.author) ? item.author : []).map((author: Record<string, unknown>) =>
+      [author.given, author.family].filter(Boolean).join(" "));
+    return itsResearchEvidenceBase("Crossref", "journal", {
+      title: Array.isArray(item.title) ? item.title[0] : item.title,
+      url: doi ? `https://doi.org/${doi}` : item.URL,
+      excerpt: item.abstract || "",
+      authors,
+      publisher: item.publisher || (Array.isArray(item["container-title"]) ? item["container-title"][0] : ""),
+      year: item.published?.["date-parts"] || item.issued?.["date-parts"],
+      doi,
+      pdfUrl: pdf?.URL || "",
+      sourceType: item.type,
+      citedByCount: item["is-referenced-by-count"],
+    });
+  }).filter((item): item is ItsResearchEvidence => Boolean(item));
+}
+
+function itsOpenAlexAbstract(value: unknown): string {
+  const index = objectRecord(value);
+  const words: Array<[number, string]> = [];
+  Object.entries(index).forEach(([word, positions]) => {
+    if (!Array.isArray(positions)) return;
+    positions.forEach((position) => {
+      const numeric = Number(position);
+      if (Number.isFinite(numeric)) words.push([numeric, word]);
+    });
+  });
+  return words.sort((left, right) => left[0] - right[0]).map((item) => item[1]).join(" ");
+}
+
+async function itsSearchOpenAlex(query: string): Promise<ItsResearchEvidence[]> {
+  const url = new URL("https://api.openalex.org/works");
+  url.searchParams.set("search", query);
+  url.searchParams.set("per-page", "8");
+  url.searchParams.set("sort", "relevance_score:desc");
+  const payload = await itsFetchResearchJson<{ results?: Array<Record<string, any>> }>(url.href);
+  return (payload.results || []).map((item) => {
+    const best = objectRecord(item.best_oa_location);
+    const primary = objectRecord(item.primary_location);
+    const source = objectRecord(best.source || primary.source);
+    const openAccess = objectRecord(item.open_access);
+    const doi = itsNormalizeDoi(item.doi);
+    const authors = (Array.isArray(item.authorships) ? item.authorships : [])
+      .map((authorship: Record<string, unknown>) => String(objectRecord(authorship.author).display_name || ""));
+    return itsResearchEvidenceBase("OpenAlex", "journal", {
+      title: item.display_name,
+      url: best.landing_page_url || primary.landing_page_url || (doi ? `https://doi.org/${doi}` : item.id),
+      excerpt: itsOpenAlexAbstract(item.abstract_inverted_index),
+      authors,
+      publisher: String(source.display_name || ""),
+      year: item.publication_year,
+      doi,
+      pdfUrl: String(best.pdf_url || primary.pdf_url || ""),
+      license: String(best.license || openAccess.oa_status || ""),
+      sourceType: item.type,
+      citedByCount: item.cited_by_count,
+    });
+  }).filter((item): item is ItsResearchEvidence => Boolean(item));
+}
+
+async function itsSearchEuropePmc(query: string): Promise<ItsResearchEvidence[]> {
+  const url = new URL("https://www.ebi.ac.uk/europepmc/webservices/rest/search");
+  url.searchParams.set("query", query);
+  url.searchParams.set("format", "json");
+  url.searchParams.set("resultType", "core");
+  url.searchParams.set("pageSize", "8");
+  const payload = await itsFetchResearchJson<{ resultList?: { result?: Array<Record<string, any>> } }>(url.href);
+  return (payload.resultList?.result || []).map((item) => {
+    const doi = itsNormalizeDoi(item.doi);
+    const authors = (item.authorList?.author || []).map((author: Record<string, unknown>) =>
+      String(author.fullName || [author.firstName, author.lastName].filter(Boolean).join(" ")));
+    const fullText = item.isOpenAccess === "Y" && Array.isArray(item.fullTextUrlList?.fullTextUrl)
+      ? item.fullTextUrlList.fullTextUrl.find((entry: Record<string, unknown>) =>
+        String(entry.documentStyle || "").toLowerCase() === "pdf")
+      : null;
+    const recordUrl = doi
+      ? `https://doi.org/${doi}`
+      : item.pmcid
+        ? `https://europepmc.org/articles/${item.pmcid}`
+        : `https://europepmc.org/article/${encodeURIComponent(String(item.source || "MED"))}/${encodeURIComponent(String(item.id || ""))}`;
+    return itsResearchEvidenceBase("Europe PMC", "journal", {
+      title: item.title,
+      url: recordUrl,
+      excerpt: item.abstractText || item.bookOrReportDetails?.abstractText || "",
+      authors,
+      publisher: item.journalInfo?.journal?.title || item.journalTitle || "",
+      year: item.pubYear || item.firstPublicationDate,
+      doi,
+      pdfUrl: fullText?.url || "",
+      license: item.isOpenAccess === "Y" ? "Open access" : "",
+      sourceType: item.pubTypeList?.pubType?.[0] || "journal article",
+      citedByCount: item.citedByCount,
+    });
+  }).filter((item): item is ItsResearchEvidence => Boolean(item));
+}
+
+async function itsSearchWikipedia(query: string, language: "id" | "en"): Promise<ItsResearchEvidence[]> {
+  const url = new URL(`https://${language}.wikipedia.org/w/api.php`);
+  Object.entries({
+    action: "query",
+    generator: "search",
+    gsrsearch: query,
+    gsrlimit: "6",
+    prop: "extracts|pageimages|info",
+    exintro: "1",
+    explaintext: "1",
+    inprop: "url",
+    piprop: "thumbnail|name",
+    pithumbsize: "900",
+    format: "json",
+    origin: "*",
+  }).forEach(([key, value]) => url.searchParams.set(key, value));
+  const payload = await itsFetchResearchJson<{ query?: { pages?: Record<string, Record<string, any>> } }>(url.href);
+  return Object.values(payload.query?.pages || {}).map((page) => itsResearchEvidenceBase(
+    `Wikipedia (${language})`,
+    "website",
+    {
+      title: page.title,
+      url: page.fullurl,
+      excerpt: page.extract,
+      publisher: "Wikipedia",
+      imageUrl: page.thumbnail?.source || "",
+      imageSourceUrl: page.fullurl,
+      license: "CC BY-SA",
+      sourceType: "encyclopedia",
+    },
+  )).filter((item): item is ItsResearchEvidence => Boolean(item));
+}
+
+async function itsSearchWikimediaImages(query: string): Promise<ItsResearchEvidence[]> {
+  const url = new URL("https://commons.wikimedia.org/w/api.php");
+  Object.entries({
+    action: "query",
+    generator: "search",
+    gsrsearch: query,
+    gsrnamespace: "6",
+    gsrlimit: "6",
+    prop: "imageinfo",
+    iiprop: "url|extmetadata",
+    iiurlwidth: "1200",
+    format: "json",
+    origin: "*",
+  }).forEach(([key, value]) => url.searchParams.set(key, value));
+  const payload = await itsFetchResearchJson<{ query?: { pages?: Record<string, Record<string, any>> } }>(url.href);
+  return Object.values(payload.query?.pages || {}).map((page) => {
+    const info = Array.isArray(page.imageinfo) ? page.imageinfo[0] : {};
+    const metadata = objectRecord(info?.extmetadata);
+    const metaValue = (name: string) => String(objectRecord(metadata[name]).value || "");
+    return itsResearchEvidenceBase("Wikimedia Commons", "image", {
+      title: metaValue("ObjectName") || page.title,
+      url: info?.descriptionurl || `https://commons.wikimedia.org/wiki/${encodeURIComponent(page.title)}`,
+      excerpt: metaValue("ImageDescription") || metaValue("Categories"),
+      authors: [itsPlainResearchMarkup(metaValue("Artist"))].filter(Boolean),
+      publisher: "Wikimedia Commons",
+      imageUrl: info?.thumburl || info?.url || "",
+      imageSourceUrl: info?.descriptionurl || "",
+      license: metaValue("LicenseShortName") || metaValue("UsageTerms"),
+      sourceType: "image",
+    });
+  }).filter((item): item is ItsResearchEvidence => Boolean(item));
+}
+
+function itsResearchTokens(value: string): string[] {
+  return itsNormalizeResearchText(value.toLowerCase())
+    .replace(/[^\p{L}\p{N}\s-]+/gu, " ")
+    .split(/\s+/)
+    .filter((word) => word.length >= 3);
+}
+
+function itsResearchRelevance(query: string, source: ItsResearchEvidence): number {
+  const tokens = new Set(itsResearchTokens(query));
+  if (!tokens.size) return 0;
+  const title = source.title.toLowerCase();
+  const body = `${source.excerpt} ${source.authors.join(" ")} ${source.publisher}`.toLowerCase();
+  let score = 0;
+  tokens.forEach((token) => {
+    if (title.includes(token)) score += 5;
+    else if (body.includes(token)) score += 1;
+  });
+  return score / tokens.size + Math.log10(source.citedByCount + 1) * 0.15 + (source.excerpt ? 0.35 : 0);
+}
+
+function itsDedupeResearchSources(query: string, sources: ItsResearchEvidence[]): ItsResearchEvidence[] {
+  const deduped = new Map<string, ItsResearchEvidence>();
+  sources.forEach((source) => {
+    const key = source.doi
+      ? `doi:${source.doi.toLowerCase()}`
+      : `title:${source.title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()}`;
+    const current = deduped.get(key);
+    if (!current || source.excerpt.length + Number(Boolean(source.pdfUrl)) * 400 > current.excerpt.length + Number(Boolean(current.pdfUrl)) * 400) {
+      deduped.set(key, current
+        ? { ...source, provider: Array.from(new Set(`${current.provider}|${source.provider}`.split("|"))).join(" | ") }
+        : source);
+    }
+  });
+  return Array.from(deduped.values())
+    .sort((left, right) => itsResearchRelevance(query, right) - itsResearchRelevance(query, left))
+    .slice(0, 10);
+}
+
+function itsFallbackResearchQueries(question: string, mode: ItsResearchMode): string[] {
+  const clean = question.trim();
+  if (mode === "journal") return [clean, `${clean} mathematical formulation`, `${clean} object detection`];
+  if (mode === "profile") return [clean, `${clean} official profile`, `${clean} university`];
+  if (mode === "image") return [clean, `${clean} Wikimedia Commons`];
+  return [clean, `${clean} official documentation`];
+}
+
+async function itsSearchResearchSources(
+  question: string,
+  mode: ItsResearchMode,
+  forceRefresh = false,
+): Promise<ItsResearchEvidence[]> {
+  const query = question.trim();
+  if (!query) throw new Error("Pertanyaan pencarian tidak boleh kosong.");
+  const cacheKey = `${mode}:${query.toLowerCase()}`;
+  const cached = itsResearchSearchCache.get(cacheKey);
+  if (!forceRefresh && cached && Date.now() - cached.at < ITS_RESEARCH_CACHE_TTL) {
+    return cached.sources.map((source) => ({ ...source }));
+  }
+
+  const tasks: Array<Promise<ItsResearchEvidence[]>> = mode === "journal"
+    ? [itsSearchCrossref(query), itsSearchOpenAlex(query), itsSearchEuropePmc(query)]
+    : mode === "image"
+      ? [itsSearchWikimediaImages(query), itsSearchWikipedia(query, "id"), itsSearchWikipedia(query, "en")]
+      : [itsSearchWikipedia(query, "id"), itsSearchWikipedia(query, "en"), itsSearchWikimediaImages(query)];
+  const settled = await Promise.allSettled(tasks);
+  settled.forEach((result) => {
+    if (result.status === "rejected") console.warn("[ITS] Research provider unavailable", result.reason);
+  });
+  const sources = itsDedupeResearchSources(
+    query,
+    settled.flatMap((result) => result.status === "fulfilled" ? result.value : []),
+  );
+  if (!sources.length) throw new Error("Sumber daring belum dapat dijangkau. Coba lagi atau gunakan browser agent WebMCP.");
+  itsResearchSearchCache.set(cacheKey, { at: Date.now(), sources });
+  return sources.map((source) => ({ ...source }));
+}
+
+async function itsReadPublicUrlClientSide(rawUrl: string): Promise<ItsReadableWebPage> {
+  const url = new URL(rawUrl, window.location.href);
+  if (!/^https?:$/.test(url.protocol) || (url.origin !== window.location.origin && itsIsPrivateOrLocalHost(url.hostname))) {
+    throw new Error("URL publik tidak valid.");
+  }
+  let response: Response;
+  try {
+    response = await fetch(url.href, {
+      mode: "cors",
+      credentials: "omit",
+      redirect: "follow",
+      cache: "no-store",
+      headers: { Accept: "text/html,application/xhtml+xml,text/plain,application/json" },
+    });
+  } catch {
+    throw new Error("Situs memblokir pembacaan browser lintas domain.");
+  }
+  if (!response.ok) throw new Error(`Situs mengembalikan HTTP ${response.status}.`);
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/pdf")) {
+    throw new Error("PDF lintas situs tidak diproses oleh browser. Gunakan tautan sumber atau full text open-access yang disediakan penerbit.");
+  }
+  const html = await response.text();
+  const parsed = new DOMParser().parseFromString(html, "text/html");
+  parsed.querySelectorAll("script, style, noscript, svg, canvas, nav, footer, form, iframe").forEach((element) => element.remove());
+  const title = parsed.querySelector("title")?.textContent?.trim() || parsed.querySelector("h1")?.textContent?.trim() || url.hostname;
+  const description = parsed.querySelector<HTMLMetaElement>('meta[name="description"]')?.content?.trim() || "";
+  const imageValue = parsed.querySelector<HTMLMetaElement>('meta[property="og:image"]')?.content?.trim() || "";
+  const imageUrl = imageValue ? new URL(imageValue, url.href).href : null;
+  const article = parsed.querySelector("article, main, [role='main']") || parsed.body;
+  return {
+    url: url.href,
+    title,
+    description,
+    imageUrl,
+    text: itsNormalizeResearchText(article?.textContent || "").slice(0, 60000),
+    contentType,
+  };
+}
+
+function itsResearchTaskById(taskId: string): ItsResearchTask {
+  const task = itsResearchTasks.find((item) => item.id === taskId);
+  if (!task) throw new Error(`Misi penelitian "${taskId}" tidak ditemukan.`);
+  return task;
+}
+
+function itsEvidenceForTask(taskId: string): ItsResearchEvidence[] {
+  return itsResearchEvidence.filter((item) => item.taskId === taskId).slice(-12);
+}
+
+async function itsCreateResearchTask(
+  question: string,
+  mode: ItsResearchMode,
+  autoSearch = true,
+): Promise<ItsResearchTask> {
+  const clean = question.trim();
+  if (!clean) throw new Error("Pertanyaan penelitian tidak boleh kosong.");
+  const task: ItsResearchTask = {
+    id: itsResearchId("research"),
+    question: clean,
+    mode,
+    queries: itsFallbackResearchQueries(clean, mode),
+    sourceIds: [],
+    createdAt: Date.now(),
+  };
+  itsResearchTasks.push(task);
+  if (autoSearch) {
+    const sources = await itsSearchResearchSources(clean, mode);
+    sources.forEach((source) => {
+      source.taskId = task.id;
+      itsResearchEvidence.push(source);
+      task.sourceIds.push(source.id);
+    });
+  }
+  itsSaveResearchState();
+  return task;
+}
+
+function itsAddResearchEvidence(input: Record<string, unknown>): ItsResearchEvidence {
+  const taskId = String(input.taskId || "").trim();
+  const task = itsResearchTaskById(taskId);
+  const evidence = itsResearchEvidenceBase(String(input.provider || "Browser agent"), task.mode, {
+    taskId,
+    title: String(input.title || ""),
+    url: String(input.url || ""),
+    excerpt: String(input.excerpt || ""),
+    authors: itsResearchStringArray(input.authors),
+    publisher: String(input.publisher || ""),
+    year: String(input.year || ""),
+    doi: String(input.doi || ""),
+    pdfUrl: String(input.pdfUrl || ""),
+    imageUrl: String(input.imageUrl || ""),
+    imageSourceUrl: String(input.imageSourceUrl || ""),
+    license: String(input.license || ""),
+    facts: itsResearchFacts(input.facts),
+    sourceType: String(input.sourceType || "web evidence"),
+  });
+  if (!evidence || !evidence.excerpt) throw new Error("Judul, URL, dan kutipan sumber wajib diisi.");
+  const index = itsResearchEvidence.findIndex((item) => item.taskId === taskId && item.url === evidence.url);
+  if (index >= 0) itsResearchEvidence[index] = { ...evidence, id: itsResearchEvidence[index].id };
+  else itsResearchEvidence.push(evidence);
+  if (!task.sourceIds.includes(evidence.id)) task.sourceIds.push(evidence.id);
+  itsSaveResearchState();
+  return evidence;
+}
+
+function itsBibliographyEntry(source: ItsResearchEvidence, index: number): string {
+  const authors = source.authors.length ? source.authors.join(", ") : source.publisher || "Unknown author";
+  const year = source.year || "n.d.";
+  const venue = source.publisher ? `, ${source.publisher}` : "";
+  const doi = source.doi ? `, doi: ${source.doi}` : "";
+  return `[${index + 1}] ${authors}, "${source.title}"${venue}, ${year}${doi}. [Online]. Available: ${source.url}`;
+}
+
+function itsResearchContext(sources: ItsResearchEvidence[]): string {
+  return sources.map((source, index) => [
+    `[${index + 1}] ${source.title}`,
+    `Authors: ${source.authors.join(", ") || "-"}`,
+    `Publisher: ${source.publisher || "-"}; Year: ${source.year || "-"}; DOI: ${source.doi || "-"}`,
+    `Evidence: ${source.excerpt || "Metadata only; no abstract supplied by provider."}`,
+  ].join("\n")).join("\n\n");
+}
+
+function itsDeterministicResearchAnswer(question: string, sources: ItsResearchEvidence[]): string {
+  const withEvidence = sources.filter((source) => source.excerpt).slice(0, 4);
+  if (!withEvidence.length) {
+    return `Saya menemukan ${sources.length} sumber untuk "${question}", tetapi penyedia metadata tidak mengirim abstrak. Buka halaman sumber untuk membaca isi lengkap sebelum menarik kesimpulan.`;
+  }
+  return [
+    `Saya menemukan ${sources.length} sumber daring yang relevan. Ringkasan berikut hanya memakai metadata dan abstrak yang tersedia:`,
+    ...withEvidence.map((source, index) => `${source.title}: ${source.excerpt.slice(0, 420)}${source.excerpt.length > 420 ? "..." : ""} [${index + 1}]`),
+  ].join("\n\n");
+}
+
+function itsResearchCitationsValid(answer: string, sourceCount: number): boolean {
+  const citations = Array.from(answer.matchAll(/\[(\d+)\]/g)).map((match) => Number(match[1]));
+  return citations.length > 0 && citations.every((value) => value >= 1 && value <= sourceCount);
+}
+
+function itsResearchCardHtml(answer: string, sources: ItsResearchEvidence[]): string {
+  const bibliography = sources.map(itsBibliographyEntry);
+  const images = sources.filter((source) => source.imageUrl).slice(0, 3).map((source) => `
+    <figure class="its-ai-research-image">
+      <img src="${escapeHtml(source.imageUrl)}" alt="${escapeHtml(source.title)}" loading="lazy" referrerpolicy="no-referrer">
+      <figcaption>${escapeHtml(source.title)}${source.license ? ` - ${escapeHtml(source.license)}` : ""} <a href="${escapeHtml(source.imageSourceUrl || source.url)}" target="_blank" rel="noopener">Sumber gambar</a></figcaption>
+    </figure>`).join("");
+  const sourceItems = sources.map((source, index) => `
+    <li class="its-ai-reference-item">
+      <p>${escapeHtml(bibliography[index])}</p>
+      <div class="its-ai-source-meta"><span>${escapeHtml(source.provider)}</span>${source.citedByCount ? `<span>${source.citedByCount} sitasi</span>` : ""}</div>
+      <div class="its-ai-actions"><a href="${escapeHtml(source.url)}" target="_blank" rel="noopener">Buka sumber</a>${source.pdfUrl ? `<a href="${escapeHtml(source.pdfUrl)}" target="_blank" rel="noopener">PDF legal</a>` : ""}</div>
+    </li>`).join("");
+  return `<section class="its-ai-card its-ai-research-card">
+    <div class="its-ai-card-head"><span>Riset daring</span><strong>${sources.length} SUMBER</strong></div>
+    ${images}
+    <div class="its-ai-research-answer">${escapeHtml(answer).replace(/\n/g, "<br>")}</div>
+    <h4>Daftar pustaka</h4>
+    <ol class="its-ai-reference-list">${sourceItems}</ol>
+    <p class="its-ai-card-note">Metadata dicari saat pertanyaan dikirim. ITS Maps tidak mengunggah PDF ke Firebase dan tidak menembus paywall.</p>
+  </section>`;
+}
+
+async function itsAnswerResearchTask(
+  taskId: string,
+  onStage?: (stage: string) => void,
+): Promise<ItsResearchResult> {
+  const task = itsResearchTaskById(taskId);
+  const sources = itsEvidenceForTask(taskId);
+  if (!sources.length) throw new Error("Belum ada bukti sumber untuk misi ini.");
+  let answer = itsDeterministicResearchAnswer(task.question, sources);
+
+  try {
+    onStage?.("Skill Sintesis ilmiah: menyusun jawaban dari sumber terverifikasi");
+    const generated = await generateBrowserText(
+      "research",
+      [
+        {
+          role: "system",
+          content: [
+            "Anda adalah asisten riset ITS Maps berbahasa Indonesia.",
+            "Jawab hanya dari bukti yang diberikan dan jangan menciptakan fakta, rumus, DOI, angka, penulis, atau URL.",
+            "Setiap klaim faktual wajib memakai sitasi [1], [2], dan seterusnya.",
+            "Jika bukti tidak cukup untuk menurunkan rumus atau menjawab bagian tertentu, katakan secara eksplisit.",
+            "Bedakan temuan sumber dari inferensi dan jawab langsung sesuai pertanyaan pengguna.",
+          ].join("\n"),
+        },
+        { role: "user", content: `Pertanyaan: ${task.question}\n\nBUKTI:\n${itsResearchContext(sources.slice(0, 8))}` },
+      ],
+      { max_new_tokens: 360, temperature: 0.1, do_sample: false, repetition_penalty: 1.08 },
+      (message) => onStage?.(message),
+      150_000,
+    );
+    if (itsGeneratedAnswerLooksUseful(generated, task.question) && itsResearchCitationsValid(generated, sources.length)) {
+      answer = generated;
+    }
+  } catch (error) {
+    console.warn("[ITS] Research synthesis fallback", error);
+    onStage?.("Model lokal belum siap; menampilkan ringkasan sumber deterministik");
+  }
+
+  const bibliography = sources.map(itsBibliographyEntry);
+  return {
+    taskId,
+    text: answer,
+    html: itsResearchCardHtml(answer, sources),
+    bibliography,
+    sources,
+  };
+}
+
+type ItsReadableWebPage = {
+  url: string;
+  title: string;
+  description: string;
+  imageUrl: string | null;
+  text: string;
+  contentType: string;
+};
+
+type ItsPublicSearchLinks = {
+  query: string;
+  google: string;
+  bing: string;
+  github: string;
+  linkedIn: string;
+  googleScholar: string;
+  arxiv: string;
+  pdfSearch: string;
+};
+
+function itsBuildPublicSearchLinks(
+  queryValue: string,
+): ItsPublicSearchLinks {
+  const query = queryValue.trim();
+  const encoded = encodeURIComponent(query);
+
+  return {
+    query,
+    google:
+      `https://www.google.com/search?q=${encoded}`,
+    bing:
+      `https://www.bing.com/search?q=${encoded}`,
+    github:
+      `https://github.com/search?q=${encoded}`,
+    linkedIn:
+      `https://www.linkedin.com/search/results/all/?keywords=${encoded}`,
+    googleScholar:
+      `https://scholar.google.com/scholar?q=${encoded}`,
+    arxiv:
+      `https://arxiv.org/search/?query=${encoded}&searchtype=all`,
+    pdfSearch:
+      `https://www.google.com/search?q=${encodeURIComponent(
+        `filetype:pdf ${query}`,
+      )}`,
+  };
+}
+
 
 function itsValueText(value: unknown, fallback = "-"): string {
   if (value === null || value === undefined || value === "") return fallback;
@@ -12285,23 +13508,123 @@ function itsIncludesAny(q: string, words: string[]): boolean {
   return words.some((word) => q.includes(word));
 }
 
+function itsGeneratedAnswerLooksUseful(answer: string, question: string): boolean {
+  const clean = answer.replace(/\s+/g, " ").trim();
+  if (clean.length < 28 || clean.length > 1400) return false;
+  if (/(["']?\d+\.){3,}|(?:^|\s)\d+(?:\.\d+){2,}/.test(clean)) return false;
+  if (/^(undefined|null|nan|error)\b/i.test(clean)) return false;
+  const normalizedAnswer = itsNormalizeQuestion(clean);
+  const normalizedQuestion = itsNormalizeQuestion(question);
+  if (normalizedQuestion.length > 18 && normalizedAnswer.startsWith(normalizedQuestion)) return false;
+  const words = normalizedAnswer.split(" ").filter(Boolean);
+  if (words.length < 5) return false;
+  return new Set(words).size / words.length >= 0.38;
+}
+
+function itsCompactAssistantContext(status: Record<string, unknown>): Record<string, unknown> {
+  const device = itsPrimaryDevice(status);
+  if (!device) return { generatedAt: status.generatedAt, devices: [] };
+  const detection = objectRecord(device.objectDetection);
+  const camera = objectRecord(device.cameraStatus);
+  return {
+    generatedAt: status.generatedAt,
+    device: {
+      id: device.id,
+      label: device.label,
+      status: device.status,
+      lastSeenText: device.lastSeenText,
+      roadName: device.roadName,
+      trafficColor: device.trafficColor,
+      trafficDurationSec: device.trafficDurationSec,
+      vehicleBreakdown: device.vehicleBreakdown,
+      location: device.location,
+      objectDetection: {
+        total: detection.total,
+        fps: detection.fps,
+        modelUrl: detection.modelUrl,
+      },
+      cameraStatus: {
+        localOk: camera.localOk,
+        publicOk: camera.publicOk,
+        note: camera.note,
+      },
+    },
+  };
+}
+
+function itsResolveConversationalQuestion(question: string, history: ItsChatTurn[]): string {
+  const q = itsNormalizeQuestion(question);
+  const recent = history.slice(-8).map((turn) => turn.content.toLowerCase()).join(" ");
+  const profileContext = /hanifa|developer|pembuat|pencipta|author|profil/.test(recent);
+  const contextualFollowUp = /(^|\s)(dia|beliau|orangnya|fotonya|foto nya|kuliahnya|kuliah nya|profilnya|profil nya|sekolahnya|kampusnya|akun nya|akunnya)(\s|$)/.test(q)
+    || /^(foto|kuliah|kampus|instagram|linkedin|github|facebook)(\s|$)/.test(q);
+  if (profileContext && contextualFollowUp) {
+    return `${question} (konteks percakapan: profil Hanifa Septhi Larasati, developer ITS Maps)`;
+  }
+  return question;
+}
+
 function itsIntentFlags(question: string): Record<string, boolean> {
   const q = itsNormalizeQuestion(question);
   const plainGreeting = itsIsPlainGreeting(question);
   const history = !plainGreeting && itsIncludesAny(q, ["riwayat ai", "riwayat", "history", "snapshot history"]);
   const userLocation = !plainGreeting && /(lokasi saya|posisi saya|lokasi terkini|di sekitar saya|dekat saya|macet di sini|macet disini|tempat saya sekarang)/.test(q);
+  const identity = !plainGreeting && itsIncludesAny(q, ["siapa", "pencipta", "developer", "hanifa", "hanifa septhi", "pembuat", "author", "dibuat oleh", "profil", "instagram", "linkedin", "github", "facebook", "kuliah", "kampusnya", "fotonya", "foto nya"]);
+  const webSearch = !plainGreeting && itsIncludesAny(q, ["cari", "carikan", "search", "temukan", "sumber luar", "sumber eksternal", "google", "bing"]);
+  const research =
+    !plainGreeting &&
+    itsIncludesAny(q, [
+      "jurnal",
+      "paper",
+      "artikel ilmiah",
+      "penelitian",
+      "sitasi",
+      "citation",
+      "daftar pustaka",
+      "referensi",
+      "pdf jurnal",
+      "turunkan rumus",
+      "penurunan rumus",
+    ]);
   return {
     greeting: /(^|\s)(halo|hallo|hai|hi|hello|selamat|assalam|pagi|siang|sore|malam)(\s|$)/.test(q),
     plainGreeting,
     history,
-    image: !plainGreeting && !history && itsIncludesAny(q, ["gambar", "snapshot", "foto", "deteksi", "object", "objek", "kamera", "scan", "bbox", "akurasi"]),
+    image: !plainGreeting && !history && !identity && itsIncludesAny(q, ["gambar", "snapshot", "foto", "deteksi", "object", "objek", "kamera", "scan", "bbox", "akurasi"]),
+    analyzeOpenPanel: !plainGreeting && itsIncludesAny(q, ["analisis panel", "apa isi", "baca modal", "baca panel", "isi riwayat", "cek riwayat", "scroll modal", "lihat isi panel"]),
     video: !plainGreeting && itsIncludesAny(q, ["video", "live", "stream", "kamera live", "cctv", "rekaman"]),
     chart: !plainGreeting && !history && itsIncludesAny(q, ["grafik", "chart", "tren", "trend", "statistik", "histori", "history", "plot", "visualisasi"]),
     map: !plainGreeting && itsIncludesAny(q, ["peta", "map", "lokasi", "koordinat", "jalan", "gang", "google maps", "bing maps"]),
     poi: !plainGreeting && itsIncludesAny(q, ["poi", "tempat", "gedung", "kampus", "fakultas", "masjid", "mall", "terminal", "stasiun", "sekitar", "terdekat"]),
-    formula: !plainGreeting && itsIncludesAny(q, ["rumus", "formula", "latex", "matematika", "rf-detr", "rf detr", "detr", "iou", "confidence", "loss", "nms"]),
+    formula:
+      !plainGreeting &&
+      (itsIncludesAny(q, [
+        "rumus",
+        "formula",
+        "latex",
+        "matematika",
+        "persamaan",
+        "turunan",
+        "derivasi",
+        "rf-detr",
+        "rf detr",
+        "detr",
+        "iou",
+        "confidence",
+        "loss",
+        "hungarian",
+        "bipartite",
+        "giou",
+        "precision",
+        "recall",
+        "mean average precision",
+        "map score",
+        "map metric",
+      ])),
     status: !plainGreeting && itsIncludesAny(q, ["status", "raspberry", "online", "offline", "lampu", "traffic", "lalu lintas", "kendaraan", "mobil", "motor", "bus", "truk", "sepeda", "sistem"]),
-    identity: !plainGreeting && itsIncludesAny(q, ["siapa", "pencipta", "developer", "hanifa", "hanifa septhi", "pembuat", "author", "dibuat oleh", "profil", "instagram", "linkedin", "github"]),
+    identity,
+    webSearch,
+    research,
     about: !plainGreeting && itsIncludesAny(q, ["apa itu", "tentang its maps", "fitur", "aplikasi ini", "its maps itu"]),
     license: !plainGreeting && itsIncludesAny(q, ["lisensi", "licence", "license", "privasi", "privacy", "data pribadi"]),
     roadmap: !plainGreeting && itsIncludesAny(q, ["roadmap", "story", "rencana", "pengembangan"]),
@@ -12338,6 +13661,7 @@ function itsVehicleMetricGridHtml(vehicles: Record<string, unknown>): string {
 
 function itsAssistantText(question: string, status: Record<string, unknown>, extra = ""): string {
   const flags = itsIntentFlags(question);
+  const normalizedQuestion = itsNormalizeQuestion(question);
   const devices = Array.isArray(status.devices)
     ? status.devices as Record<string, unknown>[]
     : status.device ? [status.device as Record<string, unknown>] : [];
@@ -12346,7 +13670,13 @@ function itsAssistantText(question: string, status: Record<string, unknown>, ext
     return "Halo. Saya di sini, siap bantu membaca ITS Maps. Mau cek status Raspberry, peta, snapshot AI, grafik, video, rumus RF-DETR, lisensi, atau dokumentasi?";
   }
   if (flags.identity) {
-    return "ITS Maps dikembangkan oleh Hanifa Septhi Larasati bersama Hanifa Teams. Di website ini saya hanya memakai data publik aplikasi, dokumentasi, dan RTDB ITS Maps; kalau butuh profil eksternal, saya akan menampilkan sumber/link yang tersedia, bukan menebak.";
+    if (/foto|gambar|wajah/.test(normalizedQuestion)) {
+      return "Saya belum menemukan foto personal yang terverifikasi di metadata ITS Maps. Saya tampilkan tautan pencarian sumber, tetapi tidak akan menebak bahwa sebuah wajah adalah Hanifa tanpa profil pemilik yang jelas.";
+    }
+    if (/kuliah|kampus|universitas|pendidikan|mahasiswa/.test(normalizedQuestion)) {
+      return "Metadata paket ITS Maps mencantumkan Hanifa Septhi Larasati - Telkom University. Itu adalah atribusi proyek, bukan bukti status kuliah terkini; tautan verifikasi sumber saya tampilkan di bawah.";
+    }
+    return "ITS Maps dikembangkan oleh Hanifa Septhi Larasati bersama Hanifa Teams. Saya tampilkan data internal proyek dan tautan sumber publik yang bisa diperiksa, tanpa menebak profil pribadi.";
   }
   if (flags.about) {
     return "ITS Maps adalah dashboard realtime untuk peta ITS, Raspberry Pi controller, kamera lalu lintas, AI RF-DETR, Firebase RTDB, Android APK, Microsoft Store Windows app, dan Windows Widgets.";
@@ -12356,6 +13686,9 @@ function itsAssistantText(question: string, status: Record<string, unknown>, ext
   }
   if (flags.roadmap) {
     return "Roadmap ITS Maps mencakup WebApp/PWA, Android APK, Microsoft Store app, Windows Widgets, AI RF-DETR, dokumentasi publik, dan integrasi realtime berbasis Firebase RTDB.";
+  }
+  if (flags.webSearch) {
+    return "Saya siapkan tautan pencarian langsung untuk topik yang Anda minta. Periksa sumber hasilnya sebelum menganggap profil, foto, atau data eksternal sebagai fakta.";
   }
   if (!device) return "Saya belum menerima node device dari RTDB. Cek koneksi Firebase atau node devices terlebih dahulu.";
   const vehicles = (device.vehicleBreakdown as Record<string, unknown> | undefined) || {};
@@ -12367,7 +13700,7 @@ function itsAssistantText(question: string, status: Record<string, unknown>, ext
   const topDetection = detections
     .slice()
     .sort((a, b) => Number(b.confidencePercent || 0) - Number(a.confidencePercent || 0))[0];
-  const q = question.toLowerCase();
+  const q = normalizedQuestion;
   const statusLine = `Sistem ${device.id || "raspberry-its"} sedang ${device.status || "offline"}; update ${device.lastSeenText || "belum tersedia"}.`;
   const trafficLine = `Lampu ${itsTrafficColorText(device.trafficColor)}${device.trafficDurationSec ? ` (${device.trafficDurationSec}s)` : ""}.`;
   const vehicleLine = `Kendaraan: ${itsVehicleLines(vehicles)}.`;
@@ -12408,7 +13741,7 @@ function itsAssistantText(question: string, status: Record<string, unknown>, ext
   if (q.includes("update") || q.includes("controller") || q.includes("raspberry") || q.includes("status")) {
     return [statusLine, updateLine, cameraLine, trafficLine].filter(Boolean).join(" ");
   }
-  return [statusLine, locationLine, trafficLine, vehicleLine, aiLine, extra].filter(Boolean).join(" ");
+  return `Saya memahami pertanyaannya, tetapi belum memiliki sumber yang cukup untuk menjawabnya dengan pasti. Coba sebutkan apakah Anda ingin memakai data RTDB ITS Maps, dokumentasi aplikasi, atau pencarian sumber eksternal.${extra ? ` ${extra}` : ""}`;
 }
 
 function itsFallbackAssistantAnswer(question: string, status: Record<string, unknown>): string {
@@ -12857,12 +14190,7 @@ function itsUserLocationCardHtml(device: Record<string, unknown>): string {
 function itsPoiCardHtml(device: Record<string, unknown>): string {
   const origin = itsRuntimeBridge().getUserLocation?.() || itsLatLng(device) || { lat: -6.977254, lng: 107.631817 };
   const runtimePois = itsRuntimeBridge().getPoiSnapshot?.() || [];
-  const fallbackPois: ItsRuntimePoiSnapshot[] = [
-    { id: "its-ai-rs", title: "Raspberry Pi 5 Controller", kind: "traffic", icon: "RS", lat: itsLatLng(device)?.lat || -6.977254, lng: itsLatLng(device)?.lng || 107.631817 },
-    { id: "its-ai-campus", title: "Kawasan Kampus", kind: "campus", icon: "Edu", lat: -6.97655, lng: 107.63262 },
-    { id: "its-ai-parking", title: "Area Parkir", kind: "parking", icon: "P", lat: -6.9791, lng: 107.6304 },
-  ];
-  const pois = (runtimePois.length ? runtimePois : fallbackPois)
+  const pois = runtimePois
     .map((poi) => ({
       poi,
       distance: itsChatDistanceMeters(origin.lat, origin.lng, poi.lat, poi.lng),
@@ -12900,34 +14228,133 @@ function itsVideoCardHtml(device: Record<string, unknown>, cameraHealth: Record<
   </section>`;
 }
 
-function itsFormulaCardHtml(): string {
-  return `<section class="its-ai-card its-ai-formula">
-    <div class="its-ai-card-head">
-      <span>${itsMiniIcon("M4 7h16M4 12h10M4 17h16", "#0f172a")} Rumus AI deteksi</span>
-      <strong>RF-DETR</strong>
-    </div>
-    <p><b>Skor objek</b>: <code>score = sigma(z_obj) x max softmax(z_cls)</code></p>
-    <p><b>IoU bbox</b>: <code>IoU = area(Bp intersect Bg) / area(Bp union Bg)</code></p>
-    <p><b>Loss ringkas</b>: <code>L = lambda_cls L_cls + lambda_box L1 + lambda_giou L_giou</code></p>
-    <p class="its-ai-card-note">Di aplikasi, confidence dan bbox final dipublikasikan controller ke RTDB, lalu UI menampilkan label, akurasi, dan kotak deteksi.</p>
-  </section>`;
-}
+function itsDeveloperProfileCardHtml(
+  question = "",
+): string {
+  const profile = ITS_CREATOR_PROFILE;
+  const q = itsNormalizeQuestion(question);
 
-function itsDeveloperProfileCardHtml(): string {
-  const query = encodeURIComponent("Hanifa Septhi Larasati ITS Maps Hanifa Teams");
-  return `<section class="its-ai-card">
-    <div class="its-ai-card-head">
-      <span>${itsMiniIcon("M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7 9a7 7 0 0 0-14 0", "#0f172a")} Profil developer</span>
-      <strong>Hanifa Teams</strong>
-    </div>
-    <p class="its-ai-card-note">Data internal aplikasi menyebut developer: Hanifa Septhi Larasati dan Hanifa Teams. Untuk profil eksternal, buka sumber berikut agar tidak menebak identitas.</p>
-    <div class="its-ai-actions">
-      <a href="https://github.com/hanifasepthi/its" target="_blank" rel="noopener">GitHub ITS</a>
-      <a href="https://www.google.com/search?q=${query}" target="_blank" rel="noopener">Google</a>
-      <a href="https://www.linkedin.com/search/results/all/?keywords=${query}" target="_blank" rel="noopener">LinkedIn</a>
-      <a href="https://www.instagram.com/explore/search/keyword/?q=${query}" target="_blank" rel="noopener">Instagram</a>
-    </div>
-  </section>`;
+  const asksPhoto = itsIncludesAny(q, [
+    "foto",
+    "gambar",
+    "wajah",
+  ]);
+
+  const asksEducation = itsIncludesAny(q, [
+    "pendidikan",
+    "kuliah",
+    "kampus",
+    "universitas",
+    "program studi",
+    "prodi",
+  ]);
+
+  const educationHtml = profile.education.length
+    ? `
+      <div class="its-ai-profile-section">
+        <strong>Pendidikan</strong>
+        <ul>
+          ${profile.education
+      .map(
+        (education) => `
+                <li>
+                  <b>${escapeHtml(education.institution)}</b>
+                  — ${escapeHtml(education.program)}
+                  ${education.period
+            ? ` (${escapeHtml(education.period)})`
+            : ""
+          }
+                  ${education.sourceUrl
+            ? `<a href="${escapeHtml(education.sourceUrl)}"
+                            target="_blank"
+                            rel="noopener">Sumber</a>`
+            : ""
+          }
+                </li>
+              `,
+      )
+      .join("")}
+        </ul>
+      </div>
+    `
+    : `
+      <p class="its-ai-card-note">
+        Informasi pendidikan belum dimasukkan ke profil terverifikasi.
+      </p>
+    `;
+
+  const sourceQuery =
+    `${profile.name} ${profile.publisher} ITS Maps`;
+
+  const search = itsBuildPublicSearchLinks(sourceQuery);
+
+  return `
+    <section class="its-ai-card its-ai-profile-card">
+      <div class="its-ai-card-head">
+        <span>Profil pencipta</span>
+        <strong>TERVERIFIKASI LOKAL</strong>
+      </div>
+
+      <figure class="its-ai-profile-media">
+        <img
+          src="${escapeHtml(profile.photoUrl)}"
+          alt="Foto profil ${escapeHtml(profile.name)}"
+          loading="lazy"
+        >
+      </figure>
+
+      <h3>${escapeHtml(profile.name)}</h3>
+      <p><b>${escapeHtml(profile.role)}</b></p>
+      <p>${escapeHtml(profile.summary)}</p>
+
+      ${asksEducation
+      ? educationHtml
+      : ""
+    }
+
+      <div class="its-ai-profile-section">
+        <strong>Keahlian</strong>
+        <p>${profile.skills.map(escapeHtml).join(", ")}</p>
+      </div>
+
+      <div class="its-ai-actions">
+        ${profile.sources
+      .map(
+        (source) => `
+              <a href="${escapeHtml(source.url)}"
+                 target="_blank"
+                 rel="noopener">
+                ${escapeHtml(source.label)}
+              </a>
+            `,
+      )
+      .join("")}
+
+        <a href="${escapeHtml(search.google)}"
+           target="_blank"
+           rel="noopener">Cari Google</a>
+
+        <a href="${escapeHtml(search.linkedIn)}"
+           target="_blank"
+           rel="noopener">Cari LinkedIn</a>
+
+        ${asksPhoto
+      ? `<a href="${escapeHtml(
+        `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(
+          sourceQuery,
+        )}`,
+      )}"
+                 target="_blank"
+                 rel="noopener">Cari gambar</a>`
+      : ""
+    }
+      </div>
+
+      <p class="its-ai-card-note">
+        Foto utama berasal dari aset profil ITS Maps. Hasil pencarian eksternal hanya berupa tautan dan tidak otomatis dianggap sebagai fakta.
+      </p>
+    </section>
+  `;
 }
 
 function itsAgentCardHtml(status: Record<string, unknown>): string {
@@ -12942,7 +14369,7 @@ function itsAgentCardHtml(status: Record<string, unknown>): string {
       <span>${itsMiniIcon("M12 3l1.8 5.3L19 10l-5.2 1.7L12 17l-1.8-5.3L5 10l5.2-1.7L12 3Z", "#111827")} Agent in-page</span>
       <strong>${itsAgentModeEnabled ? "AKTIF" : "IN-PAGE"}</strong>
     </div>
-    <p class="its-ai-card-note">Agent membaca halaman ITS Maps yang sedang terbuka, RTDB, dan panel internal. Batas aman browser: agent web tidak mengontrol OS, pointer fisik, atau tab di luar situs.</p>
+    <p class="its-ai-card-note">Agent membaca halaman ITS Maps yang sedang terbuka, RTDB, dan panel internal.</p>
     <ul class="its-ai-agent-list">
       <li>Viewport: ${window.innerWidth} x ${window.innerHeight}</li>
       <li>Panel aktif: ${escapeHtml(openPanels.join(", ") || "tidak ada")}</li>
@@ -12952,68 +14379,817 @@ function itsAgentCardHtml(status: Record<string, unknown>): string {
   </section>`;
 }
 
-function itsShowInPageAgentRunner(text: string, durationMs = 1500): void {
-  document.getElementById("its-ai-agent-runner")?.remove();
-  const chatModal = document.getElementById("its-ai-chat-modal");
-  chatModal?.classList.add("agent-mini");
-  const runner = document.createElement("div");
-  runner.id = "its-ai-agent-runner";
-  runner.className = "its-ai-agent-runner";
-  runner.innerHTML = `
-    ${itsAppAiFabIconHtml()}
-    <div>
-      <strong>Agent aktif</strong>
-      <span>${escapeHtml(text)}</span>
-    </div>
-    <i aria-hidden="true"></i>`;
-  document.body.appendChild(runner);
-  requestAnimationFrame(() => runner.classList.add("open"));
-  window.setTimeout(() => {
-    runner.classList.remove("open");
-    chatModal?.classList.remove("agent-mini");
-    window.setTimeout(() => runner.remove(), 220);
-  }, durationMs);
+function itsDelay(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
-function itsPerformInPageAgentAction(question: string): string {
+function itsSetChatStatus(text = ""): void {
+  const form = document.querySelector<HTMLFormElement>("#its-ai-chat-modal [data-ai-chat-form]");
+  const status = form?.querySelector<HTMLElement>("[data-ai-chat-status]");
+  if (!form || !status) return;
+  form.classList.toggle("agent-thinking", Boolean(text));
+  status.hidden = !text;
+  const copy = status.querySelector<HTMLElement>("span");
+  if (copy) copy.textContent = text;
+}
+
+function itsSetAgentWorking(isWorking: boolean): void {
+  document.getElementById("its-ai-chat-modal")?.classList.toggle("agent-working", isWorking);
+}
+
+function itsEnsureAgentCursor(): HTMLElement {
+  const existing = document.getElementById("its-agent-cursor");
+  if (existing) return existing;
+  const cursor = document.createElement("div");
+  cursor.id = "its-agent-cursor";
+  cursor.setAttribute("aria-hidden", "true");
+  cursor.innerHTML = `<svg viewBox="0 0 18 24"><path d="M1 1v18l5-4 3.3 7 3-1.4-3.2-6.7H16L1 1Z"/></svg>`;
+  cursor.style.left = `${itsLastRealPointer.x}px`;
+  cursor.style.top = `${itsLastRealPointer.y}px`;
+  document.body.appendChild(cursor);
+  return cursor;
+}
+
+function itsVisibleAgentTarget(selector: string): HTMLElement | null {
+  return Array.from(document.querySelectorAll<HTMLElement>(selector)).find((element) => {
+    const rect = element.getBoundingClientRect();
+    const style = window.getComputedStyle(element);
+    return rect.width > 2 && rect.height > 2 && style.visibility !== "hidden" && style.display !== "none";
+  }) || null;
+}
+
+function itsAnimateAgentCursor(
+  cursor: HTMLElement,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+): Promise<void> {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    cursor.style.left = `${to.x}px`;
+    cursor.style.top = `${to.y}px`;
+    return itsDelay(30);
+  }
+  const distance = Math.hypot(to.x - from.x, to.y - from.y);
+  const duration = Math.max(320, Math.min(760, 300 + distance * 0.24));
+  const direction = to.x >= from.x ? 1 : -1;
+  const arc = Math.min(72, Math.max(20, distance * 0.12));
+  const controlA = {
+    x: from.x + (to.x - from.x) * 0.28 + direction * arc,
+    y: from.y + (to.y - from.y) * 0.18 - arc,
+  };
+  const controlB = {
+    x: from.x + (to.x - from.x) * 0.72 - direction * arc * 0.35,
+    y: from.y + (to.y - from.y) * 0.82 + arc * 0.2,
+  };
+  const startedAt = performance.now();
+  cursor.style.transition = "opacity 100ms ease, transform 100ms ease";
+  return new Promise((resolve) => {
+    const frame = (now: number) => {
+      const linear = Math.min(1, (now - startedAt) / duration);
+      const t = 1 - Math.pow(1 - linear, 3);
+      const inverse = 1 - t;
+      const x = inverse ** 3 * from.x
+        + 3 * inverse ** 2 * t * controlA.x
+        + 3 * inverse * t ** 2 * controlB.x
+        + t ** 3 * to.x;
+      const y = inverse ** 3 * from.y
+        + 3 * inverse ** 2 * t * controlA.y
+        + 3 * inverse * t ** 2 * controlB.y
+        + t ** 3 * to.y;
+      cursor.style.left = `${x}px`;
+      cursor.style.top = `${y}px`;
+      if (linear < 1) window.requestAnimationFrame(frame);
+      else resolve();
+    };
+    window.requestAnimationFrame(frame);
+  });
+}
+
+async function itsAgentClick(selector: string, fallback: () => void): Promise<void> {
+  const target = itsVisibleAgentTarget(selector);
+  const cursor = itsEnsureAgentCursor();
+  const start = { ...itsLastRealPointer };
+  const rect = target?.getBoundingClientRect();
+  const destination = rect
+    ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+    : { x: Math.max(28, window.innerWidth - 52), y: Math.max(64, window.innerHeight - 54) };
+  document.body.classList.add("its-agent-cursor-active");
+  cursor.classList.add("visible");
+  await itsDelay(20);
+  await itsAnimateAgentCursor(cursor, start, destination);
+  cursor.classList.add("clicking");
+  itsAgentPanelTransitionActive = true;
+  try {
+    if (target) target.click();
+    else fallback();
+  } finally {
+    await itsDelay(80);
+    itsAgentPanelTransitionActive = false;
+  }
+  cursor.classList.remove("clicking");
+  await itsAnimateAgentCursor(cursor, destination, start);
+  cursor.remove();
+  document.body.classList.remove("its-agent-cursor-active");
+}
+
+async function itsWaitForAgentTarget(selector: string, timeoutMs = 1800): Promise<HTMLElement | null> {
+  const started = performance.now();
+  while (performance.now() - started < timeoutMs) {
+    const element = document.querySelector<HTMLElement>(selector);
+    if (element) return element;
+    await itsDelay(40);
+  }
+  return null;
+}
+
+function itsAgentTargetSheet(target: HTMLElement): HTMLElement {
+  if (target.id === "m-ai-history-sheet") return target;
+  return target.querySelector<HTMLElement>(".map-license-sheet, .m-device-sheet, .m-poi-sheet, .m-ai-history-detail-sheet") || target;
+}
+
+function itsReleaseAgentPanelStack(): void {
+  const cleanup = itsAgentStackCleanup;
+  itsAgentStackCleanup = null;
+  cleanup?.();
+}
+
+function itsSetupStackedSwipeDismiss(chatModal: HTMLElement, bottomSheet: HTMLElement, target: HTMLElement, closeBottom: () => void): () => void {
+  const controller = new AbortController();
+  const { signal } = controller;
+  const targetSheet = itsAgentTargetSheet(target);
+  let startY = 0;
+  let pull = 0;
+  let pointerId = -1;
+  let dragging = false;
+  let wheelTimer = 0;
+  let baseTargetHeight = 0;
+
+  const begin = () => {
+    baseTargetHeight = target.getBoundingClientRect().height;
+    bottomSheet.style.transition = "none";
+    target.style.transition = "none";
+    targetSheet.style.transition = "none";
+  };
+  const apply = (nextPull: number) => {
+    pull = Math.max(0, Math.min(bottomSheet.getBoundingClientRect().height, nextPull));
+    const progress = Math.min(1, pull / Math.max(120, bottomSheet.getBoundingClientRect().height * 0.72));
+    bottomSheet.style.transform = `translateY(${pull}px)`;
+    bottomSheet.style.opacity = String(Math.max(0.18, 1 - progress * 0.82));
+    if (baseTargetHeight > 0) target.style.height = `${Math.min(window.innerHeight, baseTargetHeight + pull)}px`;
+  };
+  const restore = () => {
+    bottomSheet.style.transition = "transform 240ms cubic-bezier(0.32, 0.72, 0, 1), opacity 180ms ease";
+    target.style.transition = "height 240ms cubic-bezier(0.32, 0.72, 0, 1)";
+    targetSheet.style.transition = "height 240ms cubic-bezier(0.32, 0.72, 0, 1), transform 240ms cubic-bezier(0.32, 0.72, 0, 1)";
+    bottomSheet.style.transform = "";
+    bottomSheet.style.opacity = "";
+    target.style.height = "";
+    window.setTimeout(() => {
+      bottomSheet.style.transition = "";
+      target.style.transition = "";
+      targetSheet.style.transition = "";
+    }, 250);
+  };
+  const dismiss = () => {
+    const height = bottomSheet.getBoundingClientRect().height;
+    bottomSheet.style.transition = "transform 260ms cubic-bezier(0.32, 0.72, 0, 1), opacity 200ms ease";
+    target.style.transition = "height 260ms cubic-bezier(0.32, 0.72, 0, 1)";
+    bottomSheet.style.transform = `translateY(${height + 24}px)`;
+    bottomSheet.style.opacity = "0";
+    target.style.height = `${window.innerHeight}px`;
+    window.setTimeout(closeBottom, 250);
+  };
+
+  bottomSheet.addEventListener("pointerdown", (event) => {
+    if (!chatModal.classList.contains("agent-target-stack-open")) return;
+    const handle = (event.target as HTMLElement | null)?.closest("[data-swipe-handle], .its-ai-chat-head");
+    if (!handle) return;
+    event.stopImmediatePropagation();
+    dragging = true;
+    pointerId = event.pointerId;
+    startY = event.clientY;
+    pull = 0;
+    begin();
+    try { bottomSheet.setPointerCapture(event.pointerId); } catch { /* Pointer capture is optional. */ }
+  }, { capture: true, signal });
+  bottomSheet.addEventListener("pointermove", (event) => {
+    if (!dragging || event.pointerId !== pointerId) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    apply(event.clientY - startY);
+  }, { capture: true, signal });
+  const finishPointer = (event: PointerEvent) => {
+    if (!dragging || event.pointerId !== pointerId) return;
+    event.stopImmediatePropagation();
+    dragging = false;
+    pointerId = -1;
+    if (pull > 82) dismiss();
+    else restore();
+  };
+  bottomSheet.addEventListener("pointerup", finishPointer, { capture: true, signal });
+  bottomSheet.addEventListener("pointercancel", finishPointer, { capture: true, signal });
+  bottomSheet.addEventListener("wheel", (event) => {
+    if (!chatModal.classList.contains("agent-target-stack-open") || event.deltaY <= 8) return;
+    const scrollTarget = promptNearestScrollableTarget(event.target as HTMLElement | null, bottomSheet);
+    const atBottom = scrollTarget.scrollTop + scrollTarget.clientHeight >= scrollTarget.scrollHeight - 2;
+    if (!atBottom) return;
+    event.preventDefault();
+    if (!pull) begin();
+    apply(pull + event.deltaY * 0.62);
+    window.clearTimeout(wheelTimer);
+    wheelTimer = window.setTimeout(() => {
+      if (pull > 82) dismiss();
+      else restore();
+      pull = 0;
+    }, 120);
+  }, { capture: true, passive: false, signal });
+  return () => {
+    window.clearTimeout(wheelTimer);
+    controller.abort();
+    bottomSheet.style.transform = "";
+    bottomSheet.style.opacity = "";
+    target.style.height = "";
+    target.style.transition = "";
+    targetSheet.style.transition = "";
+  };
+}
+
+function itsDockAgentPanelStack(target: HTMLElement): void {
+  itsReleaseAgentPanelStack();
+  const chatModal = document.getElementById("its-ai-chat-modal");
+  const chatSheet = chatModal?.querySelector<HTMLElement>(".its-ai-chat-sheet");
+  if (!chatModal || !chatSheet || !target.isConnected) return;
+  const width = Math.max(320, Math.round(itsAgentTargetSheet(target).getBoundingClientRect().width || chatSheet.getBoundingClientRect().width));
+  const viewportHeight = Math.max(480, document.documentElement.clientHeight || window.innerHeight);
+  const chatHeight = promptUsesDesktopSidePanel()
+    ? Math.min(360, Math.max(260, Math.round(viewportHeight * 0.38)))
+    : Math.min(410, Math.max(250, Math.round(viewportHeight * 0.43)));
+  document.documentElement.style.setProperty("--its-agent-stack-width", `${width}px`);
+  document.documentElement.style.setProperty("--its-agent-chat-stack-height", `${chatHeight}px`);
+  document.documentElement.style.setProperty("--its-agent-chat-stack-height-mobile", `${chatHeight}px`);
+  target.classList.add("its-ai-agent-target-stacked");
+  chatModal.classList.add("agent-target-stack-open");
+  setPromptSidePanelWidth(width);
+  const closeBottom = () => chatModal.querySelector<HTMLButtonElement>("[data-ai-chat-close]")?.click();
+  const removeGesture = itsSetupStackedSwipeDismiss(chatModal, chatSheet, target, closeBottom);
+  const observer = new MutationObserver(() => {
+    if (!target.isConnected || (!target.classList.contains("open") && target.id !== "m-ai-history-sheet")) {
+      itsReleaseAgentPanelStack();
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+  if (target.id !== "m-ai-history-sheet") observer.observe(target, { attributes: true, attributeFilter: ["class"] });
+  itsAgentStackCleanup = () => {
+    observer.disconnect();
+    removeGesture();
+    target.classList.remove("its-ai-agent-target-stacked");
+    chatModal.classList.remove("agent-target-stack-open");
+    document.documentElement.style.removeProperty("--its-agent-stack-width");
+    document.documentElement.style.removeProperty("--its-agent-chat-stack-height");
+    document.documentElement.style.removeProperty("--its-agent-chat-stack-height-mobile");
+    if (target.isConnected) setPromptSidePanelWidthFromSheet(itsAgentTargetSheet(target));
+    else if (chatModal.isConnected) setPromptSidePanelWidthFromSheet(chatSheet);
+    else clearPromptSidePanelWidth(0);
+  };
+}
+
+type ItsAgentPanelAction = {
+  status: string;
+  triggerSelector: string;
+  targetSelector?: string;
+  fallback: () => void;
+  result: string;
+};
+
+type ItsModalScrollMode =
+  | "none"
+  | "top"
+  | "bottom"
+  | "both";
+
+type ItsModalAnalysis = {
+  panelId: string | null;
+  title: string;
+  activeTab: string | null;
+  summary: string;
+  scroll: {
+    top: number;
+    height: number;
+    viewport: number;
+    canScroll: boolean;
+  };
+  history: Array<{
+    title: string;
+    status: string | null;
+    text: string;
+  }>;
+  metrics: Array<{
+    label: string;
+    value: string;
+  }>;
+  textExcerpt: string;
+};
+
+function itsElementIsVisible(
+  element: HTMLElement,
+): boolean {
+  const style = window.getComputedStyle(element);
+  const rect = element.getBoundingClientRect();
+
+  return (
+    style.display !== "none" &&
+    style.visibility !== "hidden" &&
+    Number(style.opacity) !== 0 &&
+    rect.width > 0 &&
+    rect.height > 0
+  );
+}
+
+function itsFindTopmostOpenPanel(): HTMLElement | null {
+  const selectors = [
+    "#its-ai-chat-detection-detail-modal.open",
+    "#m-ai-history-detail-modal.open",
+    "#roadmap-story-modal.open",
+    "#privacy-info-modal.open",
+    "#app-license-info-modal.open",
+    "#about-site-info-modal.open",
+    "#ai-license-modal.open",
+    "#map-license-modal.open",
+    "#windows-download-modal.open",
+    "#m-device-modal.open",
+    "#m-poi-modal.open",
+    "body.ai-history-sheet-open #m-ai-history-sheet",
+  ];
+
+  const candidates = selectors
+    .map((selector, priority) => ({
+      element:
+        document.querySelector<HTMLElement>(selector),
+      priority,
+    }))
+    .filter(
+      (
+        item,
+      ): item is {
+        element: HTMLElement;
+        priority: number;
+      } =>
+        Boolean(
+          item.element &&
+          itsElementIsVisible(item.element),
+        ),
+    );
+
+  if (!candidates.length) return null;
+
+  candidates.sort((left, right) => {
+    const leftZ =
+      Number.parseInt(
+        window.getComputedStyle(left.element).zIndex || "0",
+        10,
+      ) || 0;
+
+    const rightZ =
+      Number.parseInt(
+        window.getComputedStyle(right.element).zIndex || "0",
+        10,
+      ) || 0;
+
+    if (leftZ !== rightZ) return rightZ - leftZ;
+
+    return left.priority - right.priority;
+  });
+
+  return candidates[0].element;
+}
+
+function itsFindModalScrollableArea(
+  panel: HTMLElement,
+): HTMLElement {
+  const selectors = [
+    ".m-ai-history-content",
+    "[data-ai-history-content]",
+    ".m-ai-detail-body",
+    ".map-license-list",
+    ".windows-download-detail-body",
+    ".modal-content",
+    ".poi-modal-content",
+    ".its-ai-chat-log",
+  ];
+
+  const candidates = Array.from(
+    panel.querySelectorAll<HTMLElement>(
+      selectors.join(", "),
+    ),
+  ).filter(itsElementIsVisible);
+
+  return (
+    candidates.find(
+      (element) =>
+        element.scrollHeight >
+        element.clientHeight + 4,
+    ) ||
+    candidates[0] ||
+    panel
+  );
+}
+
+async function itsScrollOpenModal(
+  mode: ItsModalScrollMode,
+  amount = 0.9,
+): Promise<{
+  ok: boolean;
+  panelId: string | null;
+  mode: ItsModalScrollMode;
+  top: number;
+  height: number;
+  viewport: number;
+}> {
+  const panel = itsFindTopmostOpenPanel();
+
+  if (!panel) {
+    return {
+      ok: false,
+      panelId: null,
+      mode,
+      top: 0,
+      height: 0,
+      viewport: 0,
+    };
+  }
+
+  const scrollable = itsFindModalScrollableArea(panel);
+  const maxTop = Math.max(
+    0,
+    scrollable.scrollHeight -
+    scrollable.clientHeight,
+  );
+
+  const safeAmount = Math.min(
+    1,
+    Math.max(
+      0.1,
+      Number.isFinite(amount) ? amount : 0.9,
+    ),
+  );
+
+  if (mode === "top") {
+    scrollable.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+
+    await itsDelay(260);
+  }
+
+  if (mode === "bottom") {
+    scrollable.scrollTo({
+      top: maxTop,
+      behavior: "smooth",
+    });
+
+    await itsDelay(360);
+  }
+
+  if (mode === "both") {
+    scrollable.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+
+    await itsDelay(220);
+
+    scrollable.scrollTo({
+      top: maxTop * safeAmount,
+      behavior: "smooth",
+    });
+
+    await itsDelay(360);
+
+    scrollable.scrollTo({
+      top: maxTop,
+      behavior: "smooth",
+    });
+
+    await itsDelay(320);
+
+    scrollable.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+
+    await itsDelay(220);
+  }
+
+  return {
+    ok: true,
+    panelId: panel.id || null,
+    mode,
+    top: Math.round(scrollable.scrollTop),
+    height: scrollable.scrollHeight,
+    viewport: scrollable.clientHeight,
+  };
+}
+
+function itsCloseTopmostModal(): boolean {
+  const panel = itsFindTopmostOpenPanel();
+  if (!panel) return false;
+
+  if (panel.id === "m-ai-history-sheet") {
+    const closed =
+      itsRuntimeBridge().closeAiHistory?.();
+
+    if (closed) return true;
+  }
+
+  const closeButton =
+    panel.querySelector<HTMLButtonElement>([
+      "[data-action='close']",
+      "[data-license-close]",
+      "[data-windows-close]",
+      "[data-ai-history-close]",
+      "[data-ai-detail-close]",
+      "[data-poi-close]",
+      "[data-device-close]",
+      "[aria-label='Tutup']",
+      "[aria-label='Close']",
+    ].join(", "));
+
+  if (closeButton) {
+    closeButton.click();
+    return true;
+  }
+
+  panel.classList.remove("open");
+  panel.setAttribute("aria-hidden", "true");
+
+  return true;
+}
+
+async function itsAnalyzeOpenModalContent(
+  options: {
+    scroll?: ItsModalScrollMode;
+    maxItems?: number;
+  } = {},
+): Promise<ItsModalAnalysis | null> {
+  const panel = itsFindTopmostOpenPanel();
+  if (!panel) return null;
+
+  const scrollMode = options.scroll || "both";
+  const maxItems = Math.min(
+    30,
+    Math.max(1, options.maxItems || 12),
+  );
+
+  if (scrollMode !== "none") {
+    await itsScrollOpenModal(scrollMode);
+  }
+
+  const scrollable = itsFindModalScrollableArea(panel);
+
+  const title =
+    panel
+      .querySelector<HTMLElement>(
+        "h1, h2, h3, .modal-title, .sheet-title-copy h2",
+      )
+      ?.textContent?.trim() ||
+    "Panel aktif";
+
+  const activeTab =
+    panel
+      .querySelector<HTMLElement>(
+        "[aria-selected='true'], .active[data-ai-history-tab], .active[role='tab']",
+      )
+      ?.textContent?.trim() || null;
+
+  const history = Array.from(
+    panel.querySelectorAll<HTMLElement>(
+      ".m-ai-history-card, [data-history-item]",
+    ),
+  )
+    .slice(0, maxItems)
+    .map((card) => ({
+      title:
+        card
+          .querySelector<HTMLElement>(
+            ".m-ai-history-meta, strong, h3",
+          )
+          ?.textContent?.trim() ||
+        "Item riwayat",
+
+      status:
+        card
+          .querySelector<HTMLElement>(
+            "[data-history-status], .status, .badge",
+          )
+          ?.textContent?.trim() || null,
+
+      text: itsNormalizeResearchText(
+        card.innerText,
+      ).slice(0, 900),
+    }));
+
+  const metrics = Array.from(
+    panel.querySelectorAll<HTMLElement>(
+      ".its-ai-metric, [data-ai-metric], .m-ai-detail-total",
+    ),
+  )
+    .slice(0, maxItems)
+    .map((metric) => ({
+      label:
+        metric
+          .querySelector<HTMLElement>(
+            "span, label, small",
+          )
+          ?.textContent?.trim() ||
+        "Metrik",
+
+      value:
+        metric
+          .querySelector<HTMLElement>(
+            "strong, b, output",
+          )
+          ?.textContent?.trim() ||
+        "-",
+    }));
+
+  const textExcerpt = itsNormalizeResearchText(
+    scrollable.innerText || panel.innerText,
+  ).slice(0, 6000);
+
+  const summaryParts = [
+    `Panel "${title}" sedang terbuka.`,
+  ];
+
+  if (activeTab) {
+    summaryParts.push(
+      `Tab aktif adalah "${activeTab}".`,
+    );
+  }
+
+  summaryParts.push(
+    `Ditemukan ${history.length} item riwayat dan ${metrics.length} metrik.`,
+  );
+
+  if (
+    scrollable.scrollHeight >
+    scrollable.clientHeight + 4
+  ) {
+    summaryParts.push(
+      "Panel memiliki data yang dapat digulir dari atas ke bawah.",
+    );
+  }
+
+  if (history.length) {
+    summaryParts.push(
+      `Contoh data: ${history
+        .slice(0, 3)
+        .map((item) => item.title)
+        .join(", ")}.`,
+    );
+  }
+
+  return {
+    panelId: panel.id || null,
+    title,
+    activeTab,
+    summary: summaryParts.join(" "),
+    scroll: {
+      top: Math.round(scrollable.scrollTop),
+      height: scrollable.scrollHeight,
+      viewport: scrollable.clientHeight,
+      canScroll:
+        scrollable.scrollHeight >
+        scrollable.clientHeight + 4,
+    },
+    history,
+    metrics,
+    textExcerpt,
+  };
+}
+
+function itsAgentPanelAction(question: string): ItsAgentPanelAction | null {
   const q = itsNormalizeQuestion(question);
-  const wantsAction = itsIncludesAny(q, ["buka", "bukakan", "tunjukkan", "tampilkan", "lihat", "open", "show", "scroll", "navigasi"]);
-  if (!wantsAction) return "";
+  const wantsAction = itsIncludesAny(q, ["buka", "bukakan", "tunjukkan", "tampilkan", "lihat", "open", "show", "scroll", "navigasi", "zoom", "perbesar", "perkecil", "kembali ke", "fokus"]);
+  if (itsIncludesAny(q, ["tutup", "close", "keluar dari panel"]) && itsIncludesAny(q, ["modal", "panel", "jendela", "ini", "riwayat", "tab"])) {
+    const panel = itsFindTopmostOpenPanel();
+    const closeSelector = panel
+      ? `#${panel.id} [data-action='close'], #${panel.id} [data-license-close], #${panel.id} [data-windows-close], #${panel.id} [data-ai-history-close]`
+      : "[data-action='close']";
+    return {
+      status: "Menutup panel yang terbuka...",
+      triggerSelector: closeSelector,
+      fallback: () => { itsCloseTopmostModal(); },
+      result: panel ? "Panel sudah ditutup." : "Tidak ada panel yang sedang terbuka.",
+    };
+  }
+  if (!wantsAction) return null;
+  if (itsIncludesAny(q, ["zoom in", "perbesar peta", "perbesar map"])) {
+    return { status: "Memperbesar peta...", triggerSelector: '[data-action="zoom-in"]', fallback: () => undefined, result: "Peta sudah diperbesar satu tingkat." };
+  }
+  if (itsIncludesAny(q, ["zoom out", "perkecil peta", "perkecil map"])) {
+    return { status: "Memperkecil peta...", triggerSelector: '[data-action="zoom-out"]', fallback: () => undefined, result: "Peta sudah diperkecil satu tingkat." };
+  }
+  if (itsIncludesAny(q, ["lokasi saya", "posisi saya", "lokasi terkini"])) {
+    return { status: "Membuka lokasi terkini...", triggerSelector: '[data-action="locate"]', fallback: () => undefined, result: "Kontrol lokasi terkini sudah dijalankan; browser dapat meminta izin lokasi." };
+  }
+  if (itsIncludesAny(q, ["lokasi raspberry", "posisi raspberry", "kembali ke device", "kembali ke sistem"])) {
+    return { status: "Memusatkan peta ke Raspberry...", triggerSelector: '[data-action="home"]', fallback: () => undefined, result: "Peta sudah dipusatkan kembali ke perangkat Raspberry." };
+  }
   if (itsIncludesAny(q, ["riwayat ai", "riwayat", "history", "snapshot history"])) {
-    itsShowInPageAgentRunner("Membuka Riwayat AI dan membaca snapshot terbaru...");
-    window.dispatchEvent(new CustomEvent("its:open-ai-history", { detail: { source: "its-ai-chat" } }));
-    return "Agent in-page membuka panel Riwayat AI di halaman ITS Maps.";
+    return {
+      status: "Membuka Riwayat AI...",
+      triggerSelector: "[data-camera-ai-history]",
+      targetSelector: "#m-ai-history-sheet",
+      fallback: () => window.dispatchEvent(new CustomEvent("its:open-ai-history", { detail: { source: "its-ai-chat" } })),
+      result: "Riwayat AI sudah dibuka di atas chat.",
+    };
   }
   if (itsIncludesAny(q, ["roadmap", "story", "rencana"])) {
-    itsShowInPageAgentRunner("Membuka Roadmap story...");
-    itsShowRoadmapStoryModal();
-    return "Agent in-page membuka panel Roadmap.";
+    return { status: "Membuka Roadmap...", triggerSelector: "[data-roadmap-story]", targetSelector: "#roadmap-story-modal", fallback: itsShowRoadmapStoryModal, result: "Roadmap sudah dibuka di atas chat." };
   }
   if (itsIncludesAny(q, ["privasi", "privacy"])) {
-    itsShowInPageAgentRunner("Membuka panel Privasi...");
-    itsShowSiteInfoModal("privacy");
-    return "Agent in-page membuka panel Privasi.";
+    return { status: "Membuka Privasi...", triggerSelector: "[data-privacy-modal]", targetSelector: "#privacy-info-modal", fallback: () => itsShowSiteInfoModal("privacy"), result: "Panel Privasi sudah dibuka di atas chat." };
   }
   if (itsIncludesAny(q, ["lisensi ai", "license ai", "licence ai"])) {
-    itsShowInPageAgentRunner("Membuka Lisensi AI...");
-    itsShowAiLicenseModal();
-    return "Agent in-page membuka panel Lisensi AI.";
+    return { status: "Membuka Lisensi AI...", triggerSelector: "[data-ai-license]", targetSelector: "#ai-license-modal", fallback: itsShowAiLicenseModal, result: "Lisensi AI sudah dibuka di atas chat." };
   }
   if (itsIncludesAny(q, ["licence", "license", "lisensi"])) {
-    itsShowInPageAgentRunner("Membuka Licence Aplikasi...");
-    itsShowSiteInfoModal("app-license");
-    return "Agent in-page membuka panel Licence Aplikasi.";
+    return { status: "Membuka Licence Aplikasi...", triggerSelector: "[data-app-license]", targetSelector: "#app-license-info-modal", fallback: () => itsShowSiteInfoModal("app-license"), result: "Licence Aplikasi sudah dibuka di atas chat." };
   }
-  return "";
+  return null;
 }
 
-async function itsBuildAssistantResponse(question: string, status: Record<string, unknown>, onStage?: (stage: string) => void): Promise<ItsAssistantResponse> {
-  const flags = itsIntentFlags(question);
+async function itsPerformInPageAgentAction(question: string): Promise<string> {
+  const action = itsAgentPanelAction(question);
+  if (!action) return "";
+  itsSetChatStatus(action.status);
+  itsSetAgentWorking(true);
+  try {
+    await itsDelay(100);
+    await itsAgentClick(action.triggerSelector, action.fallback);
+  } catch (error) {
+    itsAgentPanelTransitionActive = false;
+    itsSetAgentWorking(false);
+    itsSetChatStatus("Aksi panel gagal dijalankan");
+    window.setTimeout(() => itsSetChatStatus(), 1600);
+    throw error;
+  }
+  if (!action.targetSelector) {
+    itsSetAgentWorking(false);
+    itsSetChatStatus(action.result);
+    window.setTimeout(() => itsSetChatStatus(), 1500);
+    return action.result;
+  }
+  const target = await itsWaitForAgentTarget(action.targetSelector);
+  if (!target) {
+    itsSetAgentWorking(false);
+    itsSetChatStatus("Panel tidak ditemukan");
+    window.setTimeout(() => itsSetChatStatus(), 1500);
+    return "Panel yang diminta belum dapat dibuka.";
+  }
+  await itsDelay(260);
+  itsDockAgentPanelStack(target);
+  itsSetAgentWorking(false);
+  itsSetChatStatus(action.result);
+  window.setTimeout(() => itsSetChatStatus(), 1500);
+  return action.result;
+}
+
+async function itsBuildAssistantResponse(
+  question: string,
+  status: Record<string, unknown>,
+  onStage?: (stage: string) => void,
+  history: ItsChatTurn[] = [],
+): Promise<ItsAssistantResponse> {
+  const resolvedQuestion =
+    itsResolveConversationalQuestion(
+      question,
+      history,
+    );
+
+  const q = itsNormalizeQuestion(resolvedQuestion);
+  const flags = itsIntentFlags(resolvedQuestion);
   const device = itsPrimaryDevice(status);
+  if (flags.analyzeOpenPanel) {
+    onStage?.("Menggulir dan membaca panel yang terbuka...");
+    const analysis = await itsAnalyzeOpenModalContent();
+    if (!analysis) {
+      return { text: "Tidak ada panel yang sedang terbuka untuk dianalisis. Buka dulu misalnya Riwayat AI, lalu tanya lagi." };
+    }
+    return { text: analysis.summary };
+  }
+  if (publicResearchAgent.shouldHandle(resolvedQuestion, history) || flags.research || flags.formula || flags.webSearch) {
+    const research = await publicResearchAgent.answer({
+      question: resolvedQuestion,
+      history,
+      onProgress: onStage,
+    });
+    return { text: research.text, html: research.html };
+  }
   if (flags.plainGreeting || flags.identity || flags.about || flags.license || flags.roadmap) {
     const cards: string[] = [];
     if (flags.identity) {
-      cards.push(itsDeveloperProfileCardHtml());
+      cards.push(itsDeveloperProfileCardHtml(resolvedQuestion));
     }
     if (flags.license) {
       cards.push(`<section class="its-ai-card">
@@ -13033,15 +15209,53 @@ async function itsBuildAssistantResponse(question: string, status: Record<string
       </section>`);
     }
     return {
-      text: itsAssistantText(question, status),
+      text: itsAssistantText(resolvedQuestion, status),
       html: cards.length ? `<div class="its-ai-card-stack">${cards.join("")}</div>` : undefined,
     };
   }
   if (!device) return { text: itsFallbackAssistantAnswer(question, status) };
   const cards: string[] = [];
-  if (flags.agent || flags.history || itsAgentModeEnabled) {
+  if ((flags.agent || flags.history) && !itsAgentPanelAction(resolvedQuestion)) {
     onStage?.("Membaca layar internal ITS Maps");
     cards.push(itsAgentCardHtml(status));
+  }
+  if (
+    itsIncludesAny(q, [
+      "lokasi raspberry",
+      "posisi raspberry",
+      "kembali ke device",
+      "kembali ke sistem",
+      "kembali ke home",
+      "pulang ke lokasi",
+      "rasberi",
+      "raspberry",
+    ]) &&
+    itsIncludesAny(q, [
+      "kembali",
+      "home",
+      "pusatkan",
+      "fokus",
+      "lokasi",
+      "posisi",
+    ])
+  ) {
+    onStage?.("Memusatkan peta ke Raspberry...");
+
+    const bridgeResult =
+      itsRuntimeBridge().goHome?.();
+
+    if (!bridgeResult) {
+      document
+        .querySelector<HTMLButtonElement>(
+          '[data-action="home"]',
+        )
+        ?.click();
+    }
+
+    return {
+      text:
+        "Peta sudah dipusatkan kembali ke lokasi Raspberry Pi utama.",
+    };
   }
   if (flags.image) {
     onStage?.("Mengambil snapshot dan bbox dari RTDB");
@@ -13065,51 +15279,64 @@ async function itsBuildAssistantResponse(question: string, status: Record<string
   if (flags.userLocation) {
     cards.push(itsUserLocationCardHtml(device));
   }
-  if (flags.formula) {
-    cards.push(itsFormulaCardHtml());
-  }
-  if (!cards.length && itsAgentModeEnabled) cards.push(itsAgentCardHtml(status));
-  const extra = flags.agent ? "Mode agent membaca konteks halaman, bukan OS/tab lain." : "";
+  const extra = flags.agent ? "Mode agent membaca konteks halaman ITS Maps yang sedang aktif." : "";
   return {
-    text: itsAssistantText(question, status, extra),
-    html: `<div class="its-ai-card-stack">${cards.join("")}</div>`,
+    text: itsAssistantText(resolvedQuestion, status, extra),
+    html: cards.length ? `<div class="its-ai-card-stack">${cards.join("")}</div>` : undefined,
   };
 }
 
-async function askItsMapsAssistant(question: string, onStage?: (stage: string) => void): Promise<ItsAssistantResponse> {
-  onStage?.("Mengambil data realtime dari Firebase RTDB");
-  const status = await itsGetRealtimeMapSummary();
-  const context = JSON.stringify(status, null, 2).slice(0, 9000);
-  const visualResponse = await itsBuildAssistantResponse(question, status, onStage);
-  const flags = itsIntentFlags(question);
-  if (flags.plainGreeting || flags.identity || flags.about || flags.license || flags.roadmap || flags.image || flags.video || flags.chart || flags.map || flags.poi || flags.userLocation || flags.formula || flags.status || flags.agent || flags.history) {
+async function askItsMapsAssistant(question: string, onStage?: (stage: string) => void, history: ItsChatTurn[] = []): Promise<ItsAssistantResponse> {
+  const resolvedQuestion = itsResolveConversationalQuestion(question, history);
+  const flags = itsIntentFlags(resolvedQuestion);
+  const needsRealtime = flags.status || flags.image || flags.video || flags.chart || flags.map ||
+    flags.poi || flags.userLocation || flags.history || flags.agent;
+  let status: Record<string, unknown>;
+  if (needsRealtime) {
+    onStage?.("Mengambil data realtime dari Firebase RTDB");
+    status = await itsGetRealtimeMapSummary();
+  } else {
+    status = { generatedAt: new Date().toISOString(), devices: [] };
+  }
+  const context = JSON.stringify(itsCompactAssistantContext(status));
+  const visualResponse = await itsBuildAssistantResponse(question, status, onStage, history);
+  if (flags.plainGreeting || flags.identity || flags.about || flags.license || flags.roadmap || flags.webSearch || flags.image || flags.video || flags.chart || flags.map || flags.poi || flags.userLocation || flags.formula || flags.research || flags.status || flags.agent || flags.history) {
     return visualResponse;
   }
   try {
-    onStage?.("Memuat model lokal untuk memahami pertanyaan");
-    const generator = await itsWithTimeout(
-      ensureItsChatModel(),
-      3500,
-      "Model lokal belum siap dalam 8 detik.",
-    );
-    const prompt = [
-      "Kamu asisten ITS Maps.",
-      "Jawab hanya berdasarkan data realtime Firebase RTDB berikut.",
-      "Bahasa Indonesia, singkat, jelas, dan jangan mengarang angka.",
+    if (!isBrowserTextModelReady("chat")) {
+      onStage?.("Skill bahasa disiapkan di background; jawaban aman ditampilkan sekarang");
+      void warmBrowserTextModel("chat").catch((error) => {
+        console.warn("[ITS] Persiapan model bahasa background belum selesai", error);
+      });
+      return visualResponse;
+    }
+    onStage?.("Skill Pemahaman bahasa: membaca maksud dan konteks pertanyaan");
+    const recentConversation = history.slice(-4).map((turn) => `${turn.role === "user" ? "Pengguna" : "Asisten"}: ${turn.content.slice(0, 320)}`).join("\n");
+    const systemContent = [
+      "Kamu adalah Asisten ITS Maps berbahasa Indonesia.",
+      "Pahami maksud pertanyaan secara langsung dan jawab hanya hal yang ditanyakan.",
+      "Gunakan data RTDB hanya jika relevan. Jangan menumpahkan status perangkat pada sapaan atau pertanyaan profil.",
+      "Jangan mengarang angka, identitas pribadi, foto, pendidikan, atau hasil pencarian eksternal.",
+      "Jika sumber eksternal dibutuhkan, katakan bahwa pengguna perlu membuka tautan sumber yang disediakan UI.",
+      "Jawaban ringkas, natural, dan tidak mengulang template.",
+      recentConversation ? `\nPercakapan sebelumnya:\n${recentConversation}` : "",
       "",
-      context,
+      `Data realtime Firebase RTDB (gunakan hanya bila relevan):\n${context}`,
       "",
-      `Pertanyaan: ${question}`,
-      "Jawaban:",
     ].join("\n");
-    onStage?.("Menganalisis pertanyaan dan data realtime");
-    const output = await itsWithTimeout(
-      generator(prompt, { max_new_tokens: 180, temperature: 0.25, do_sample: false }),
-      4500,
-      "Model lokal terlalu lama menjawab.",
+    const messages = [
+      { role: "system" as const, content: systemContent },
+      { role: "user" as const, content: resolvedQuestion },
+    ];
+    const answer = await generateBrowserText(
+      "chat",
+      messages,
+      { max_new_tokens: 72, temperature: 0.18, do_sample: false, repetition_penalty: 1.08 },
+      (message) => onStage?.(message),
+      75_000,
     );
-    const answer = itsExtractGeneratedAnswer(output, prompt);
-    return { ...visualResponse, text: answer || visualResponse.text };
+    return { ...visualResponse, text: itsGeneratedAnswerLooksUseful(answer, resolvedQuestion) ? answer : visualResponse.text };
   } catch (error) {
     console.warn("[ITS] Local AI assistant fallback", error);
     onStage?.("Model lokal belum siap, memakai pembaca data realtime");
@@ -13283,11 +15510,14 @@ function itsShowAiChatModal(): void {
         <button type="button" data-ai-agent-toggle class="${itsAgentModeEnabled ? "active" : ""}" aria-pressed="${itsAgentModeEnabled ? "true" : "false"}">${itsAgentModeEnabled ? "Agent aktif" : "Agent"}</button>
       </div>
       <form class="its-ai-chat-form" data-ai-chat-form>
+        <div class="its-ai-chat-inline-status" data-ai-chat-status role="status" aria-live="polite" hidden>
+          <i aria-hidden="true"></i><span></span>
+        </div>
         <label>
           <span>Pertanyaan</span>
           <input name="question" type="text" autocomplete="off" placeholder="Tanya apa saja tentang ITS Maps..." required>
         </label>
-        <button type="submit">Kirim</button>
+        <button type="submit" data-ai-chat-send><span data-ai-send-label>Kirim</span><i data-ai-send-spinner aria-hidden="true"></i></button>
       </form>
     </div>`;
   document.body.appendChild(modal);
@@ -13295,7 +15525,15 @@ function itsShowAiChatModal(): void {
   const sheet = modal.querySelector<HTMLElement>(".its-ai-chat-sheet");
   const log = modal.querySelector<HTMLElement>("[data-ai-chat-log]");
   const input = modal.querySelector<HTMLInputElement>("input[name='question']");
+  const form = modal.querySelector<HTMLFormElement>("[data-ai-chat-form]");
+  const sendButton = modal.querySelector<HTMLButtonElement>("[data-ai-chat-send]");
+  const sendLabel = sendButton?.querySelector<HTMLElement>("[data-ai-send-label]");
+  const disposeLiveActivity = log ? mountAgentLiveActivity(log) : () => undefined;
+  const conversation: ItsChatTurn[] = [];
+  let promptRunning = false;
   const close = () => {
+    itsReleaseAgentPanelStack();
+    disposeLiveActivity();
     modal.classList.remove("open");
     clearPromptSidePanelWidth();
     window.setTimeout(() => modal.remove(), 220);
@@ -13307,12 +15545,15 @@ function itsShowAiChatModal(): void {
     node.classList.add("its-ai-typewriter");
     node.textContent = "";
     let index = 0;
+    const chunkSize = text.length > 1_500 ? 16 : text.length > 800 ? 8 : text.length > 360 ? 4 : 1;
+    const delay = text.length > 800 ? 7 : text.length > 360 ? 9 : 12;
     const tick = () => {
       node.textContent = text.slice(0, index);
       scrollLog();
-      index += 1;
-      if (index <= text.length) window.setTimeout(tick, Math.max(5, Math.min(22, 260 / Math.max(text.length, 1))));
+      index += chunkSize;
+      if (index <= text.length) window.setTimeout(tick, delay);
       else {
+        node.textContent = text;
         node.classList.remove("its-ai-typewriter");
         resolve();
       }
@@ -13340,27 +15581,45 @@ function itsShowAiChatModal(): void {
       item.appendChild(host);
       scrollLog();
       void itsHydrateSnapshotDetectionCards(host);
+      renderMathIn(host);
     }
+  };
+  const setPromptBusy = (busy: boolean) => {
+    promptRunning = busy;
+    form?.classList.toggle("is-busy", busy);
+    form?.setAttribute("aria-busy", String(busy));
+    if (input) input.disabled = busy;
+    if (sendButton) sendButton.disabled = busy;
+    if (sendLabel) sendLabel.textContent = busy ? "Memproses" : "Kirim";
+    modal.querySelectorAll<HTMLButtonElement>("[data-ai-chat-prompt], [data-ai-agent-toggle]").forEach((button) => {
+      button.disabled = busy;
+    });
   };
   const runPrompt = async (question: string) => {
     const trimmed = question.trim();
-    if (!trimmed) return;
+    if (!trimmed || promptRunning) return;
+    setPromptBusy(true);
+    const previousConversation = conversation.slice();
     addMessage("user", trimmed);
-    const statusMsg = addMessage("status", "Membaca RTDB dan menyiapkan output visual...");
+    conversation.push({ role: "user", content: trimmed });
+    itsSetChatStatus("Memahami pertanyaan dan memilih sumber data...");
     try {
       const answer = await askItsMapsAssistant(trimmed, (stage) => {
-        if (statusMsg) statusMsg.querySelector("p")!.textContent = stage;
-      });
-      statusMsg?.remove();
+        itsSetChatStatus(stage);
+      }, previousConversation);
+      itsSetChatStatus();
       await addAssistantMessage(answer.text, answer.html || "");
+      conversation.push({ role: "assistant", content: answer.text });
       const flags = itsIntentFlags(trimmed);
       if (itsAgentModeEnabled || flags.agent || flags.history) {
-        const actionText = itsPerformInPageAgentAction(trimmed);
-        if (actionText) addMessage("status", actionText);
+        await itsPerformInPageAgentAction(trimmed);
       }
     } catch (error) {
-      statusMsg?.remove();
+      itsSetChatStatus();
       await addAssistantMessage(error instanceof Error ? error.message : "Chat AI belum dapat menjawab.");
+    } finally {
+      setPromptBusy(false);
+      input?.focus();
     }
   };
   modal.querySelector<HTMLButtonElement>("[data-ai-chat-close]")?.addEventListener("click", close);
@@ -13377,10 +15636,16 @@ function itsShowAiChatModal(): void {
     if (openPanelButton) {
       event.preventDefault();
       const panel = openPanelButton.dataset.aiOpenPanel;
-      if (panel === "privacy") itsShowSiteInfoModal("privacy");
-      else if (panel === "app-license") itsShowSiteInfoModal("app-license");
-      else if (panel === "ai-license") itsShowAiLicenseModal();
-      else if (panel === "roadmap") itsShowRoadmapStoryModal();
+      const prompt = panel === "privacy"
+        ? "Buka panel privasi"
+        : panel === "app-license"
+          ? "Buka licence aplikasi"
+          : panel === "ai-license"
+            ? "Buka lisensi AI"
+            : panel === "roadmap"
+              ? "Buka roadmap"
+              : "";
+      if (prompt) void itsPerformInPageAgentAction(prompt);
       return;
     }
     const poiButton = target?.closest<HTMLButtonElement>("[data-ai-poi-id]");
@@ -13419,8 +15684,8 @@ function itsShowAiChatModal(): void {
         const systemPoint = { lat: systemLat, lng: systemLng };
         resultEl.innerHTML = `
           <span>${near
-    ? `Lokasi Anda berjarak ${escapeHtml(itsChatDistanceText(distance))} dari titik Raspberry terdekat. Status titik ITS Maps: ${escapeHtml(itsTrafficColorText(card.dataset.systemColor))}.`
-    : `Lokasi Anda berjarak ${escapeHtml(itsChatDistanceText(distance))} dari titik Raspberry. Belum ada sensor ITS Maps yang cukup dekat untuk menyimpulkan macet di titik Anda.`}</span>
+            ? `Lokasi Anda berjarak ${escapeHtml(itsChatDistanceText(distance))} dari titik Raspberry terdekat. Status titik ITS Maps: ${escapeHtml(itsTrafficColorText(card.dataset.systemColor))}.`
+            : `Lokasi Anda berjarak ${escapeHtml(itsChatDistanceText(distance))} dari titik Raspberry. Belum ada sensor ITS Maps yang cukup dekat untuk menyimpulkan macet di titik Anda.`}</span>
           <div class="its-ai-map-split">
             <div><b>Lokasi Anda</b>${itsMapMosaicHtml(userPoint, itsUserMarkerHtml(), "Peta lokasi user")}</div>
             <div><b>Raspberry terdekat</b>${itsMapMosaicHtml(systemPoint, itsTrafficLightMarkerHtml(card.dataset.systemColor), "Peta Raspberry terdekat")}</div>
@@ -13447,9 +15712,8 @@ function itsShowAiChatModal(): void {
     button.setAttribute("aria-pressed", String(itsAgentModeEnabled));
     button.textContent = itsAgentModeEnabled ? "Agent aktif" : "Agent";
     button.classList.toggle("active", itsAgentModeEnabled);
-    addMessage("status", itsAgentModeEnabled
-      ? "Agent in-page aktif. Saya boleh membaca panel ITS Maps yang terbuka dan RTDB, tetap di dalam situs ini."
-      : "Agent in-page dimatikan. Saya akan menjawab dari pertanyaan dan data RTDB saja.");
+    itsSetChatStatus(itsAgentModeEnabled ? "Agent in-page aktif; model hanya dimuat saat benar-benar dibutuhkan" : "Agent in-page dimatikan");
+    window.setTimeout(() => itsSetChatStatus(), 1600);
   });
   modal.querySelector<HTMLFormElement>("[data-ai-chat-form]")?.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -13474,7 +15738,9 @@ function itsRegisterWebMcpTools(): boolean {
     itsWebMcpListenersInstalled = true;
   }
 
-  const modelContext = document.modelContext || navigator.modelContext;
+  const modelContext =
+    (document as Document & ItsWebMcpHost)
+      .modelContext;
 
   if (!modelContext?.registerTool) return false;
   if (itsWebMcpImperativeRegistered) return true;
@@ -13602,6 +15868,483 @@ function itsRegisterWebMcpTools(): boolean {
       return itsWebMcpContentResponse(JSON.stringify(result, null, 2), result);
     },
   });
+  register({
+    name: "close_its_modal",
+    description:
+      "Close the topmost visible ITS Maps modal, detail panel, or AI history sheet.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+    annotations: {
+      readOnlyHint: false,
+    },
+    execute: async () => {
+      const before =
+        await itsAnalyzeOpenModalContent({
+          scroll: "none",
+          maxItems: 4,
+        });
+
+      const closed = itsCloseTopmostModal();
+
+      await itsDelay(260);
+
+      const result = {
+        closed,
+        closedPanelId: before?.panelId || null,
+        closedTitle: before?.title || null,
+        remainingPanelId:
+          itsFindTopmostOpenPanel()?.id || null,
+      };
+
+      return itsWebMcpContentResponse(
+        closed
+          ? "Modal teratas sudah ditutup."
+          : "Tidak ada modal yang sedang terbuka.",
+        result,
+      );
+    },
+  });
+
+  register({
+    name: "analyze_its_modal",
+    description:
+      "Read and summarize the open ITS Maps modal, including active tab, AI history, metrics, text, and scroll state.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        scroll: {
+          type: "string",
+          enum: [
+            "none",
+            "top",
+            "bottom",
+            "both",
+          ],
+        },
+        maxItems: {
+          type: "number",
+          minimum: 1,
+          maximum: 30,
+        },
+      },
+    },
+    annotations: {
+      readOnlyHint: true,
+    },
+    execute: async (
+      input: Record<string, unknown>,
+    ) => {
+      const requested =
+        String(input.scroll || "both");
+
+      const scroll: ItsModalScrollMode =
+        ["none", "top", "bottom", "both"]
+          .includes(requested)
+          ? requested as ItsModalScrollMode
+          : "both";
+
+      const result =
+        await itsAnalyzeOpenModalContent({
+          scroll,
+          maxItems:
+            finiteNumber(input.maxItems) || 12,
+        });
+
+      if (!result) {
+        return itsWebMcpContentResponse(
+          "Tidak ada modal yang sedang terbuka.",
+          { open: false },
+        );
+      }
+
+      return itsWebMcpContentResponse(
+        result.summary,
+        {
+          open: true,
+          ...result,
+        },
+      );
+    },
+  });
+
+  register({
+    name: "scroll_its_modal",
+    description:
+      "Scroll the open ITS Maps modal to the top, bottom, or both directions.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        direction: {
+          type: "string",
+          enum: ["top", "bottom", "both"],
+        },
+        amount: {
+          type: "number",
+          minimum: 0.1,
+          maximum: 1,
+        },
+      },
+      required: ["direction"],
+    },
+    annotations: {
+      readOnlyHint: false,
+    },
+    execute: async (
+      input: Record<string, unknown>,
+    ) => {
+      const requested =
+        String(input.direction || "both");
+
+      const direction: ItsModalScrollMode =
+        ["top", "bottom", "both"]
+          .includes(requested)
+          ? requested as ItsModalScrollMode
+          : "both";
+
+      const result = await itsScrollOpenModal(
+        direction,
+        finiteNumber(input.amount) || 0.9,
+      );
+
+      return itsWebMcpContentResponse(
+        result.ok
+          ? `Modal sudah digulir ke ${direction}.`
+          : "Tidak ada modal yang sedang terbuka.",
+        result,
+      );
+    },
+  });
+
+  register({
+    name: "go_its_raspberry_home",
+    description:
+      "Close the blocking modal and center ITS Maps on the primary Raspberry Pi device.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+    annotations: {
+      readOnlyHint: false,
+    },
+    execute: async () => {
+      const activePanel =
+        itsFindTopmostOpenPanel()?.id || null;
+
+      if (activePanel) {
+        itsCloseTopmostModal();
+        await itsDelay(260);
+      }
+
+      const result =
+        itsRuntimeBridge().goHome?.();
+
+      if (!result) {
+        document
+          .querySelector<HTMLButtonElement>(
+            '[data-action="home"]',
+          )
+          ?.click();
+      }
+
+      return itsWebMcpContentResponse(
+        "Peta sudah kembali ke lokasi Raspberry Pi utama.",
+        {
+          closedPanel: activePanel,
+          ...(result || {
+            ok: true,
+            source: "home-button",
+          }),
+        },
+      );
+    },
+  });
+
+  register({
+    name: "get_its_creator_profile",
+    description:
+      "Return the locally verified ITS Maps creator profile, photo, education, skills, and source links. No external search API is used.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+    annotations: {
+      readOnlyHint: true,
+    },
+    execute: async () => {
+      return itsWebMcpContentResponse(
+        `${ITS_CREATOR_PROFILE.name} — ${ITS_CREATOR_PROFILE.role}`,
+        ITS_CREATOR_PROFILE,
+      );
+    },
+  });
+
+  register({
+    name: "search_its_public_sources",
+    description:
+      "Create public search links for Google, Bing, GitHub, LinkedIn, Google Scholar, arXiv, and PDF search. This tool returns links only and does not claim to have read the search results.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description:
+            "Profile, technical, or academic search query.",
+        },
+      },
+      required: ["query"],
+    },
+    annotations: {
+      readOnlyHint: true,
+    },
+    execute: async (
+      input: Record<string, unknown>,
+    ) => {
+      const result =
+        itsBuildPublicSearchLinks(
+          String(input.query || ""),
+        );
+
+      return itsWebMcpContentResponse(
+        `Tautan pencarian disiapkan untuk "${result.query}".`,
+        result,
+      );
+    },
+  });
+
+  register({
+    name: "read_its_public_url",
+    description:
+      "Read a same-origin or CORS-enabled public HTML/PDF URL in the browser. It cannot bypass CORS, authentication, paywalls, robots restrictions, or LinkedIn/Google blocking.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        url: {
+          type: "string",
+          description:
+            "Public HTTP or HTTPS URL.",
+        },
+      },
+      required: ["url"],
+    },
+    annotations: {
+      readOnlyHint: true,
+      untrustedContentHint: true,
+    },
+    execute: async (
+      input: Record<string, unknown>,
+    ) => {
+      try {
+        const result =
+          await itsReadPublicUrlClientSide(
+            String(input.url || ""),
+          );
+
+        return itsWebMcpContentResponse(
+          `${result.title}\n\n${result.text.slice(0, 8000)}`,
+          result,
+        );
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : String(error);
+
+        return itsWebMcpContentResponse(
+          message,
+          {
+            ok: false,
+            error: message,
+          },
+        );
+      }
+    },
+  });
+
+  register({
+    name: "search_its_research_sources",
+    description:
+      "Search current scholarly metadata through Crossref, OpenAlex, and Europe PMC, or search openly licensed website/image evidence through Wikipedia and Wikimedia Commons. Returns real source URLs and never uploads PDFs.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        question: { type: "string", description: "The complete research or source-search question." },
+        mode: { type: "string", enum: ["journal", "profile", "website", "image"] },
+        forceRefresh: { type: "boolean", description: "Ignore the short browser cache and query providers again." },
+      },
+      required: ["question", "mode"],
+    },
+    annotations: { readOnlyHint: true },
+    execute: async (input: Record<string, unknown>) => {
+      const requestedMode = String(input.mode || "journal");
+      const mode: ItsResearchMode = ["journal", "profile", "website", "image"].includes(requestedMode)
+        ? requestedMode as ItsResearchMode
+        : "journal";
+      const sources = await itsSearchResearchSources(
+        String(input.question || ""),
+        mode,
+        input.forceRefresh === true,
+      );
+      return itsWebMcpContentResponse(
+        `${sources.length} sumber daring ditemukan.`,
+        { mode, sources },
+      );
+    },
+  });
+
+  register({
+    name: "plan_its_research",
+    description:
+      "Create an ITS Maps research mission and automatically query public scholarly or Wikimedia APIs. A browsing agent may add stronger page-level evidence with add_its_research_evidence before finishing the mission.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        question: { type: "string", description: "The user's complete question." },
+        mode: { type: "string", enum: ["journal", "profile", "website", "image"] },
+      },
+      required: ["question", "mode"],
+    },
+    annotations: { readOnlyHint: false },
+    execute: async (input: Record<string, unknown>) => {
+      const requestedMode = String(input.mode || "journal");
+      const mode: ItsResearchMode = ["journal", "profile", "website", "image"].includes(requestedMode)
+        ? requestedMode as ItsResearchMode
+        : "journal";
+      const task = await itsCreateResearchTask(String(input.question || ""), mode, true);
+      return itsWebMcpContentResponse(
+        `Misi ${task.id} dibuat dengan ${task.sourceIds.length} sumber awal.`,
+        {
+          ...task,
+          nextSteps: [
+            "Inspect the returned authoritative sources.",
+            "Add page-level evidence only when it was actually read.",
+            "Call finish_its_research to create the cited answer and bibliography.",
+          ],
+        },
+      );
+    },
+  });
+
+  register({
+    name: "add_its_research_evidence",
+    description:
+      "Add one source actually inspected by a browser agent to an existing ITS research mission. Never invent metadata, quotations, images, DOI, or PDF links.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        taskId: { type: "string" },
+        title: { type: "string" },
+        url: { type: "string" },
+        excerpt: { type: "string" },
+        provider: { type: "string" },
+        authors: { type: "array", items: { type: "string" } },
+        publisher: { type: "string" },
+        year: { type: "string" },
+        doi: { type: "string" },
+        pdfUrl: { type: "string" },
+        imageUrl: { type: "string" },
+        imageSourceUrl: { type: "string" },
+        license: { type: "string" },
+        facts: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: { label: { type: "string" }, value: { type: "string" } },
+            required: ["label", "value"],
+          },
+        },
+      },
+      required: ["taskId", "title", "url", "excerpt"],
+    },
+    annotations: { readOnlyHint: false, untrustedContentHint: true },
+    execute: async (input: Record<string, unknown>) => {
+      const evidence = itsAddResearchEvidence(input);
+      return itsWebMcpContentResponse(
+        `Sumber "${evidence.title}" tersimpan.`,
+        { stored: true, evidence, sourceCount: itsEvidenceForTask(evidence.taskId).length },
+      );
+    },
+  });
+
+  register({
+    name: "finish_its_research",
+    description:
+      "Create the final evidence-grounded answer, inline citations, bibliography, legal PDF links, and attributed image links for an ITS research mission.",
+    inputSchema: {
+      type: "object",
+      properties: { taskId: { type: "string" } },
+      required: ["taskId"],
+    },
+    annotations: { readOnlyHint: true, untrustedContentHint: true },
+    execute: async (input: Record<string, unknown>) => {
+      const result = await itsAnswerResearchTask(String(input.taskId || ""));
+      window.dispatchEvent(new CustomEvent("its:research-complete", { detail: result }));
+      return itsWebMcpContentResponse(result.text, {
+        taskId: result.taskId,
+        answer: result.text,
+        bibliography: result.bibliography,
+        sources: result.sources,
+      });
+    },
+  });
+
+  register({
+    name: "list_its_ai_skills",
+    description:
+      "List the client-side AI skills and models available in ITS Maps.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+    annotations: {
+      readOnlyHint: true,
+    },
+    execute: async () => {
+      const result = {
+        skills: [
+          {
+            name: "control",
+            model: ITS_MODEL_IDS.control,
+            function:
+              "Memahami perintah ringan dan navigasi aplikasi.",
+          },
+          {
+            name: "profile",
+            model: "structured-local-data",
+            function:
+              "Membaca profil dan foto lokal yang sudah diverifikasi.",
+          },
+          {
+            name: "research",
+            model: ITS_MODEL_IDS.research,
+            function:
+              "Merangkum jurnal dan menjelaskan penurunan formulasi.",
+          },
+          {
+            name: "vision",
+            model: ITS_MODEL_IDS.vision,
+            function:
+              "Mendeteksi objek dan kendaraan pada gambar/video.",
+          },
+          {
+            name: "modal",
+            model: "DOM-analysis",
+            function:
+              "Menutup, menggulir, dan menganalisis modal.",
+          },
+        ],
+        inferenceLocation: "browser-device",
+        paidApiRequired: false,
+      };
+
+      return itsWebMcpContentResponse(
+        JSON.stringify(result, null, 2),
+        result,
+      );
+    },
+  });
+  publicResearchAgent.createWebMcpTools().forEach((tool) => register(tool as ItsWebMcpTool));
   return true;
 }
 
