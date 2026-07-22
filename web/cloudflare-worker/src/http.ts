@@ -44,6 +44,7 @@ function corsHeaders(request: Request, env: Env): Headers {
   const headers = new Headers({
     "Access-Control-Allow-Methods": "GET,HEAD,POST,DELETE,OPTIONS",
     "Access-Control-Allow-Headers": "Authorization,Content-Type,X-ITS-Signature,X-ITS-Timestamp,X-ITS-Nonce,X-Requested-With",
+    "Access-Control-Expose-Headers": "Accept-Ranges,Content-Length,Content-Range,ETag,Last-Modified",
     "Access-Control-Max-Age": "86400",
     "Vary": "Origin",
   });

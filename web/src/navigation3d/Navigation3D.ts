@@ -1,5 +1,9 @@
 import maplibregl, { type Map as MapLibreMap } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { Protocol } from "pmtiles";
+
+const nationalPmtilesProtocol = new Protocol();
+maplibregl.addProtocol("pmtiles", nationalPmtilesProtocol.tile);
 
 import {
   DEFAULT_NAVIGATION_CENTER,
@@ -916,7 +920,11 @@ export class Navigation3D {
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     this.map = new maplibregl.Map({
       container: this.element<HTMLElement>("[data-nav3d-map]"),
-      style: navigationStyle(),
+      // Buildings close to navigation come from the higher-resolution
+      // Overpass scene, where footprints intersecting the snapped route are
+      // removed. The z15 national building backdrop is intentionally omitted
+      // here so an overscaled footprint can never cover the guidance lane.
+      style: navigationStyle({ includeNationalBuildings: false }),
       center,
       zoom: MODE_PROFILES[this.mode].zoom,
       pitch: MODE_PROFILES[this.mode].pitch,

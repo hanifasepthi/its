@@ -16,6 +16,9 @@ const EMPTY_COLLECTION: GeoJSON.FeatureCollection = {
   features: [],
 };
 
+const NATIONAL_PM_TILES =
+  "pmtiles://https://its.hanifahseptiani45.workers.dev/v1/map/archive/indonesia.pmtiles";
+
 const SOURCE_IDS = [
   "nav-roads",
   "nav-sidewalks",
@@ -50,12 +53,14 @@ const LAYER_IDS = [
   "nav-active-route",
   "nav-traveled",
   "nav-point-symbols",
+  "nav-point-symbol-labels",
 ] as const;
 
-export function navigationStyle(): StyleSpecification {
-  return {
+export function navigationStyle(options: { includeNationalBuildings?: boolean } = {}): StyleSpecification {
+  const style: StyleSpecification = {
     version: 8,
     name: "ITS Maps Lane-Level Navigation",
+    glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
     light: {
       anchor: "viewport",
       color: "#fff8ec",
@@ -71,15 +76,186 @@ export function navigationStyle(): StyleSpecification {
       "fog-ground-blend": 0.18,
       "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 14, 0.75, 20, 0.28, 22, 0.12],
     },
-    sources: {},
+    sources: {
+      "its-national": {
+        type: "vector",
+        url: NATIONAL_PM_TILES,
+        attribution: "ITS Maps · © OpenStreetMap contributors · OpenMapTiles",
+      },
+    },
     layers: [
       {
         id: "background",
         type: "background",
         paint: { "background-color": "#f3f8f3", "background-opacity": 1 },
       },
+      {
+        id: "its-national-landcover",
+        type: "fill",
+        source: "its-national",
+        "source-layer": "landcover",
+        paint: {
+          "fill-color": ["match", ["get", "class"], "wood", "#b7dcae", "grass", "#c9e5bd", "#dcebd5"],
+          "fill-opacity": 0.72,
+        },
+      },
+      {
+        id: "its-national-water",
+        type: "fill",
+        source: "its-national",
+        "source-layer": "water",
+        paint: { "fill-color": "#86cde5", "fill-opacity": 0.96 },
+      },
+      {
+        id: "its-national-waterway",
+        type: "line",
+        source: "its-national",
+        "source-layer": "waterway",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": "#69bfdd", "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1, 18, 8] },
+      },
+      {
+        id: "its-national-roads-casing",
+        type: "line",
+        source: "its-national",
+        "source-layer": "transportation",
+        filter: ["!=", ["get", "class"], "rail"],
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": "#f7fafb",
+          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2, 15, ["match", ["get", "class"], "motorway", 13, "trunk", 12, "primary", 11, "secondary", 9, 6], 20, ["match", ["get", "class"], "motorway", 70, "trunk", 64, "primary", 58, "secondary", 48, 30]],
+        },
+      },
+      {
+        id: "its-national-roads",
+        type: "line",
+        source: "its-national",
+        "source-layer": "transportation",
+        filter: ["!=", ["get", "class"], "rail"],
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": ["match", ["get", "class"], "motorway", "#2d3c4f", "trunk", "#344456", "primary", "#39495b", "secondary", "#435163", "path", "#d9e1e3", "#53606d"],
+          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1, 15, ["match", ["get", "class"], "motorway", 10, "trunk", 9, "primary", 8, "secondary", 6, 3], 20, ["match", ["get", "class"], "motorway", 62, "trunk", 56, "primary", 50, "secondary", 40, 24]],
+        },
+      },
+      {
+        id: "its-national-rail",
+        type: "line",
+        source: "its-national",
+        "source-layer": "transportation",
+        filter: ["==", ["get", "class"], "rail"],
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": "#7064c5", "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1, 18, 5], "line-dasharray": [2, 1.4] },
+      },
+      {
+        id: "its-national-buildings",
+        type: "fill-extrusion",
+        source: "its-national",
+        "source-layer": "building",
+        minzoom: 13,
+        paint: {
+          "fill-extrusion-color": "#dceaf0",
+          "fill-extrusion-base": ["*", ["coalesce", ["get", "render_min_height"], 0], 0.32],
+          "fill-extrusion-height": ["interpolate", ["linear"], ["coalesce", ["get", "render_height"], 8], 0, 2, 35, 12, 100, 22, 300, 34],
+          "fill-extrusion-opacity": 0.36,
+          "fill-extrusion-vertical-gradient": true,
+        },
+      },
+      {
+        id: "its-national-poi-dots",
+        type: "circle",
+        source: "its-national",
+        "source-layer": "poi",
+        minzoom: 14,
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 14, 2.5, 18, 5],
+          "circle-color": ["match", ["get", "class"], "hospital", "#d9363e", "school", "#d59b28", "college", "#d59b28", "bus", "#c74747", "railway", "#7064c5", "#3185b5"],
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": 1.5,
+        },
+      },
+      {
+        id: "its-national-poi-labels",
+        type: "symbol",
+        source: "its-national",
+        "source-layer": "poi",
+        minzoom: 15,
+        layout: {
+          "text-field": ["coalesce", ["get", "name:id"], ["get", "name"]],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 15, 10, 18, 12],
+          "text-font": ["Noto Sans Regular"],
+          "text-offset": [0, 1.1],
+          "text-anchor": "top",
+          "text-max-width": 11,
+          "text-allow-overlap": false,
+          "text-ignore-placement": false,
+          "text-optional": true,
+          "text-padding": 8,
+          "symbol-sort-key": ["coalesce", ["get", "rank"], 99],
+        },
+        paint: { "text-color": "#243747", "text-halo-color": "rgba(255,255,255,.96)", "text-halo-width": 1.6 },
+      },
+      {
+        id: "its-national-road-labels",
+        type: "symbol",
+        source: "its-national",
+        "source-layer": "transportation_name",
+        filter: ["!=", ["get", "class"], "rail"],
+        minzoom: 12,
+        layout: {
+          "symbol-placement": "line",
+          "symbol-spacing": 420,
+          "text-field": ["coalesce", ["get", "name:id"], ["get", "name"], ["get", "ref"]],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 12, 10, 18, 14],
+          "text-font": ["Noto Sans Regular"],
+          "text-max-angle": 35,
+          "text-padding": 8,
+          "text-rotation-alignment": "map",
+          "text-pitch-alignment": "map",
+        },
+        paint: { "text-color": "#334155", "text-halo-color": "rgba(247,251,252,.92)", "text-halo-width": 1.5 },
+      },
+      {
+        id: "its-national-rail-labels",
+        type: "symbol",
+        source: "its-national",
+        "source-layer": "transportation_name",
+        filter: ["==", ["get", "class"], "rail"],
+        minzoom: 12,
+        layout: {
+          "symbol-placement": "line",
+          "symbol-spacing": 620,
+          "text-field": ["coalesce", ["get", "name:id"], ["get", "name"], ["get", "ref"]],
+          "text-size": 11,
+          "text-font": ["Noto Sans Regular"],
+          "text-max-angle": 28,
+          "text-padding": 12,
+          "text-rotation-alignment": "map",
+          "text-pitch-alignment": "map",
+        },
+        paint: { "text-color": "#5f55b3", "text-halo-color": "rgba(250,250,255,.94)", "text-halo-width": 1.5 },
+      },
+      {
+        id: "its-national-water-labels",
+        type: "symbol",
+        source: "its-national",
+        "source-layer": "water_name",
+        layout: {
+          "symbol-placement": "line",
+          "symbol-spacing": 520,
+          "text-field": ["coalesce", ["get", "name:id"], ["get", "name"]],
+          "text-size": 12,
+          "text-font": ["Noto Sans Italic"],
+          "text-padding": 10,
+        },
+        paint: { "text-color": "#277b9c", "text-halo-color": "rgba(239,249,252,.9)", "text-halo-width": 1.5 },
+      },
     ],
   };
+  if (options.includeNationalBuildings === false) {
+    style.layers = style.layers.filter((layer) => layer.id !== "its-national-buildings");
+  }
+  return style;
 }
 
 function ensureSource(map: MapLibreMap, id: string): void {
@@ -139,11 +315,11 @@ function layerSpecifications(): LayerSpecification[] {
           "#d8e8ef",
           30,
           "#dfeef3",
-          100,
-          "#eaf4f7",
+            100,
+            "#eaf4f7",
         ],
         "fill-extrusion-base": ["coalesce", ["get", "baseHeight"], 0],
-        "fill-extrusion-height": ["coalesce", ["get", "height"], 9],
+        "fill-extrusion-height": ["interpolate", ["linear"], ["coalesce", ["get", "height"], 9], 0, 2.8, 35, 19, 100, 34, 300, 52],
         "fill-extrusion-opacity": 0.42,
         "fill-extrusion-vertical-gradient": true,
       },
@@ -309,7 +485,6 @@ function layerSpecifications(): LayerSpecification[] {
       layout: { "line-cap": "round", "line-join": "round" },
       paint: {
         "line-color": "#075466",
-        "line-offset": ["interpolate", ["linear"], ["zoom"], 14, 1, 18, 8, 21, 22],
         "line-width": ["interpolate", ["linear"], ["zoom"], 14, 8, 18, 22, 21, 38],
         "line-opacity": 0.72,
         "line-blur": 2,
@@ -332,7 +507,6 @@ function layerSpecifications(): LayerSpecification[] {
           "#18b98c",
         ],
         "line-width": ["interpolate", ["linear"], ["zoom"], 14, 5, 18, 16, 21, 30],
-        "line-offset": ["interpolate", ["linear"], ["zoom"], 14, 1, 18, 8, 21, 22],
         "line-opacity": 0.97,
       },
     },
@@ -343,7 +517,6 @@ function layerSpecifications(): LayerSpecification[] {
       layout: { "line-cap": "round", "line-join": "round" },
       paint: {
         "line-color": "#8fa3ad",
-        "line-offset": ["interpolate", ["linear"], ["zoom"], 14, 1, 18, 8, 21, 22],
         "line-width": ["interpolate", ["linear"], ["zoom"], 14, 3, 21, 20],
         "line-opacity": 0.58,
       },
@@ -377,6 +550,21 @@ function layerSpecifications(): LayerSpecification[] {
         "circle-stroke-color": "#ffffff",
         "circle-stroke-width": 1.5,
       },
+    },
+    {
+      id: "nav-point-symbol-labels",
+      type: "symbol",
+      source: "nav-symbols",
+      minzoom: 15,
+      layout: {
+        "text-field": ["match", ["get", "kind"], "crossing", "⇄", "cctv", "▣", "etle", "▣", "speed-camera", "◉", "bus-stop", "H", "traffic-signal", "●", "footbridge", "↟", "•"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 15, 10, 20, 16],
+        "text-font": ["Noto Sans Bold"],
+        "text-allow-overlap": false,
+        "text-ignore-placement": false,
+        "text-padding": 4,
+      },
+      paint: { "text-color": "#ffffff", "text-halo-color": "#173042", "text-halo-width": 1 },
     },
   ];
 }

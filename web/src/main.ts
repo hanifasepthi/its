@@ -4721,7 +4721,7 @@ if (staticRoute) {
 
   async function refreshMapLibreDetailLayer(force = false): Promise<void> {
     const maplibreMap = state.maplibreMap;
-    if (!maplibreMap || state.baseMode !== "3d") return;
+    if (!maplibreMap || state.baseMode === "satellite") return;
     if (typeof maplibreMap.isStyleLoaded === "function" && !maplibreMap.isStyleLoaded()) return;
     const zoom = map.getZoom();
     if (zoom < 11) {
@@ -5819,7 +5819,7 @@ if (staticRoute) {
   // Helper: Update MapLibre POI layer with GeoJSON features
   function updateMapLibrePoiLayer(pois: PoiRecord[]): void {
     const maplibreMap = state.maplibreMap;
-    if (!maplibreMap || state.baseMode !== "3d") return;
+    if (!maplibreMap || state.baseMode === "satellite") return;
 
     try {
       const zoom = map.getZoom();
@@ -5894,7 +5894,7 @@ if (staticRoute) {
       const visiblePois = rankPoisForView(currentPoiDataset);
       const visibleIds = new Set(visiblePois.map((poi) => poi.id));
       const visibleClusterIds = new Set(state.poiClusters.map((cluster) => cluster.id));
-      const useMapLibre = state.baseMode === "3d" && Boolean(state.maplibreMap);
+      const useMapLibre = state.baseMode !== "satellite" && Boolean(state.maplibreMap);
       const markerSize = poiMarkerSizeByZoom();
 
       updateMapLibrePoiLayer(currentPoiDataset);
@@ -6033,7 +6033,7 @@ if (staticRoute) {
     const lng = ev.latlng.lng;
 
     // Resolve visible MapLibre POIs while Leaflet remains the interaction plane.
-    if (state.baseMode === "3d" && state.maplibreMap) {
+    if (state.baseMode !== "satellite" && state.maplibreMap) {
       try {
         const point = state.maplibreMap.project([lng, lat]);
         const features = state.maplibreMap.queryRenderedFeatures(point, {
@@ -6104,7 +6104,7 @@ if (staticRoute) {
 
   map.on('moveend', () => {
     syncMapStateToUrl();
-    if (state.maplibreMap && state.baseMode === "3d") {
+    if (state.maplibreMap && state.baseMode !== "satellite") {
       if (state.roadGuideLayer) state.roadGuideLayer.clearLayers();
       if (state.visionLayer) state.visionLayer.clearLayers();
       void refreshOverpassLayer();
@@ -7631,7 +7631,7 @@ if (staticRoute) {
 
     // Keep MapLibre POI text stable in screen pixels as the camera zooms.
     const maplibreMap = state.maplibreMap;
-    if (maplibreMap && state.baseMode === "3d" && maplibreMap.getLayer?.("poi-symbols")) {
+    if (maplibreMap && state.baseMode !== "satellite" && maplibreMap.getLayer?.("poi-symbols")) {
       try {
         maplibreMap.setLayoutProperty("poi-symbols", "text-size", 11);
       } catch {
@@ -7741,10 +7741,22 @@ if (staticRoute) {
       });
       state.maplibreMap = maplibreMap;
 
+      // Register before `load`: missing sprite icons can be requested while the
+      // style is still parsing, earlier than the former load-handler listener.
+      maplibreMap.on("styleimagemissing", (event: any) => {
+        const id = event?.id;
+        if (!id || maplibreMap.hasImage(id)) return;
+        maplibreMap.addImage(id, {
+          width: 1,
+          height: 1,
+          data: new Uint8Array([0, 0, 0, 0]),
+        });
+      });
+
       let surfaceRevealed = false;
       const revealRenderedSurface = () => {
         if (surfaceRevealed || !state.maplibreContainer?.isConnected) return;
-        if (state.baseMode !== "3d" || state.maplibreMap !== maplibreMap) return;
+        if (state.baseMode === "satellite" || state.maplibreMap !== maplibreMap) return;
         if (typeof maplibreMap.isStyleLoaded === "function" && !maplibreMap.isStyleLoaded()) return;
         if (typeof maplibreMap.areTilesLoaded === "function" && !maplibreMap.areTilesLoaded()) return;
         surfaceRevealed = true;
@@ -7754,13 +7766,13 @@ if (staticRoute) {
         // when an Overpass response arrives), so hiding individual elements is
         // not sufficient to prevent duplicate vector + DOM symbols.
         mapRoot.classList.add("maplibre-pois-active");
-        if (state.baseMode === "3d" && map.hasLayer(streetLayer)) map.removeLayer(streetLayer);
+        if (map.hasLayer(streetLayer)) map.removeLayer(streetLayer);
       };
       maplibreMap.on("idle", revealRenderedSurface);
       maplibreMap.on("render", revealRenderedSurface);
 
       maplibreMap.on("load", () => {
-        if (state.baseMode !== "3d" || state.maplibreMap !== maplibreMap) return;
+        if (state.baseMode === "satellite" || state.maplibreMap !== maplibreMap) return;
         state.roadGuideLayer?.clearLayers();
         state.visionLayer?.clearLayers();
         syncMapLibreView(true);
@@ -7781,13 +7793,6 @@ if (staticRoute) {
 
         // Prevent noisy runtime warnings when style references icons not present
         // in the remote sprite sheet.
-        maplibreMap.on("styleimagemissing", (e: any) => {
-          const id = e?.id;
-          if (!id || maplibreMap.hasImage(id)) return;
-          const transparentPixel = new Uint8Array([0, 0, 0, 0]);
-          maplibreMap.addImage(id, { width: 1, height: 1, data: transparentPixel });
-        });
-
         // Add POI GeoJSON source for 3D rendering (prevents drift)
         try {
           if (!maplibreMap.getSource("poi-source")) {
@@ -8025,7 +8030,7 @@ if (staticRoute) {
 
   function syncMapLibreView(force = false): void {
     const maplibreMap = state.maplibreMap;
-    if (!maplibreMap || state.baseMode !== "3d") return;
+    if (!maplibreMap || state.baseMode === "satellite") return;
     if (!force) {
       if (state.maplibreSyncFrame) return;
       state.maplibreSyncFrame = window.requestAnimationFrame(() => {
@@ -8039,7 +8044,7 @@ if (staticRoute) {
     const center = map.getCenter();
     const zoom = map.getZoom();
     const bearing = map.getBearing?.() ?? 0;
-    const pitch = mapLibrePitchByZoom(zoom);
+    const pitch = state.baseMode === "3d" ? mapLibrePitchByZoom(zoom) : 0;
 
     const currentCenter = maplibreMap.getCenter();
     const currentZoom = maplibreMap.getZoom();
@@ -8081,7 +8086,7 @@ if (staticRoute) {
 
   async function setBaseMap(mode: BaseMapMode): Promise<void> {
     const isCurrentSurface = mode === "street"
-      ? !state.maplibreMap && map.hasLayer(streetLayer) && !map.hasLayer(satelliteLayer)
+      ? Boolean(state.maplibreMap) && !map.hasLayer(satelliteLayer)
       : mode === "3d"
         ? Boolean(state.maplibreMap) && !map.hasLayer(satelliteLayer)
         : !state.maplibreMap && map.hasLayer(satelliteLayer) && !map.hasLayer(streetLayer);
@@ -8099,14 +8104,28 @@ if (staticRoute) {
     mapEl.classList.toggle("map-mode-3d", mode === "3d");
 
     if (mode === "street") {
-      await removeMapLibreMap();
-      restoreLeafletPoiSurface();
       if (map.hasLayer(satelliteLayer)) map.removeLayer(satelliteLayer);
-      if (!map.hasLayer(streetLayer)) streetLayer.addTo(map);
-      renderCurrentPoiDataset();
-      void refreshOverpassLayer();
-      void refreshRoadGuideLayer(true);
-      void refreshVisionLayer(true);
+      if (!mapLibreSurfaceReady() && !map.hasLayer(streetLayer)) streetLayer.addTo(map);
+      const maplibreMap = await ensureMapLibreMap();
+      if (state.baseMode !== mode) return;
+      if (!maplibreMap) {
+        if (!map.hasLayer(streetLayer)) streetLayer.addTo(map);
+        restoreLeafletPoiSurface();
+      } else {
+        maplibreMap.resize();
+        applyMapLibreDimensionMode(maplibreMap);
+        maplibreMap.easeTo({
+          center: map.getCenter(),
+          zoom: map.getZoom(),
+          bearing: map.getBearing?.() ?? 0,
+          pitch: 0,
+          duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 260,
+        });
+        state.roadGuideLayer?.clearLayers();
+        state.visionLayer?.clearLayers();
+        renderCurrentPoiDataset();
+        void refreshMapLibreDetailLayer(true);
+      }
     } else if (mode === "3d") {
       if (map.hasLayer(satelliteLayer)) map.removeLayer(satelliteLayer);
       // Keep CARTO underneath until MapLibre has a complete
@@ -8122,6 +8141,7 @@ if (staticRoute) {
         restoreLeafletPoiSurface();
       } else if (state.maplibreMap === maplibreMap) {
         const center = map.getCenter();
+        maplibreMap.resize();
         applyMapLibreDimensionMode(maplibreMap);
         maplibreMap.easeTo({
           center,
