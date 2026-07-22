@@ -191,12 +191,13 @@ function modeFields(): string {
         <label class="nav3d-mode" data-nav3d-mode-label="${mode}">
           <input
             type="radio"
-            name="mode"
+            data-nav3d-mode-input
             value="${mode}"
+            id="its-nav3d-mode-${mode}"
             title="Moda ${escapeHtml(profile.label)}"
+            aria-label="Moda ${escapeHtml(profile.label)}"
             aria-description="Gunakan moda ${escapeHtml(profile.label)} untuk menghitung rute navigasi."
             ${mode === "car" ? "checked" : ""}
-            toolparamdescription="Moda perjalanan: ${escapeHtml(profile.label)}."
           >
           <span aria-hidden="true">${profile.icon}</span>
           <small>${escapeHtml(profile.label)}</small>
@@ -249,6 +250,19 @@ function applicationHtml(): string {
       >
         <fieldset class="nav3d-modes">
           <legend>Moda perjalanan</legend>
+          <label class="nav3d-webmcp-mode" for="its-nav3d-mode-parameter">
+            Moda untuk agen
+            <select
+              id="its-nav3d-mode-parameter"
+              name="mode"
+              data-nav3d-mode-parameter
+              title="Moda perjalanan navigasi"
+              aria-description="Pilih moda perjalanan yang dipakai untuk menghitung rute navigasi 3D."
+              toolparamdescription="Travel mode for the route: car, motorcycle, truck, bicycle, walk, or transit."
+            >
+              ${(Object.keys(MODE_PROFILES) as NavigationMode[]).map((mode) => `<option value="${mode}">${escapeHtml(MODE_PROFILES[mode].label)}</option>`).join("")}
+            </select>
+          </label>
           <div class="nav3d-mode-scroll">${modeFields()}</div>
         </fieldset>
 
@@ -495,6 +509,8 @@ export class Navigation3D {
     );
     this.element<HTMLFormElement>("[data-nav3d-search-form]").addEventListener("submit", (event) => {
       event.preventDefault();
+      const parameterMode = this.element<HTMLSelectElement>("[data-nav3d-mode-parameter]").value;
+      if (isNavigationMode(parameterMode) && parameterMode !== this.mode) this.setMode(parameterMode);
       void this.performSearch();
     });
 
@@ -508,7 +524,7 @@ export class Navigation3D {
     input.addEventListener("keydown", (event) => this.handleSearchKeys(event));
 
     this.root?.addEventListener("change", (event) => {
-      const radio = (event.target as Element).closest<HTMLInputElement>('input[name="mode"]');
+      const radio = (event.target as Element).closest<HTMLInputElement>("[data-nav3d-mode-input]");
       if (radio && isNavigationMode(radio.value)) this.setMode(radio.value);
     });
     this.root?.addEventListener("click", (event) => {
@@ -592,9 +608,10 @@ export class Navigation3D {
 
   private setMode(mode: NavigationMode): void {
     this.mode = mode;
-    this.root?.querySelectorAll<HTMLInputElement>('input[name="mode"]').forEach((input) => {
+    this.root?.querySelectorAll<HTMLInputElement>("[data-nav3d-mode-input]").forEach((input) => {
       input.checked = input.value === mode;
     });
+    this.element<HTMLSelectElement>("[data-nav3d-mode-parameter]").value = mode;
     this.element("[data-nav3d-speed-limit]").textContent = String(modeSpeedLimit(mode));
     this.updateRoutingNote();
     this.syncNavigationUrl(this.selectedPlace ? "preview" : "search");

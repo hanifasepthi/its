@@ -144,6 +144,18 @@ body.nav3d-active {
   animation: nav3d-panel-in 180ms ease-out;
 }
 
+.nav3d-webmcp-mode {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 .nav3d-search-header {
   display: flex;
   align-items: center;
@@ -954,6 +966,7 @@ body.nav3d-active {
   }
 
   .nav3d-search-panel {
+    z-index: 60010;
     top: auto;
     right: 6px;
     bottom: max(6px, env(safe-area-inset-bottom));

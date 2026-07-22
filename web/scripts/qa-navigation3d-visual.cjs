@@ -789,7 +789,7 @@ async function run() {
       throw new Error("Car navigation overlay did not close.");
     }
     await evaluate(window, `(() => {
-      const mode = document.querySelector('input[name="mode"][value="walk"]');
+      const mode = document.querySelector('[data-nav3d-mode-input][value="walk"]');
       if (!(mode instanceof HTMLInputElement)) return false;
       mode.checked = true;
       mode.dispatchEvent(new Event('change', { bubbles: true }));

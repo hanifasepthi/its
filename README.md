@@ -29,7 +29,7 @@ Website: <https://itstelkom.web.app/>
 
 | Fitur | WebApp | Android APK | Windows / MSIX | Windows Widgets |
 | --- | --- | --- | --- | --- |
-| Peta realtime | Leaflet, CARTO, OSM, MapLibre | Capacitor WebView + native location | Electron renderer | Peta tile/media widget |
+| Peta realtime | Leaflet, MapLibre, OpenFreeMap, OSM, CARTO fallback | Capacitor WebView + native location | Electron renderer | Peta tile/media widget |
 | Kamera | WebRTC/MJPEG/HLS fallback | Kamera widget dan lock-screen dashboard | Fullscreen, mini player, PiP, ambient light | Snapshot media |
 | AI object detection | RF-DETR ONNX di browser | Snapshot/lock-screen AI view | Video AI segment dan detection overlay | AI snapshot/bbox media |
 | Grafik lalu lintas | Realtime history | Widget grafik Android | Desktop chart | ITS Live widget |
@@ -170,6 +170,31 @@ Dokumentasi detail tidak hanya menyebut nama file. Halaman berikut dibuat oleh `
 | `web/public/sw.js` | Service worker untuk cache, push notification, notification click, dan manifest dinamis |
 | `web/firebase.json` | Firebase Hosting rewrites untuk `/privacy`, `/documentation`, `/method`, `/licence`, dan cache headers |
 
+## Cloudflare AI, MCP, dan Notifikasi Publik
+
+`https://its.hanifahseptiani45.workers.dev` tetap menjadi mirror WebApp Firebase sekaligus edge backend ITS Maps. Request halaman biasa diproksikan ke `itstelkom.web.app`; API baru tersedia melalui `/v1/*`, sedangkan server MCP publik stateless tersedia di `/mcp`.
+
+```mermaid
+flowchart LR
+  Web["ITS Maps Web/PWA"] --> Edge["Cloudflare Worker"]
+  MCP["MCP client"] --> Edge
+  Edge --> Gateway["AI Gateway"]
+  Gateway --> WorkersAI["Workers AI"]
+  Edge --> Search["AI Search + Vectorize"]
+  Edge --> Queue["Cloudflare Queue"]
+  Queue --> FCM["Firebase Cloud Messaging"]
+  FCM --> SW["Service worker /sw.js"]
+  SW --> Notification["Notifikasi saat tab ditutup"]
+  Edge --> Firebase["Firebase Hosting/RTDB"]
+```
+
+- Orchestrator memakai Workers AI untuk tugas teks yang aman dikirim ke cloud, lalu otomatis kembali ke model ONNX lokal ketika endpoint/kuota tidak tersedia. Snapshot kamera, token, koordinat privat, dan credential tidak diteruskan ke cloud.
+- AI Gateway `default` memberi routing/observability dan dibuat otomatis saat inference pertama; AI Search `its-maps-public` dan Vectorize `its-maps-knowledge` menyediakan RAG untuk dokumentasi publik.
+- Opt-in/opt-out notifikasi memakai Firebase Cloud Messaging, KV subscription store dengan retensi 180 hari, Queue fan-out/retry/dead-letter, event deduplication, serta service worker. Pesan dapat diterima ketika tab tidak terbuka, selama izin/background browser tidak dimatikan oleh pengguna atau OS.
+- Detail endpoint, free-tier guardrail, secret, dan provisioning ada di `web/cloudflare-worker/README.md`. Bootstrap aman tersedia di `web/cloudflare-worker/scripts/deploy-cloudflare.ps1`.
+
+Account ID atau Firebase Web API key bukan pengganti credential deploy. Deployment pertama memerlukan login Wrangler/API token, public VAPID key, Firebase service-account secret, admin token, dan controller webhook secret; seluruh nilai privat disimpan sebagai Worker secrets dan tidak dibundel ke frontend.
+
 ## Android Source Map
 
 | File | Peran utama |
@@ -254,11 +279,10 @@ Kata kunci Store yang disarankan: `AI`, `Maps`, `ITS`, `Traffic`, `Object Detect
 Terima kasih untuk:
 
 - **Hanifa Septhi Larasati / Hanifa Teams** (`@hanifasepthi`, <https://github.com/hanifasepthi>) sebagai developer, publisher, dan pemilik repository ITS Maps.
-- **galihru** (`@galihru`, <https://github.com/galihru>) untuk kontribusi akun/repository awal dan kolaborasi pengembangan.
 - **Roboflow RF-DETR** (`roboflow/rf-detr`, <https://github.com/roboflow/rf-detr>) sebagai rujukan model object detection.
 - **Hugging Face `onnx-community`** (<https://huggingface.co/onnx-community/rfdetr_nano-ONNX>) untuk model `onnx-community/rfdetr_nano-ONNX`.
 - **Transformers.js / Xenova** (<https://github.com/huggingface/transformers.js>) untuk runtime AI browser dan fallback model.
-- **OpenStreetMap, CARTO, Leaflet, MapLibre, Firebase, Microsoft, Android** untuk ekosistem peta, realtime database, web, widget, dan distribusi aplikasi.
+- **OpenStreetMap, OpenMapTiles, OpenFreeMap, Leaflet, MapLibre, CARTO fallback, Firebase, Microsoft, Android** untuk ekosistem peta, realtime database, web, widget, dan distribusi aplikasi.
 
 ## License
 

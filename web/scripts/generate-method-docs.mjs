@@ -14,6 +14,7 @@ const docsRoot = path.join(publicRoot, "documentation");
 const licenceRoot = path.join(publicRoot, "licence");
 const licenseRoot = path.join(publicRoot, "license");
 const pdfPreviewRoot = path.join(publicRoot, "pdf-preview");
+const sourceAtlasRoot = path.join(publicRoot, "source-atlas");
 const qrAssetsRoot = path.join(methodAssetsRoot, "qr");
 const storySourceRoot = path.join(webRoot, "img", "story");
 const roadmapRoot = path.join(publicRoot, "roadmap");
@@ -31,7 +32,7 @@ const site = {
   androidApkDirect: "https://github.com/hanifasepthi/its/releases/download/its-maps-android-1.0.36/ITS-Maps-Android-1.0.36.apk",
   storeId: "9MWFGGW3FD2C",
   storeProtocol: "ms-windows-store://pdp/?productid=9MWFGGW3FD2C",
-  date: "10 July 2026",
+  date: "21 July 2026",
 };
 
 const contributorProfiles = [
@@ -40,12 +41,6 @@ const contributorProfiles = [
     handle: "@hanifasepthi",
     url: "https://github.com/hanifasepthi",
     role: "Developer utama, publisher Hanifa Teams, dan pemilik repository ITS Maps.",
-  },
-  {
-    name: "galihru",
-    handle: "@galihru",
-    url: "https://github.com/galihru",
-    role: "Kontributor repository awal dan kolaborasi pengembangan ITS Maps.",
   },
   {
     name: "Roboflow RF-DETR",
@@ -418,7 +413,6 @@ function roadmapStoryPage() {
         </amp-story-grid-layer>
         <amp-story-grid-layer template="vertical" class="story-ui-layer">
           <div class="story-counter" animate-in="fade-in">${index + 1} / ${slides.length}</div>
-          <div class="story-swipe" animate-in="fly-in-bottom" animate-in-delay="700ms">Swipe ke atas untuk membuka ${index === 0 ? "dokumentasi" : "metode"}</div>
         </amp-story-grid-layer>
         ${progressLayer}
         ${outlink}
@@ -432,7 +426,7 @@ function roadmapStoryPage() {
   ${webmcpOriginTrialMeta()}
   ${searchConsoleVerificationMeta()}
   <title>Roadmap ITS Maps Story</title>
-  <link rel="canonical" href="${site.url}/roadmap/">
+  <link rel="canonical" href="${site.url}/roadmap">
   <meta name="viewport" content="width=device-width,minimum-scale=1,initial-scale=1">
   <meta name="description" content="AMP story roadmap ITS Maps untuk WebApp, Android APK, Microsoft Store, Windows Widgets, AI RF-DETR, dan dokumentasi publik.">
   <link rel="manifest" href="/manifest.webmanifest">
@@ -441,7 +435,7 @@ function roadmapStoryPage() {
   <meta name="theme-color" content="#050816">
   <meta property="og:title" content="Roadmap ITS Maps Story">
   <meta property="og:description" content="Roadmap ITS Maps dalam format web story AMP.">
-  <meta property="og:url" content="${site.url}/roadmap/">
+  <meta property="og:url" content="${site.url}/roadmap">
   <meta property="og:image" content="${site.url}${poster}">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Roadmap ITS Maps Story">
@@ -455,7 +449,6 @@ function roadmapStoryPage() {
     amp-story { font-family: Inter, Arial, sans-serif; color: #fff; background: #050816; }
     .story-ui-layer { align-content: space-between; padding: 22px 18px 22px; background: linear-gradient(180deg, rgba(2, 6, 23, .18), transparent 36%, rgba(2, 6, 23, .54)); }
     .story-counter { width: max-content; padding: 7px 10px; border-radius: 999px; background: rgba(2, 6, 23, .58); color: #67e8f9; font-size: 13px; font-weight: 900; letter-spacing: .12em; box-shadow: 0 12px 32px rgba(0,0,0,.22); }
-    .story-swipe { justify-self: center; margin: 0 auto; padding: 12px 18px; border-radius: 999px; background: rgba(255,255,255,.94); color: #0f172a; font-size: 13px; font-weight: 900; box-shadow: 0 16px 44px rgba(0,0,0,.28); }
     .story-progress { position: absolute; inset: 16px 18px auto; height: 4px; border-radius: 999px; background: rgba(255,255,255,.28); overflow: hidden; }
     .story-progress span { display: block; width: 100%; height: 100%; transform-origin: 0 50%; transform: scaleX(0); background: linear-gradient(90deg, #22d3ee, #a7f3d0); border-radius: inherit; animation: story-progress 7s linear both; }
     @keyframes story-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
@@ -469,7 +462,7 @@ function roadmapStoryPage() {
       "author": { "@type": "Person", "name": "${site.developer}" },
       "publisher": { "@type": "Organization", "name": "${site.publisher}", "logo": { "@type": "ImageObject", "url": "${site.url}/icons/icon-192.png" } },
       "image": "${site.url}${poster}",
-      "mainEntityOfPage": "${site.url}/roadmap/"
+      "mainEntityOfPage": "${site.url}/roadmap"
     }
   </script>
 </head>
@@ -581,10 +574,11 @@ function sourceStats(sources) {
 
 function sourceSymbolCell(src) {
   if (!src.symbols.length) return "template / konfigurasi";
-  const id = `symbols-${anchorFor(src.rel)}`;
+  const sourceAnchor = anchorFor(src.rel);
+  const id = `symbols-${sourceAnchor}`;
   const links = src.symbols
     .slice(0, 24)
-    .map((s) => `<a href="#${anchorFor(src.rel)}-${s.line}"><b>L${s.line}</b> ${esc(s.name)}</a>`)
+    .map((s) => `<a href="#${sourceAnchor}-${s.line}" data-source-jump="${sourceAnchor}" data-source-line="${s.line}"><b>L${s.line}</b> ${esc(s.name)}</a>`)
     .join("");
   return `
     <span class="symbol-cell">
@@ -622,12 +616,29 @@ function anchorFor(file) {
   return file.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
+function shortStableHash(value) {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function sourceSlug(file) {
+  return `${anchorFor(file)}-${shortStableHash(relPath(file))}`;
+}
+
+function sourceFragmentUrl(src) {
+  return `/source-atlas/${sourceSlug(src.rel)}.html`;
+}
+
 function codeAtlas(sources, heading = "Atlas kode baris per baris") {
   return `
     <section class="doc-section code-atlas" id="source-atlas">
       <div class="section-kicker">Line-by-line source atlas</div>
       <h2>${esc(heading)}</h2>
-      <p>Setiap tabel di bawah mengutip kode asli per baris, lalu memberikan catatan maksud logika. Catatan bersifat teknis dan mengikuti konteks file: TypeScript untuk web, Java untuk Android, C# untuk Windows widget, XML/JSON untuk layout dan manifest.</p>
+      <p>Ringkasan file tetap tersedia di halaman utama. Isi kode asli dan catatan teknis per baris dimuat hanya saat diminta agar dokumentasi cepat dibuka dan tetap dapat dipelajari secara lengkap.</p>
       ${sourceTable(sources)}
       ${sources.map((src, fileIndex) => sourceDetail(src, fileIndex === 0)).join("")}
     </section>
@@ -635,36 +646,58 @@ function codeAtlas(sources, heading = "Atlas kode baris per baris") {
 }
 
 function sourceDetail(src, open) {
+  const sourceAnchor = anchorFor(src.rel);
+  const fragmentUrl = sourceFragmentUrl(src);
   return `
-    <details class="source-file" ${open ? "open" : ""}>
+    <details class="source-file" id="source-${sourceAnchor}" data-source-file="${esc(src.rel)}" data-source-anchor="${sourceAnchor}" data-source-url="${fragmentUrl}" ${open ? "open" : ""}>
       <summary>
         <span>${esc(src.rel)}</span>
         <small>${src.lines.length.toLocaleString("id-ID")} baris</small>
       </summary>
-      ${src.symbols.length ? `
-        <div class="symbol-list" aria-label="Daftar simbol ${esc(src.rel)}">
-          ${src.symbols.map((s) => `<a href="#${anchorFor(src.rel)}-${s.line}">L${s.line} ${esc(s.name)}</a>`).join("")}
+      <div class="source-load-panel" data-source-fragment>
+        <div>
+          <strong>Atlas lengkap tersedia sesuai permintaan</strong>
+          <span class="source-status" data-source-status aria-live="polite">Belum dimuat</span>
         </div>
-      ` : ""}
-      <div class="code-table" role="table" aria-label="Penjelasan baris per baris ${esc(src.rel)}">
-        <div role="row" class="code-head">
-          <span role="columnheader">Baris</span>
-          <span role="columnheader">Kode</span>
-          <span role="columnheader">Penjelasan</span>
-        </div>
-        ${src.lines.map((line, i) => {
-          const n = i + 1;
-          return `
-            <div role="row" id="${anchorFor(src.rel)}-${n}">
-              <span role="cell" class="line-no">${n}</span>
-              <code role="cell">${esc(line || " ")}</code>
-              <span role="cell">${esc(classifyLine(line, n, src.rel))}</span>
-            </div>
-          `;
-        }).join("")}
+        <button class="source-load" type="button" data-source-load>Muat kode dan penjelasan</button>
+        <noscript><a href="${fragmentUrl}">Buka fragment atlas ${esc(src.rel)}</a></noscript>
       </div>
     </details>
   `;
+}
+
+function sourceDetailContents(src) {
+  const sourceAnchor = anchorFor(src.rel);
+  return `
+    ${src.symbols.length ? `
+      <div class="symbol-list" aria-label="Daftar simbol ${esc(src.rel)}">
+        ${src.symbols.map((s) => `<a href="#${sourceAnchor}-${s.line}">L${s.line} ${esc(s.name)}</a>`).join("")}
+      </div>
+    ` : ""}
+    <div class="code-table" role="table" aria-label="Penjelasan baris per baris ${esc(src.rel)}">
+      <div role="row" class="code-head">
+        <span role="columnheader">Baris</span>
+        <span role="columnheader">Kode</span>
+        <span role="columnheader">Penjelasan</span>
+      </div>
+      ${src.lines.map((line, i) => {
+        const n = i + 1;
+        return `
+          <div role="row" id="${sourceAnchor}-${n}">
+            <span role="cell" class="line-no">${n}</span>
+            <code role="cell">${esc(line || " ")}</code>
+            <span role="cell">${esc(classifyLine(line, n, src.rel))}</span>
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function sourceFragment(src) {
+  return `<div class="source-fragment-content" data-source-fragment-content data-source-file="${esc(src.rel)}">
+  ${sourceDetailContents(src)}
+</div>\n`;
 }
 
 function formulaSection(platform) {
@@ -888,7 +921,7 @@ function creditsSection() {
             <span>${esc(profile.role)}</span>
           </article>
         `).join("")}
-        <article><strong>OpenStreetMap, CARTO, Leaflet, MapLibre, Firebase, Microsoft, Android</strong><span>Ekosistem peta, hosting realtime, web, widget, dan distribusi aplikasi.</span></article>
+        <article><strong>OpenStreetMap, OpenMapTiles, OpenFreeMap, Leaflet, MapLibre, CARTO, Firebase, Microsoft, Android</strong><span>Ekosistem peta vector, fallback raster, hosting realtime, web, widget, dan distribusi aplikasi.</span></article>
       </div>
     </section>
   `;
@@ -899,6 +932,8 @@ function platformPage(platform) {
   const sources = sourceStats(sourceGroups[platform].map(readSource).filter(Boolean));
   return pageShell({
     title: `${meta.heading} | ITS Maps`,
+    description: meta.summary,
+    canonicalPath: `/method/${meta.slug}`,
     bodyClass: `method-page ${platform}-page`,
     navActive: `/method/${meta.slug}`,
     main: `
@@ -951,6 +986,8 @@ function platformPage(platform) {
 function methodIndexPage() {
   return pageShell({
     title: "Metode ITS Maps",
+    description: "Metode teknis ITS Maps untuk WebApp, Android, Windows, Firebase, Raspberry Pi, peta realtime, kamera, dan AI RF-DETR.",
+    canonicalPath: "/method",
     bodyClass: "method-page method-index",
     navActive: "/method",
     main: `
@@ -1007,6 +1044,8 @@ function documentationPage() {
     .filter(Boolean));
   return pageShell({
     title: "Documentation | ITS Maps",
+    description: "Dokumentasi teknis ITS Maps untuk peta realtime, Cloudflare AI, Firebase, Raspberry Pi, RF-DETR, WebApp, Android, Windows, dan notifikasi publik.",
+    canonicalPath: "/documentation",
     bodyClass: "method-page documentation-page",
     navActive: "/documentation",
     main: `
@@ -1072,6 +1111,10 @@ function licencePage(spelling = "licence") {
     : "MIT License\n\nCopyright (c) 2026 Hanifa Septhi Larasati";
   return pageShell({
     title: `${spelling === "license" ? "License" : "Licence"} | ITS Maps`,
+    description: spelling === "license"
+      ? "Ketentuan lisensi source code dan komponen AI yang digunakan oleh ITS Maps."
+      : "Lisensi aplikasi dan source code ITS Maps yang dipublikasikan oleh Hanifa Teams.",
+    canonicalPath: `/${spelling}`,
     bodyClass: "method-page licence-page",
     navActive: "/licence",
     main: `
@@ -1112,14 +1155,14 @@ function webMcpPdfTools(initialDoc) {
           <form method="get" action="${pdfPath}" toolname="search_its_maps_pdf_preview" tooldescription="Search the active ITS Maps PDF preview document and navigate to matching pages." toolautosubmit>
             <label>
               <span>Search PDF</span>
-              <input type="search" name="query" autocomplete="off" toolparamdescription="Keyword or phrase to find inside this ITS Maps documentation PDF preview.">
+              <input type="search" name="query" title="PDF search query" aria-description="Enter a keyword or phrase to find in this ITS Maps PDF preview." autocomplete="off" toolparamdescription="Keyword or phrase to find inside this ITS Maps documentation PDF preview.">
             </label>
             <button type="submit">Search PDF</button>
           </form>
           <form method="get" action="/documentation" toolname="open_its_maps_public_resource" tooldescription="Open a public ITS Maps resource such as documentation, method pages, privacy policy, licence, roadmap story, PDF preview, or llms.txt." toolautosubmit>
             <label>
               <span>Resource</span>
-              <select name="resource" toolparamdescription="Public ITS Maps resource to open.">
+              <select name="resource" title="ITS Maps public resource" aria-description="Choose the public ITS Maps resource to open." toolparamdescription="Public ITS Maps resource to open.">
                 <option value="documentation">documentation</option>
                 <option value="method">method</option>
                 <option value="privacy">privacy</option>
@@ -1262,6 +1305,7 @@ function privacyPage() {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Privacy Policy - ITS Maps</title>
     <meta name="description" content="Privacy Policy for ITS Maps by Hanifa Teams, including web, Android APK, Microsoft Store Windows app, Windows widgets, maps, camera AI, Firebase, and Raspberry Pi telemetry." />
+    <link rel="canonical" href="${site.url}/privacy" />
     <meta name="theme-color" content="#ffffff" />
     ${webmcpOriginTrialMeta()}
     ${searchConsoleVerificationMeta()}
@@ -1309,6 +1353,7 @@ function privacyPage() {
         <a href="#firebase">Firebase</a>
         <a href="#camera">Kamera dan AI</a>
         <a href="#location">Lokasi</a>
+        <a href="#analytics">Analitik</a>
         <a href="#sharing">Berbagi</a>
         <a href="#retention">Retensi</a>
         <a href="#security">Keamanan</a>
@@ -1322,16 +1367,18 @@ function privacyPage() {
           <li>Data peta/lokasi: koordinat Raspberry Pi, marker peta, lokasi user jika user memberi izin, dan data POI/map view.</li>
           <li>Data kamera/AI: URL snapshot/stream, bbox object detection, label objek, confidence, timestamp, dan ringkasan hasil deteksi.</li>
           <li>Data aplikasi: pengaturan lokal, versi aplikasi, status update, cache, log diagnostik ringan, dan state widget.</li>
+          <li>Data analitik: Cloudflare Web Analytics memproses statistik kunjungan teknis tanpa cookie; Google Analytics dan Microsoft Clarity berjalan otomatis dengan penyimpanan analitik/iklan ditolak, sinyal iklan dinonaktifkan, dan area sensitif dimasking.</li>
         </ul>`, true)}
         ${policySection("use", "3. Cara data digunakan", "Data digunakan untuk menampilkan dashboard realtime, membuat grafik, memperbarui widget, menjalankan AI detection, menampilkan peta, mengirim notifikasi, memperbaiki error, dan menjaga sinkronisasi antar platform.")}
-        ${policySection("firebase", "4. Firebase dan layanan pihak ketiga", "ITS Maps memakai Firebase Hosting dan Firebase Realtime Database untuk hosting website dan sinkronisasi realtime. Aplikasi juga menggunakan layanan peta seperti OpenStreetMap/CARTO/Leaflet/MapLibre serta platform distribusi Microsoft Store dan Android sesuai fitur yang dipakai user.")}
+        ${policySection("firebase", "4. Infrastruktur dan layanan pihak ketiga", "ITS Maps memakai Firebase Hosting dan Firebase Realtime Database untuk hosting website dan sinkronisasi realtime; Cloudflare Workers, Workers AI, AI Gateway, AI Search, Vectorize, MCP, dan Cloudflare Web Analytics untuk layanan edge, AI publik, serta statistik teknis; serta OpenStreetMap/CARTO/Leaflet/MapLibre, Google Analytics, dan platform Microsoft sesuai fitur yang dipakai pengguna.")}
         ${policySection("camera", "5. Kamera dan AI object detection", "Frame kamera/snapshot dapat dianalisis untuk mendeteksi objek dan kendaraan. Hasil yang ditampilkan berupa label, kotak deteksi, confidence, jumlah kendaraan, dan status analisis. Raw video tidak dijual dan tidak sengaja disimpan oleh ITS Maps kecuali user menghubungkan perangkat/layanan yang menyimpan stream secara terpisah.")}
         ${policySection("location", "6. Lokasi", "Lokasi user hanya dipakai setelah user memberi izin. Lokasi dapat digunakan untuk marker peta, jarak ke perangkat, atau tampilan lokasi saya. User dapat mencabut izin lokasi dari pengaturan browser, Android, atau Windows.")}
-        ${policySection("sharing", "7. Berbagi data", "Data dapat diproses oleh penyedia layanan yang dibutuhkan untuk menjalankan aplikasi, seperti Firebase, Microsoft Store, browser/Android/Windows permission system, dan layanan peta. ITS Maps tidak menjual data pribadi.")}
-        ${policySection("retention", "8. Retensi dan penghapusan", "Data realtime dipertahankan selama dibutuhkan oleh konfigurasi perangkat, dashboard, history, atau diagnostik. Data lokal bisa dihapus dengan clear app data/uninstall. Data RTDB dapat dihapus dari Firebase project atau melalui permintaan ke publisher.")}
-        ${policySection("security", "9. Keamanan", "ITS Maps menggunakan HTTPS, permission system platform, dan pemisahan data lokal/realtime. Tidak ada sistem online yang sempurna, sehingga user disarankan hanya menghubungkan perangkat, stream, dan Firebase project tepercaya.")}
-        ${policySection("children", "10. Privasi anak", "ITS Maps tidak ditujukan untuk anak di bawah 13 tahun. Jika Anda yakin anak memberikan data pribadi melalui aplikasi, hubungi publisher melalui kanal dukungan.")}
-        ${policySection("contact", "11. Kontak dan perubahan", "Untuk pertanyaan, permintaan penghapusan, atau pembaruan kebijakan, hubungi Hanifa Teams melalui listing Microsoft Store atau kanal dukungan publisher. Kebijakan ini dapat diperbarui ketika fitur, layanan, atau persyaratan hukum berubah.")}
+        ${policySection("analytics", "7. Cloudflare Web Analytics, Google Analytics, dan Microsoft Clarity", "Cloudflare Web Analytics digunakan otomatis untuk statistik kunjungan teknis tanpa cookie. Google Analytics dan Microsoft Clarity juga dimuat otomatis pada halaman yang memenuhi syarat, dengan penyimpanan analitik dan iklan berstatus ditolak, sinyal iklan/personalisasi dinonaktifkan, URL analitik disanitasi, dan elemen peta, kamera, formulir, serta percakapan AI dimasking. Kunjungan melalui URL yang memiliki query—termasuk tautan peta berkoordinat—sengaja tidak memuat Google Analytics atau Clarity. Tidak ada banner preferensi analitik; pengguna tetap dapat memblokir tracker melalui browser. ITS Maps tidak mengirim prompt AI, frame kamera, kredensial, ID perangkat, atau koordinat presisi sebagai event analitik.")}
+        ${policySection("sharing", "8. Berbagi data", "Data dapat diproses oleh penyedia layanan yang dibutuhkan untuk menjalankan aplikasi, seperti Firebase, Cloudflare, Google Analytics, Microsoft, browser/Android/Windows permission system, dan layanan peta. ITS Maps tidak menjual data pribadi.")}
+        ${policySection("retention", "9. Retensi dan penghapusan", "Data realtime dipertahankan selama dibutuhkan oleh konfigurasi perangkat, dashboard, history, atau diagnostik. Data lokal bisa dihapus dengan clear app data/uninstall. Data RTDB dapat dihapus dari Firebase project atau melalui permintaan ke publisher. Retensi analitik mengikuti pengaturan akun penyedia terkait.")}
+        ${policySection("security", "10. Keamanan", "ITS Maps menggunakan HTTPS, permission system platform, dan pemisahan data lokal/realtime. Tidak ada sistem online yang sempurna, sehingga user disarankan hanya menghubungkan perangkat, stream, dan Firebase project tepercaya.")}
+        ${policySection("children", "11. Privasi anak", "ITS Maps tidak ditujukan kepada pengguna di bawah 18 tahun. Microsoft Clarity tidak akan diaktifkan bila layanan ditujukan kepada audiens di bawah 18 tahun. Jika Anda yakin anak memberikan data pribadi melalui aplikasi, hubungi publisher melalui kanal dukungan.")}
+        ${policySection("contact", "12. Kontak dan perubahan", "Untuk pertanyaan, permintaan penghapusan, atau pembaruan kebijakan, hubungi Hanifa Teams melalui listing Microsoft Store atau kanal dukungan publisher. Kebijakan ini dapat diperbarui ketika fitur, layanan, atau persyaratan hukum berubah.")}
       </article>
     </main>
     <footer class="policy-footer">
@@ -1354,7 +1401,7 @@ function printChrome(title) {
   `;
 }
 
-function pageShell({ title, bodyClass, navActive, main }) {
+function pageShell({ title, description, canonicalPath, bodyClass, navActive, main }) {
   const nav = [
     ["/", "Home"],
     ["/method", "Metode"],
@@ -1374,7 +1421,8 @@ function pageShell({ title, bodyClass, navActive, main }) {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${esc(title)}</title>
-    <meta name="description" content="ITS Maps documentation with line-by-line source explanation, Mermaid diagrams, LaTeX formulas, screenshots, and app download links." />
+    <meta name="description" content="${esc(description)}" />
+    <link rel="canonical" href="${site.url}${esc(canonicalPath)}" />
     <meta name="theme-color" content="#ffffff" />
     ${webmcpOriginTrialMeta()}
     ${searchConsoleVerificationMeta()}
@@ -1488,6 +1536,16 @@ figcaption { margin-top: 8px; color: var(--muted); font-size: 13px; font-weight:
 code, pre { font-family: "Cascadia Code", Consolas, monospace; }
 .source-file { margin: 16px 0; border: 1px solid var(--line); border-radius: 14px; background: #fff; overflow-x: auto; overflow-y: visible; }
 .source-file summary { display: flex; justify-content: space-between; gap: 12px; padding: 14px 16px; cursor: pointer; font-weight: 900; background: #f4f8fb; }
+.source-load-panel { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 16px; border-top: 1px solid var(--line); background: #fbfdff; }
+.source-load-panel > div { display: grid; gap: 3px; }
+.source-status { color: var(--muted); font-size: 12px; font-weight: 800; }
+.source-load { flex: 0 0 auto; min-height: 40px; border: 1px solid #b9cde0; border-radius: 11px; padding: 9px 13px; background: #14304a; color: #fff; font: inherit; font-size: 13px; font-weight: 900; cursor: pointer; }
+.source-load:hover, .source-load:focus-visible { background: var(--accent); outline: 3px solid rgba(27,117,208,.18); }
+.source-load:disabled { cursor: wait; opacity: .68; }
+.source-file[data-source-state="loading"] .source-load-panel { background: #f0f7ff; }
+.source-file[data-source-state="error"] .source-load-panel { background: #fff7f4; }
+.source-file[data-source-state="error"] .source-status { color: #a12c1d; }
+.source-load-panel noscript { font-size: 12px; }
 .symbol-list { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 14px; border-top: 1px solid var(--line); }
 .symbol-list a { border-radius: 999px; padding: 6px 9px; background: #edf6ff; text-decoration: none; font-size: 12px; font-weight: 800; }
 .code-table { display: grid; width: 100%; min-width: 920px; font-size: 12px; }
@@ -1629,6 +1687,8 @@ output { display: block; margin-top: 12px; padding: 12px; border-radius: 12px; b
   .nav-more div.is-dragging { transition: none; }
   .policy-toc { position: relative; top: auto; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .source-summary > div, .code-table > div { grid-template-columns: 1fr; }
+  .source-load-panel { align-items: stretch; flex-direction: column; }
+  .source-load { width: 100%; }
   .symbol-popover { position: fixed; left: 16px; right: 16px; bottom: 14px; top: auto; width: auto; max-height: 72vh; border-radius: 20px 20px 8px 8px; }
   .line-no { text-align: left; }
   .pdf-app { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; }
@@ -1652,7 +1712,7 @@ output { display: block; margin-top: 12px; padding: 12px; border-radius: 12px; b
   @page { size: A4; margin: 22mm 14mm 22mm; }
   :root { --bg: #fff; --shadow: none; }
   body { background: #fff !important; color: #111827; font-size: 10.5pt; }
-  .topbar, .toc, .hero-actions, .skip-link, .policy-toc, .policy-footer, .run-actions, .print-header, .print-footer, .nav-more, .symbol-trigger { display: none !important; }
+  .topbar, .toc, .hero-actions, .skip-link, .policy-toc, .policy-footer, .run-actions, .print-header, .print-footer, .nav-more, .symbol-trigger, .source-load-panel { display: none !important; }
   main, .policy-layout, .policy-top nav, .policy-hero { width: auto; margin: 0; padding: 0; display: block; }
   .doc-hero, .doc-section, .policy-card { box-shadow: none; border-color: #cbd5e1; break-inside: auto; page-break-inside: auto; }
   .feature-grid article, .formula-grid article, .download-grid article, .method-card, .coverage-grid article, .credit-list article, figure { break-inside: avoid; page-break-inside: avoid; }
@@ -1700,9 +1760,131 @@ window.addEventListener("DOMContentLoaded", () => {
     navigator.serviceWorker.register("/sw.js").catch(() => undefined);
   }
 
+  const sourceFiles = Array.from(document.querySelectorAll("details[data-source-file]"));
+  const sourceLoads = new WeakMap();
+  let loadAllSourcesPromise;
+
+  const sourceStatus = (details, text) => {
+    const status = details.querySelector("[data-source-status]");
+    if (status) status.textContent = text;
+  };
+
+  const loadSourceFragment = (details) => {
+    if (!details || details.dataset.sourceLoaded === "1") return Promise.resolve(details);
+    const activeLoad = sourceLoads.get(details);
+    if (activeLoad) return activeLoad;
+    const url = details.getAttribute("data-source-url");
+    const host = details.querySelector("[data-source-fragment]");
+    const button = details.querySelector("[data-source-load]");
+    if (!url || !host) return Promise.reject(new Error("Fragment source tidak tersedia"));
+
+    details.dataset.sourceState = "loading";
+    sourceStatus(details, "Memuat atlas...");
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Memuat...";
+    }
+
+    const promise = fetch(url, { credentials: "same-origin" })
+      .then((response) => {
+        if (!response.ok) throw new Error("HTTP " + response.status);
+        return response.text();
+      })
+      .then((html) => {
+        const template = document.createElement("template");
+        template.innerHTML = html;
+        const content = template.content.querySelector("[data-source-fragment-content]");
+        if (!content) throw new Error("Isi fragment source tidak valid");
+        host.replaceChildren(...Array.from(content.childNodes));
+        details.dataset.sourceLoaded = "1";
+        details.dataset.sourceState = "ready";
+        return details;
+      })
+      .catch((error) => {
+        details.dataset.sourceState = "error";
+        sourceStatus(details, "Gagal dimuat. Periksa koneksi lalu coba lagi.");
+        if (button) {
+          button.disabled = false;
+          button.textContent = "Coba lagi";
+        }
+        sourceLoads.delete(details);
+        throw error;
+      });
+    sourceLoads.set(details, promise);
+    return promise;
+  };
+
+  const markSourceAtlasReady = () => {
+    document.documentElement.dataset.sourceAtlasReady = "1";
+    window.dispatchEvent(new CustomEvent("source-atlas-ready"));
+  };
+
+  const loadAllSourceFragments = () => {
+    const pending = sourceFiles.filter((details) => details.dataset.sourceLoaded !== "1");
+    if (!pending.length) {
+      markSourceAtlasReady();
+      return Promise.resolve();
+    }
+    if (loadAllSourcesPromise) return loadAllSourcesPromise;
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < pending.length) {
+        const index = cursor;
+        cursor += 1;
+        try { await loadSourceFragment(pending[index]); } catch {}
+      }
+    };
+    const workers = Array.from({ length: Math.min(4, pending.length) }, () => worker());
+    loadAllSourcesPromise = Promise.all(workers)
+      .then(markSourceAtlasReady)
+      .finally(() => { loadAllSourcesPromise = undefined; });
+    return loadAllSourcesPromise;
+  };
+
+  const sourceByAnchor = (anchor) => sourceFiles.find((details) => details.dataset.sourceAnchor === anchor);
+  const revealSourceLine = (anchor, line, updateHash = true) => {
+    const details = sourceByAnchor(anchor);
+    if (!details) return Promise.resolve();
+    details.open = true;
+    return loadSourceFragment(details).then(() => {
+      const id = anchor + "-" + line;
+      if (updateHash && window.location.hash !== "#" + id) window.history.pushState(null, "", "#" + id);
+      window.requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ block: "center" }));
+    });
+  };
+
+  sourceFiles.forEach((details) => {
+    details.querySelector("[data-source-load]")?.addEventListener("click", () => {
+      details.open = true;
+      loadSourceFragment(details).catch(() => undefined);
+    });
+  });
+
+  document.addEventListener("click", (event) => {
+    const link = event.target.closest?.("[data-source-jump]");
+    if (!link) return;
+    event.preventDefault();
+    revealSourceLine(link.getAttribute("data-source-jump") || "", link.getAttribute("data-source-line") || "1")
+      .catch(() => undefined);
+  });
+
+  const revealLocationHash = () => {
+    const id = decodeURIComponent(window.location.hash.slice(1));
+    if (!id) return;
+    const details = sourceFiles.find((item) => id.startsWith((item.dataset.sourceAnchor || "") + "-"));
+    if (!details) return;
+    const anchor = details.dataset.sourceAnchor || "";
+    revealSourceLine(anchor, id.slice(anchor.length + 1), false).catch(() => undefined);
+  };
+  window.addEventListener("hashchange", revealLocationHash);
+  revealLocationHash();
+
   if (query.has("pdf")) {
     document.body.classList.add("pdf-source-mode");
-    document.querySelectorAll(".source-file").forEach((details) => { details.open = true; });
+    sourceFiles.forEach((details) => { details.open = true; });
+    loadAllSourceFragments();
+  } else if (!sourceFiles.length) {
+    markSourceAtlasReady();
   }
 
   let printOpenedDetails = [];
@@ -1723,10 +1905,29 @@ window.addEventListener("DOMContentLoaded", () => {
   };
   window.addEventListener("beforeprint", preparePrint);
   window.addEventListener("afterprint", restorePrint);
-  document.querySelectorAll("[data-print]").forEach((button) => button.addEventListener("click", () => {
+  const printWithSources = async (button) => {
+    const label = button?.textContent || "Print A4";
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Menyiapkan atlas...";
+    }
+    await loadAllSourceFragments();
     preparePrint();
+    if (button) {
+      button.disabled = false;
+      button.textContent = label;
+    }
     window.print();
+  };
+  document.querySelectorAll("[data-print]").forEach((button) => button.addEventListener("click", () => {
+    printWithSources(button).catch(() => undefined);
   }));
+  window.addEventListener("keydown", (event) => {
+    if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "p") return;
+    if (!sourceFiles.some((details) => details.dataset.sourceLoaded !== "1")) return;
+    event.preventDefault();
+    printWithSources().catch(() => undefined);
+  });
   if (window.mermaid) window.mermaid.initialize({ startOnLoad: true, securityLevel: "loose", theme: "neutral" });
 
   const loadQr = (() => {
@@ -2183,6 +2384,13 @@ window.addEventListener("DOMContentLoaded", () => {
 
   frame?.addEventListener("load", () => {
     updateFromFrame();
+    try {
+      if (frame.contentDocument?.documentElement.dataset.sourceAtlasReady === "1") {
+        updateFromFrame();
+      } else {
+        frame.contentWindow?.addEventListener("source-atlas-ready", updateFromFrame, { once: true });
+      }
+    } catch {}
   });
 
   stage?.addEventListener("scroll", () => requestAnimationFrame(updateCurrentPage), { passive: true });
@@ -2370,7 +2578,7 @@ ${[
   mdLink("Privacy Policy", "/privacy"),
   mdLink("Application Licence", "/licence"),
   mdLink("AI Licence", "/license"),
-  mdLink("Roadmap AMP Story", "/roadmap/"),
+  mdLink("Roadmap AMP Story", "/roadmap"),
   mdLink("PDF viewer for documentation", "/pdf-preview/documentation"),
   mdLink("Sitemap", "/sitemap.xml"),
   mdLink("Robots", "/robots.txt"),
@@ -2408,9 +2616,8 @@ function sitemapXml() {
     "/privacy",
     "/licence",
     "/license",
-    "/roadmap/",
-    "/llms.txt",
-    "/llms-full.txt",
+    "/roadmap",
+    "/presentation",
     "/pdf-preview/documentation",
     "/pdf-preview/method",
     "/pdf-preview/android",
@@ -2420,14 +2627,10 @@ function sitemapXml() {
     "/pdf-preview/license",
     "/pdf-preview/fte-cd-6",
   ];
-  const now = new Date().toISOString().slice(0, 10);
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls.map((url) => `  <url>
     <loc>${site.url}${url}</loc>
-    <lastmod>${now}</lastmod>
-    <changefreq>${url === "/" ? "daily" : "weekly"}</changefreq>
-    <priority>${url === "/" ? "1.0" : "0.7"}</priority>
   </url>`).join("\n")}
 </urlset>
 `;
@@ -2490,6 +2693,19 @@ function writeFile(rel, text) {
   fs.writeFileSync(target, text.replace(/[ \t]+$/gm, ""), "utf8");
 }
 
+function writeSourceAtlasFragments() {
+  ensureDir(sourceAtlasRoot);
+  const sources = sourceStats(uniqueSourceFiles().map(readSource).filter(Boolean));
+  const slugs = new Set();
+  for (const src of sources) {
+    const slug = sourceSlug(src.rel);
+    if (slugs.has(slug)) throw new Error(`Duplicate source-atlas slug: ${slug}`);
+    slugs.add(slug);
+    writeFile(`source-atlas/${slug}.html`, sourceFragment(src));
+  }
+  return sources.length;
+}
+
 async function main() {
   ensureDir(methodRoot);
   ensureDir(methodAssetsRoot);
@@ -2504,6 +2720,7 @@ async function main() {
 
   writeFile("method/method.css", methodCss());
   writeFile("method/method.js", methodJs());
+  const sourceFragmentCount = writeSourceAtlasFragments();
   writeFile("method/index.html", methodIndexPage());
   writeFile("method/webapp/index.html", platformPage("webapp"));
   writeFile("method/android/index.html", platformPage("android"));
@@ -2521,6 +2738,7 @@ async function main() {
   writeFile("llms.txt", llmsTxt());
   writeFile("llms-full.txt", llmsFullTxt());
   writeFile("sitemap.xml", sitemapXml());
+  console.log(`generate-method-docs: wrote ${sourceFragmentCount} lazy source-atlas fragment(s).`);
 }
 
 await main();

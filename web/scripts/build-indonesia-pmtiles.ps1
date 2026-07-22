@@ -79,7 +79,7 @@ $catalog = [ordered]@{
     bytes = $archive.Length
     sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $output).Hash.ToLowerInvariant()
     url = "https://its.hanifahseptiani45.workers.dev/v1/map/archive/indonesia.pmtiles"
-    downloadUrl = "https://github.com/galihru/its/releases/download/map-data-2026-07-21/indonesia.pmtiles"
+    downloadUrl = "https://github.com/hanifasepthi/its/releases/download/map-data-2026-07-21/indonesia.pmtiles"
   }
   coverage = [ordered]@{
     country = "ID"

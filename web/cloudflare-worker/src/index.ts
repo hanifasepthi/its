@@ -80,16 +80,28 @@ async function nationalArchive(request: Request, env: Env): Promise<Response> {
     }
   }
 
-  const upstream = "https://github.com/galihru/its/releases/download/map-data-2026-07-21/indonesia.pmtiles";
+  const upstream = "https://github.com/hanifasepthi/its/releases/download/map-data-2026-07-21/indonesia.pmtiles";
   const upstreamHeaders = new Headers();
   const range = request.headers.get("Range");
   if (range) upstreamHeaders.set("Range", range);
-  const response = await fetch(upstream, {
+  let response = await fetch(upstream, {
     method: request.method,
     headers: upstreamHeaders,
-    redirect: "follow",
+    // GitHub release assets redirect to blob storage. Following automatically can
+    // discard Range, which would make a PMTiles client download the entire archive.
+    redirect: "manual",
     cf: { cacheEverything: true, cacheTtl: 31_536_000 },
   });
+  if (response.status >= 300 && response.status < 400) {
+    const location = response.headers.get("Location");
+    if (!location) throw new HttpError(502, "map_archive_redirect_failed", "Redirect arsip peta nasional tidak valid.");
+    response = await fetch(new URL(location, upstream).toString(), {
+      method: request.method,
+      headers: upstreamHeaders,
+      redirect: "follow",
+      cf: { cacheEverything: true, cacheTtl: 31_536_000 },
+    });
+  }
   if (!response.ok) throw new HttpError(502, "map_archive_upstream_failed", "Arsip peta nasional gagal dibaca dari GitHub.");
   const headers = new Headers(response.headers);
   headers.set("Content-Type", "application/vnd.pmtiles");
