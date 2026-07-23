@@ -1,0 +1,71 @@
+name: ITS Maps Bot
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 0
+
+      - name: Get bot account ID
+        id: bot-user
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        shell: bash
+        run: |
+          BOT_ID=$(gh api \
+            "/users/${{ steps.app-token.outputs.app-slug }}[bot]" \
+            --jq ".id")
+
+          echo "id=$BOT_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Configure bot identity
+        shell: bash
+        run: |
+          BOT_NAME="${{ steps.app-token.outputs.app-slug }}[bot]"
+          BOT_EMAIL="${{ steps.bot-user.outputs.id }}+${BOT_NAME}@users.noreply.github.com"
+
+          git config user.name "$BOT_NAME"
+          git config user.email "$BOT_EMAIL"
+
+      - name: Create test update
+        shell: bash
+        run: |
+          mkdir -p manifests
+
+          cat > manifests/bot-status.json <<EOF
+          {
+            "app": "ITS Maps",
+            "status": "active",
+            "lastRun": "$(date -u '+%Y-%m-%dT%H:%M:%SZ')",
+            "message": "ITS Maps GitHub App authentication succeeded"
+          }
+          EOF
+
+          git add manifests/bot-status.json
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git commit -m "test: verify ITS Maps bot"
+          git push
