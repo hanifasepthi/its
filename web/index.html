@@ -4,11 +4,48 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>ITS Maps | Raspberry Pi Live Traffic</title>
-  <meta name="description" content="Dashboard peta ITS realtime untuk Raspberry Pi controller, traffic, kamera, dan widget Android." />
+  <title>ITS Maps | Peta Lalu Lintas Realtime</title>
+  <meta name="description" content="ITS Maps memantau peta, kamera lalu lintas, status Raspberry Pi, dan object detection RF-DETR secara realtime." />
   <meta name="theme-color" content="#ffffff" />
   <meta http-equiv="origin-trial" content="A/yLSto1peEstniGxrmY6vd5X1JtgdJcVVXDevhUBYSXYXnk536C+/SE4/y7Cdx6OYeKilNb5TfqTp35LnMWCQwAAAB4eyJvcmlnaW4iOiJodHRwczovL2l0c3RlbGtvbS53ZWIuYXBwOjQ0MyIsImZlYXR1cmUiOiJXZWJNQ1AiLCJleHBpcnkiOjE3OTQ4NzM2MDAsImlzU3ViZG9tYWluIjp0cnVlLCJpc1RoaXJkUGFydHkiOnRydWV9" />
   <meta name="google-site-verification" content="c8bcvZrCDvCbFQbw1nvSf4Dvemq6qb35bh1J64DJ_2g" />
+  <meta name="msvalidate.01" content="C6357AD329BE82ECD8276C53EB8CDFA7" />
+  <style id="analytics-consent-retired">
+    [data-analytics-consent],
+    [data-analytics-preferences],
+    .analytics-consent-banner,
+    .analytics-preferences-button,
+    .analytics-preferences-panel {
+      display: none !important;
+    }
+  </style>
+  <script>
+    (() => {
+      const retiredSelector = [
+        "[data-analytics-consent]",
+        "[data-analytics-preferences]",
+        ".analytics-consent-banner",
+        ".analytics-preferences-button",
+        ".analytics-preferences-panel"
+      ].join(",");
+      const removeRetiredAnalyticsUi = (root = document) => {
+        root.querySelectorAll?.(retiredSelector).forEach((node) => node.remove());
+      };
+      removeRetiredAnalyticsUi();
+      const observer = new MutationObserver((records) => {
+        records.forEach((record) => record.addedNodes.forEach((node) => {
+          if (!(node instanceof Element)) return;
+          if (node.matches(retiredSelector)) node.remove();
+          else removeRetiredAnalyticsUi(node);
+        }));
+      });
+      observer.observe(document.documentElement, { childList: true, subtree: true });
+      window.addEventListener("load", () => window.setTimeout(() => {
+        removeRetiredAnalyticsUi();
+        observer.disconnect();
+      }, 15000), { once: true });
+    })();
+  </script>
   <link id="pwa-manifest" rel="manifest" href="/manifest.webmanifest" />
   <link rel="alternate" type="text/markdown" href="/llms.txt" title="ITS Maps llms.txt" />
   <script>
@@ -28,14 +65,14 @@
   <meta name="publisher" content="Hanifa Teams" />
   <meta property="og:site_name" content="ITS Maps" />
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="ITS Maps | Raspberry Pi Live Traffic" />
-  <meta property="og:description" content="Dashboard peta ITS realtime untuk Raspberry Pi controller, lalu lintas, kamera, dan AI RF-DETR." />
+  <meta property="og:title" content="ITS Maps | Peta Lalu Lintas Realtime" />
+  <meta property="og:description" content="ITS Maps memantau peta, kamera lalu lintas, status Raspberry Pi, dan object detection RF-DETR secara realtime." />
   <meta property="og:url" content="https://itstelkom.web.app/" />
   <meta property="og:image" content="/screenshots/desktop-home.png" />
   <meta property="og:image:alt" content="Pratinjau ITS Maps" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="ITS Maps | Raspberry Pi Live Traffic" />
-  <meta name="twitter:description" content="Dashboard peta ITS realtime dengan kamera Raspberry dan AI RF-DETR." />
+  <meta name="twitter:title" content="ITS Maps | Peta Lalu Lintas Realtime" />
+  <meta name="twitter:description" content="ITS Maps memantau peta, kamera lalu lintas, status Raspberry Pi, dan object detection RF-DETR secara realtime." />
   <meta name="twitter:image" content="/screenshots/desktop-home.png" />
   <link rel="author" href="https://github.com/hanifasepthi/its" />
   <link rel="help" href="https://itstelkom.web.app/documentation" />
@@ -75,6 +112,63 @@
       height: 1px;
       overflow: hidden;
     }
+
+    .map-app-skeleton {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      background: #eef3ee;
+      font-family: Inter, system-ui, sans-serif;
+    }
+    .map-app-skeleton::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(29deg, transparent 0 29%, rgba(255,255,255,.96) 29.4% 31.1%, transparent 31.5% 100%),
+        linear-gradient(92deg, transparent 0 43%, rgba(255,255,255,.95) 43.4% 45.5%, transparent 45.9% 100%),
+        linear-gradient(151deg, transparent 0 61%, rgba(255,255,255,.9) 61.4% 63.7%, transparent 64.1% 100%),
+        repeating-linear-gradient(12deg, rgba(207,218,210,.58) 0 2px, transparent 2px 50px),
+        repeating-linear-gradient(102deg, rgba(207,218,210,.5) 0 2px, transparent 2px 66px);
+    }
+    .map-skeleton-header {
+      position: absolute;
+      z-index: 2;
+      top: 14px;
+      left: 14px;
+      right: 14px;
+      display: grid;
+      grid-template-columns: 48px minmax(180px, 420px) 48px;
+      gap: 10px;
+      align-items: center;
+    }
+    .map-skeleton-logo,
+    .map-skeleton-layer,
+    .map-skeleton-search,
+    .map-skeleton-control,
+    .map-skeleton-poi {
+      background: linear-gradient(100deg, #fff 30%, #edf3f1 48%, #fff 66%);
+      background-size: 240% 100%;
+      animation: its-skeleton-shimmer 1.35s ease-in-out infinite;
+      box-shadow: 0 5px 20px rgba(28, 56, 48, .12);
+    }
+    .map-skeleton-logo,
+    .map-skeleton-layer,
+    .map-skeleton-control { width: 48px; height: 48px; border-radius: 15px; }
+    .map-skeleton-search { height: 48px; border-radius: 17px; }
+    .map-skeleton-controls { position: absolute; z-index: 2; right: 16px; bottom: 82px; display: grid; gap: 8px; }
+    .map-skeleton-poi { position: absolute; width: 22px; height: 22px; border: 4px solid #fff; border-radius: 50% 50% 50% 8px; transform: rotate(-45deg); }
+    .map-skeleton-poi:nth-of-type(1) { left: 27%; top: 35%; }
+    .map-skeleton-poi:nth-of-type(2) { left: 62%; top: 54%; animation-delay: -.3s; }
+    .map-skeleton-poi:nth-of-type(3) { left: 47%; top: 72%; animation-delay: -.6s; }
+    .map-skeleton-footer { position: absolute; z-index: 2; left: 14px; right: 14px; bottom: 14px; height: 48px; border-radius: 16px; background: rgba(255,255,255,.9); box-shadow: 0 5px 20px rgba(28,56,48,.1); }
+    .map-skeleton-accessible { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    @keyframes its-skeleton-shimmer { to { background-position: -140% 0; } }
+    @media (max-width: 560px) {
+      .map-skeleton-header { grid-template-columns: 44px minmax(0, 1fr) 44px; }
+      .map-skeleton-logo, .map-skeleton-layer, .map-skeleton-control { width: 44px; height: 44px; }
+      .map-skeleton-search { height: 44px; }
+    }
   </style>
   <script type="application/ld+json">
   {
@@ -108,11 +202,17 @@
         "@type": "SoftwareApplication",
         "@id": "https://itstelkom.web.app/#software",
         "name": "ITS Maps",
-        "applicationCategory": "NavigationApplication",
+        "applicationCategory": "TravelApplication",
         "operatingSystem": "Web, Android, Windows 10, Windows 11",
         "url": "https://itstelkom.web.app/",
         "downloadUrl": "https://itstelkom.web.app/documentation#download",
         "softwareHelp": "https://itstelkom.web.app/documentation",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "IDR",
+          "availability": "https://schema.org/OnlineOnly"
+        },
         "creator": {
           "@id": "https://itstelkom.web.app/#organization"
         },
@@ -137,14 +237,39 @@
 </head>
 
 <body>
-  <div id="app"></div>
+  <div id="app">
+    <main class="map-app-skeleton" aria-busy="true" aria-label="Memuat peta ITS Maps">
+      <div class="map-skeleton-header" aria-hidden="true">
+        <span class="map-skeleton-logo"></span>
+        <span class="map-skeleton-search"></span>
+        <span class="map-skeleton-layer"></span>
+      </div>
+      <span class="map-skeleton-poi" aria-hidden="true"></span>
+      <span class="map-skeleton-poi" aria-hidden="true"></span>
+      <span class="map-skeleton-poi" aria-hidden="true"></span>
+      <div class="map-skeleton-controls" aria-hidden="true">
+        <span class="map-skeleton-control"></span>
+        <span class="map-skeleton-control"></span>
+      </div>
+      <div class="map-skeleton-footer" aria-hidden="true"></div>
+      <div class="map-skeleton-accessible">
+        <h1>ITS Maps</h1>
+        <p>Peta jalan, transportasi, POI, perairan, area hijau, kamera, dan navigasi 2D serta 3D sedang dimuat.</p>
+        <nav aria-label="Tautan utama ITS Maps">
+          <a href="/documentation">Dokumentasi</a>
+          <a href="/method">Metode</a>
+          <a href="/privacy">Privasi</a>
+        </nav>
+      </div>
+    </main>
+  </div>
   <details class="webmcp-tools" aria-label="ITS Maps WebMCP tools">
     <summary>AI agent tools</summary>
     <p>WebMCP tools for public ITS Maps navigation and documentation.</p>
     <form method="get" action="/documentation" data-webmcp-open-resource toolname="open_its_maps_resource" tooldescription="Open a public ITS Maps resource such as documentation, privacy policy, licence, PDF preview, llms.txt, or the realtime map." toolautosubmit>
       <label>
         Resource
-        <select name="resource" toolparamdescription="Public ITS Maps resource to open. Choose one of home, documentation, method, privacy, licence, ai-license, roadmap, pdf, llms, or about.">
+        <select name="resource" title="ITS Maps resource" aria-description="Choose the public ITS Maps page or agent resource to open." toolparamdescription="Public ITS Maps resource to open. Choose one of home, documentation, method, privacy, licence, ai-license, roadmap, pdf, llms, or about.">
           <option value="documentation">documentation</option>
           <option value="home">home</option>
           <option value="method">method</option>
@@ -162,14 +287,14 @@
     <form method="get" action="/documentation" data-webmcp-site-search toolname="search_its_maps_site" tooldescription="Search public ITS Maps documentation and route the user to the documentation page with the requested query." toolautosubmit>
       <label>
         Query
-        <input type="search" name="query" autocomplete="off" toolparamdescription="Search query for public ITS Maps documentation, downloads, widgets, AI, privacy, or source-code explanation.">
+        <input type="search" name="query" title="ITS Maps search query" aria-description="Enter a topic to search in the public ITS Maps documentation." autocomplete="off" toolparamdescription="Search query for public ITS Maps documentation, downloads, widgets, AI, privacy, or source-code explanation.">
       </label>
       <button type="submit">Search ITS Maps</button>
     </form>
     <form method="get" action="/llms.txt" data-webmcp-public-context toolname="get_its_maps_public_context" tooldescription="Return public ITS Maps AI-agent context from llms.txt or llms-full.txt." toolautosubmit>
       <label>
         Format
-        <select name="format" toolparamdescription="Context size to return for AI agents. Use summary for llms.txt or full for llms-full.txt.">
+        <select name="format" title="Public context format" aria-description="Choose summary or full ITS Maps public AI context." toolparamdescription="Context size to return for AI agents. Use summary for llms.txt or full for llms-full.txt.">
           <option value="summary">summary</option>
           <option value="full">full</option>
         </select>
