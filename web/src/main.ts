@@ -8026,7 +8026,7 @@ if (staticRoute) {
             }
 
             // 2. Mewarnai Jalan Tol dan Raya
-            if (sourceLayer === 'transportation' && layer.type === 'line') {
+            if (sourceLayer === 'transportation' && layer.type === 'line' && !String(id).startsWith('its-national-')) {
               try {
                 maplibreMap.setPaintProperty(id, 'line-color', [
                   'match', ['get', 'class'],
