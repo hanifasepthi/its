@@ -11,7 +11,7 @@
   "theme_color": "#111827",
   "orientation": "landscape",
   "categories": ["maps", "navigation", "utilities"],
-  "prefer_related_applications": true,
+  "prefer_related_applications": false,
   "related_applications": [
     {
       "platform": "windows",

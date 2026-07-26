@@ -167,6 +167,24 @@ function explodeGeometry(geometry) {
   return ["Point", "LineString", "Polygon"].includes(geometry.type) ? [geometry] : [];
 }
 
+function geometryIntersectsBbox(geometry, bbox) {
+  const pairs = [];
+  const visit = (value) => {
+    if (!Array.isArray(value)) return;
+    if (value.length >= 2 && Number.isFinite(value[0]) && Number.isFinite(value[1])) {
+      pairs.push(value);
+      return;
+    }
+    value.forEach(visit);
+  };
+  visit(geometry?.coordinates);
+  if (!pairs.length) return false;
+  const lngs = pairs.map((pair) => pair[0]);
+  const lats = pairs.map((pair) => pair[1]);
+  return Math.min(...lngs) <= bbox[2] && Math.max(...lngs) >= bbox[0]
+    && Math.min(...lats) <= bbox[3] && Math.max(...lats) >= bbox[1];
+}
+
 async function readCheckpoint(filename, reset) {
   if (reset) return { completed: {}, tiles: 0, features: 0 };
   try { return JSON.parse(await readFile(filename, "utf8")); }
@@ -203,6 +221,7 @@ async function main() {
             const kind = baseKind === "poi" ? poiKind(geo.properties || {}) : baseKind;
             const properties = enrichedProperties(layerName, geo.properties || {}, kind);
             for (const [part, geometry] of explodeGeometry(geo.geometry).entries()) {
+              if (!geometryIntersectsBbox(geometry, options.bbox)) continue;
               const sourceId = `${tileKey}:${layerName}:${raw.id ?? index}:${part}`;
               lines.push(JSON.stringify({
                 type: "Feature",

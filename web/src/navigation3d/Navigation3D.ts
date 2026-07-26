@@ -203,6 +203,7 @@ function modeFields(): string {
             aria-label="Moda ${escapeHtml(profile.label)}"
             aria-description="Gunakan moda ${escapeHtml(profile.label)} untuk menghitung rute navigasi."
             toolparamdescription="Use ${escapeHtml(profile.label)} as the travel mode for ITS Maps 3D route calculation."
+            required
             ${mode === "car" ? "checked" : ""}
           >
           <span aria-hidden="true">${profile.icon}</span>

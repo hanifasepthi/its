@@ -31,17 +31,19 @@ function usage(message) {
 
 function argumentsFrom(argv) {
   const inputs = [];
+  const inputDirs = [];
   let coverageCheckpoint = "";
   let version = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
   for (let index = 0; index < argv.length; index += 1) {
     if (argv[index] === "--input" && argv[index + 1]) inputs.push(path.resolve(ROOT, argv[++index]));
+    else if (argv[index] === "--input-dir" && argv[index + 1]) inputDirs.push(path.resolve(ROOT, argv[++index]));
     else if (argv[index] === "--coverage-checkpoint" && argv[index + 1]) coverageCheckpoint = path.resolve(ROOT, argv[++index]);
     else if (argv[index] === "--version" && argv[index + 1]) version = argv[++index];
     else throw new Error(`Argumen tidak dikenal: ${argv[index]}`);
   }
-  if (!inputs.length) throw new Error("Minimal satu --input diperlukan.");
+  if (!inputs.length && !inputDirs.length) throw new Error("Minimal satu --input atau --input-dir diperlukan.");
   if (!/^[a-zA-Z0-9._-]{1,80}$/.test(version)) throw new Error("Versi dataset tidak valid.");
-  return { inputs, version, coverageCheckpoint };
+  return { inputs, inputDirs, version, coverageCheckpoint };
 }
 
 function parseInput(text, filename) {
@@ -212,6 +214,12 @@ async function main() {
 
   const verified = [];
   const coverageCandidates = [];
+  for (const inputDir of options.inputDirs) {
+    const filenames = (await readdir(inputDir))
+      .filter((filename) => /\.(?:geo)?json$/i.test(filename))
+      .sort();
+    options.inputs.push(...filenames.map((filename) => path.join(inputDir, filename)));
+  }
   for (const input of options.inputs) {
     const text = await readFile(input, "utf8");
     const features = parseInput(text, input);

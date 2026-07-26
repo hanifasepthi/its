@@ -14580,6 +14580,10 @@ async function hydrateWindowsStoreIntegration(modal: HTMLElement): Promise<void>
     checkButton.disabled = false;
   };
   checkButton?.addEventListener("click", () => void checkInstallation());
+  // Opening the app/download panel is itself an explicit user gesture. Check
+  // the verified related Store package immediately so Chromium can show its
+  // native "Apps on your device" permission prompt when the API is supported.
+  if (/Windows/i.test(navigator.userAgent)) void checkInstallation();
   root.querySelector<HTMLAnchorElement>("[data-store-review-link]")?.addEventListener("click", (event) => {
     if (!/Windows/i.test(navigator.userAgent)) {
       event.preventDefault();
