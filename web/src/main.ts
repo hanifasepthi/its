@@ -7902,7 +7902,7 @@ if (staticRoute) {
                   'hospital', '#ffd6d6',
                   'school', '#fff4c2',
                   'education', '#fff4c2',
-                  'residential', '#def7e3',
+                  'residential', '#f4f1ea',
                   'commercial', '#ffe4c7',
                   'industrial', '#e2d9f3',
                   '#eef2f5'

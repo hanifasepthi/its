@@ -213,21 +213,25 @@ function modeFields(): string {
 
 function applicationHtml(): string {
   return `
-    <button
-      type="button"
-      class="nav3d-launcher"
-      data-nav3d-launcher
-      aria-controls="its-nav3d-search-panel"
-      aria-expanded="false"
-      aria-haspopup="dialog"
-    >
-      <span aria-hidden="true" class="nav3d-launcher-pin">⌖</span>
-      <span class="nav3d-launcher-copy">
-        <strong>Cari tempat atau rute</strong>
-        <small>Navigasi 3D tingkat jalan</small>
-      </span>
-      <span aria-hidden="true" class="nav3d-launcher-search">⌕</span>
-    </button>
+    <div class="nav3d-launcher">
+      <input
+        type="search"
+        class="nav3d-quick-search"
+        data-nav3d-quick-search
+        aria-label="Cari tempat atau rute"
+        placeholder="Cari tempat atau rute"
+        autocomplete="off"
+      >
+      <button
+        type="button"
+        class="nav3d-launcher-search"
+        data-nav3d-launcher
+        aria-label="Buka pencarian rute"
+        aria-controls="its-nav3d-search-panel"
+        aria-expanded="false"
+        aria-haspopup="dialog"
+      >⌕</button>
+    </div>
 
     <section
       id="its-nav3d-search-panel"
@@ -509,9 +513,15 @@ export class Navigation3D {
   }
 
   private bindEvents(): void {
-    this.element<HTMLButtonElement>("[data-nav3d-launcher]").addEventListener("click", () =>
-      this.openSearch(),
-    );
+    const quickSearch = this.element<HTMLInputElement>("[data-nav3d-quick-search]");
+    const launchSearch = (): void => this.openSearch(quickSearch.value);
+    this.element<HTMLButtonElement>("[data-nav3d-launcher]").addEventListener("click", launchSearch);
+    quickSearch.addEventListener("focus", launchSearch);
+    quickSearch.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      launchSearch();
+    });
     this.element<HTMLButtonElement>("[data-nav3d-close-search]").addEventListener("click", () =>
       this.closeSearch(),
     );

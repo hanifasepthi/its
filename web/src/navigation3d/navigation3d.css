@@ -63,7 +63,7 @@ body.nav3d-active {
   top: max(14px, env(safe-area-inset-top));
   left: 16px;
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) 44px;
+  grid-template-columns: minmax(0, 1fr) 44px;
   align-items: center;
   width: min(420px, calc(100vw - 170px));
   min-height: 54px;
@@ -76,6 +76,24 @@ body.nav3d-active {
   box-shadow: 0 8px 26px rgba(12, 35, 55, 0.2);
   backdrop-filter: blur(16px);
   cursor: pointer;
+}
+
+.nav3d-quick-search {
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  padding: 0 12px;
+  color: #17324a;
+  font: 600 14px/1.2 inherit;
+  background: rgb(255 255 255 / 66%);
+  border: 0;
+  border-radius: 10px;
+  outline: 0;
+  backdrop-filter: blur(16px) saturate(1.25);
+}
+
+.nav3d-quick-search:focus-visible {
+  box-shadow: inset 0 0 0 3px var(--nav3d-focus);
 }
 
 .nav3d-launcher:hover {
@@ -956,9 +974,11 @@ body.nav3d-active {
 @media (max-width: 720px) {
   .nav3d-launcher {
     top: max(8px, env(safe-area-inset-top));
-    left: 8px;
-    width: min(292px, calc(100vw - 78px));
+    right: 64px;
+    left: 64px;
+    width: auto;
     min-height: 52px;
+    z-index: 900;
   }
 
   .nav3d-search-panel {
@@ -1052,8 +1072,7 @@ body.nav3d-active {
 }
 
 @media (max-width: 390px) {
-  .nav3d-launcher-copy small { display: none; }
-  .nav3d-launcher { grid-template-columns: 40px minmax(0, 1fr) 44px; }
+  .nav3d-launcher { grid-template-columns: minmax(0, 1fr) 42px; }
   .nav3d-preview { grid-template-columns: minmax(0, 1fr); }
   .nav3d-preview-metrics { text-align: left; }
   .nav3d-preview footer { grid-template-columns: 1fr; }
