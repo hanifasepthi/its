@@ -1,15 +1,17 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet-rotate";
-import "maplibre-gl/dist/maplibre-gl.css";
 import "./style.css";
+import "./mapLegend";
 import WIN_PREVIEW_WELCOME from "./windows/welcome.png";
 import WIN_PREVIEW_OPTIONS from "./windows/pilihopsiinstaller.png";
 import WIN_PREVIEW_DONE from "./windows/selesaiinstaller.png";
 import ITS_APP_ICON from "./icon/its.png";
+import ITS_APP_ICON_SMALL from "./icon/its-small.webp";
 import WELCOME_SEGMENT from "./image/welcomsegment.png";
 import {
   drawRfDetrDetections,
+  loadImageSource,
   publishBrowserRfDetrResult,
   RF_DETR_ANDROID_MODEL_ID,
   runBrowserRfDetr,
@@ -17,14 +19,19 @@ import {
   type BrowserRfDetrResult,
 } from "./browserRfDetr";
 import { publicResearchAgent } from "./publicResearchAgent";
+import { agentOrchestrator } from "./agent-core/AgentOrchestrator";
+import type { DynamicAgentPlan } from "./agent-core/AgentPlanSchema";
 import { mountAgentLiveActivity } from "./agentLiveActivity";
+import { cloudflareAiClient } from "./ai-runtime/CloudflareAiClient";
+import { disablePublicPush, enablePublicPush, publicPushOptedIn, restorePublicPush } from "./pushNotifications";
 import {
-  disposeBrowserTextWorker,
-  generateBrowserText,
-  isBrowserTextModelReady,
-  warmBrowserTextModel,
-} from "./ai/browserTextModelClient";
+  fetchMicrosoftStorePublicSnapshot,
+  queryItsWindowsAppInstallation,
+  type MicrosoftStorePublicSnapshot,
+} from "./deviceApps";
 import { mapDetailCache } from "./map-detail/MapDetailCache";
+import { MapDynamicsLeafletRenderer } from "./map-detail/MapDynamicsLeafletRenderer";
+import { nationalVectorStyle } from "./map-detail/NationalVectorArchive";
 import {
   detailGroupsForZoom,
   EMPTY_MAP_DETAIL_COLLECTION,
@@ -32,6 +39,37 @@ import {
   setMapDetailData,
   type MapDetailFeatureCollection,
 } from "./map-detail/MapDetailStyle";
+import {
+  stitchTransitMemberPaths,
+  verifyTransitEndpoint,
+  type TransitEndpointMemberCandidate,
+  type VerifiedTransitEndpoint,
+} from "./map-detail/TransitRelationSemantics";
+import {
+  poiIconAssetUrl,
+  poiIconById,
+  resolvePoiIcon,
+  type PoiIconDefinition,
+} from "./poi/PoiIconRegistry";
+
+// Navigation 3D pulls in MapLibre and Three.js. Keep that renderer outside the
+// critical startup bundle so the map shell and controls can paint first.
+function scheduleNavigation3D(): void {
+  const load = () => {
+    void import("./navigation3d/bootstrap").catch((error: unknown) => {
+      console.error("ITS Maps 3D navigation failed to initialize", error);
+    });
+  };
+
+  if (document.readyState === "complete") {
+    window.setTimeout(load, 1_500);
+    return;
+  }
+
+  window.addEventListener("load", () => window.setTimeout(load, 1_500), { once: true });
+}
+
+scheduleNavigation3D();
 
 type ItsWebMcpTool = {
   name: string;
@@ -57,19 +95,10 @@ const APP_SCREENSHOT_MODULES = import.meta.glob("./ss/**/*.{png,jpg,jpeg,webp,av
   import: "default",
 }) as Record<string, string>;
 
-const POI_ASSET_MODULES = import.meta.glob("./poi/*.{png,jpg,jpeg,webp,avif}", {
-  eager: true,
-  import: "default",
-}) as Record<string, string>;
-
 const PROFILE_ASSET_MODULES = import.meta.glob("./profil/*.{png,jpg,jpeg,webp,avif}", {
   eager: true,
   import: "default",
 }) as Record<string, string>;
-
-function poiAssetUrl(fileName: string): string {
-  return Object.entries(POI_ASSET_MODULES).find(([path]) => path.endsWith(`/${fileName}`))?.[1] || ITS_APP_ICON;
-}
 
 function profileAssetUrl(index: number): string {
   return Object.entries(PROFILE_ASSET_MODULES)
@@ -83,14 +112,14 @@ function escapeMapServiceHtml(v: string): string {
 }
 
 const FREE_MAP_SERVICE_STACK = [
-  ["OpenStreetMap", "Data nama jalan, bangunan, POI, arah jalan, trotoar, dan koordinat. Lisensi data memakai ODbL dari OSMF.", "https://www.openstreetmap.org/copyright"],
-  ["CARTO Voyager", "Basemap 2D raster tanpa API key berbayar di aplikasi. Tile berbasis data OpenStreetMap dan tetap memakai atribusi CARTO/OSM.", "https://carto.com/attributions"],
-  ["Overpass API", "Query POI, bangunan bernama, jalan, arah jalan, dan fitur sekitar berdasarkan viewport. Tidak perlu API key, tetapi sebaiknya self-host bila trafik besar.", "https://overpass-api.de/"],
-  ["OSRM Project", "Routing dan estimasi rute berbasis data OpenStreetMap. Untuk produksi/traffic besar bisa self-host OSRM sendiri; dokumentasi Node/API ada di link ini.", "https://project-osrm.org/docs/v26.6.1/nodejs/api"],
-  ["MapLibre GL JS", "Renderer open-source untuk mode 3D/vector map tanpa vendor/API key berbayar.", "https://maplibre.org/"],
-  ["OpenFreeMap", "Style/vector tile 3D gratis tanpa API key untuk bangunan dan orientasi visual.", "https://openfreemap.org/"],
-  ["Leaflet", "Library open-source untuk peta 2D, marker, kontrol, dan interaksi touch/mouse.", "https://leafletjs.com/"],
-  ["Esri World Imagery", "Mode satelit memakai tile publik tanpa API key di kode aplikasi. Jika ingin 100% self-hosted, ganti sumber ini dengan server imagery milik sendiri.", "https://www.esri.com/en-us/legal/terms/full-master-agreement"],
+  ["CARTO Voyager", "Peta dasar raster untuk mode 2D/street.", "https://carto.com/attributions"],
+  ["OpenStreetMap", "Sumber data jalan, bangunan, POI, rel, sungai, dan fasilitas publik (ODbL).", "https://www.openstreetmap.org/copyright"],
+  ["OpenFreeMap", "Peta vektor OpenMapTiles/OpenStreetMap untuk mode 3D.", "https://openfreemap.org/"],
+  ["Esri World Imagery", "Peta dasar untuk mode satelit.", "https://www.esri.com/en-us/legal/terms/full-master-agreement"],
+  ["Overpass API", "Pengambilan fitur OpenStreetMap berdasarkan viewport.", "https://overpass-api.de/"],
+  ["OSRM Project", "Perhitungan rute berbasis data OpenStreetMap.", "https://project-osrm.org/docs/v26.6.1/nodejs/api"],
+  ["MapLibre GL JS", "Renderer vektor untuk mode 3D dan label sepanjang geometri.", "https://maplibre.org/"],
+  ["Leaflet", "Renderer interaktif untuk peta 2D dan overlay ITS Maps.", "https://leafletjs.com/"],
 ] as const;
 
 const AI_SERVICE_STACK = [
@@ -114,7 +143,7 @@ const PRIVACY_INFO_STACK = [
 const APP_LICENSE_INFO_STACK = [
   ["ITS Maps application", "Aplikasi, dokumentasi, dan aset ITS Maps dipublikasikan oleh Hanifa Teams untuk dashboard peta, kamera, AI, Android APK, Windows app, dan PWA.", "https://itstelkom.web.app/licence"],
   ["MIT License", "Kode sumber repository menggunakan MIT License kecuali aset/model/dependency pihak ketiga yang memiliki lisensi masing-masing.", "https://github.com/hanifasepthi/its/blob/main/LICENSE"],
-  ["Attribution", "Komponen pihak ketiga seperti Leaflet, MapLibre, CARTO/OSM, Firebase, Transformers.js, dan ONNX Runtime tetap mengikuti lisensi/persyaratan masing-masing.", "https://itstelkom.web.app/licence#credits"],
+  ["Attribution", "Komponen pihak ketiga seperti Leaflet, CARTO/OSM, MapLibre/OpenFreeMap/OpenMapTiles, Firebase, Transformers.js, dan ONNX Runtime tetap mengikuti lisensi/persyaratan masing-masing.", "https://itstelkom.web.app/licence#credits"],
 ] as const;
 
 const ABOUT_SITE_INFO_STACK = [
@@ -129,7 +158,7 @@ function mapServiceStackHtml(): string {
     <article>
       <strong>${escapeMapServiceHtml(name)}</strong>
       <p>${escapeMapServiceHtml(description)}</p>
-      <a href="${escapeMapServiceHtml(url)}" target="_blank" rel="noopener">${escapeMapServiceHtml(url.replace(/^https?:\/\//, ""))}</a>
+      <a href="${escapeMapServiceHtml(url)}" target="_blank" rel="noopener" aria-label="Buka sumber dan lisensi ${escapeMapServiceHtml(name)}">Sumber &amp; lisensi <span aria-hidden="true">↗</span></a>
     </article>
   `).join("");
 }
@@ -199,6 +228,20 @@ type TrafficCameraDataset = {
   updatedAt?: number;
   source?: string;
   path?: string;
+  aiDetections?: {
+    snapshot1?: TrafficCameraAnalysis;
+    snapshot2?: TrafficCameraAnalysis;
+  };
+};
+type TrafficCameraAnalysis = {
+  updatedAt: number;
+  objectCount: number;
+  vehicleCount: number;
+  fps: number;
+  frameWidth: number;
+  frameHeight: number;
+  modelUrl?: string;
+  detections: RfDetrDetection[];
 };
 type SnapshotHistoryItem = {
   id: string;
@@ -363,20 +406,36 @@ type TrafficState = {
   updatedAt: number;
 };
 
-type PoiKind = "hospital" | "mall" | "campus" | "parking" | "park" | "worship" | "school" | "office" | "restaurant" | "monument" | "terminal" | "station" | "shelter" | "cemetery" | "transport" | "other";
-
 type PoiRecord = {
   id: string;
-  kind: PoiKind;
+  kind: string;
+  iconId: string;
   title: string;
   description: string;
   address: string;
   imageUrl: string;
-  rating: string;
   icon: string;
+  tags: Record<string, string>;
+  sourceLabel: string;
+  sourceUrl: string;
   lat: number;
   lng: number;
 };
+
+type PoiClusterRecord = {
+  id: string;
+  lat: number;
+  lng: number;
+  pois: PoiRecord[];
+};
+
+type PoiDisplayRule = {
+  minZoom: number;
+  labelZoom: number;
+  priority: number;
+};
+
+type MapDetailProperties = Record<string, string | number | boolean>;
 
 type RoadGuideRecord = {
   id: string;
@@ -384,13 +443,19 @@ type RoadGuideRecord = {
   ref: string;
   highway: string;
   oneway: boolean;
+  onewayDirection: string;
   hasSidewalk: boolean;
   hasMedian: boolean;
+  medianType: string;
   treeLined: boolean;
   waterMedian: boolean;
   isRoundabout: boolean;
   lanes: number;
+  busLane: boolean;
+  hasCycleway: boolean;
+  pedestrianStructure: "" | "jpo" | "footbridge" | "covered_walkway";
   surface: string;
+  detail: MapDetailProperties;
   roadType: "expressway" | "avenue" | "street" | "service" | "foot";
   points: L.LatLng[];
 };
@@ -398,7 +463,16 @@ type RoadGuideRecord = {
 type RailGuideRecord = {
   id: string;
   name: string;
+  label: string;
+  ref: string;
+  operator: string;
+  network: string;
+  service: string;
+  usage: string;
+  gauge: string;
+  electrified: string;
   railway: string;
+  detail: MapDetailProperties;
   points: L.LatLng[];
 };
 
@@ -407,6 +481,74 @@ type CrossingGuideRecord = {
   name: string;
   latlng: L.LatLng;
   type: "rail" | "road";
+  bearing: number;
+  roadWidthPx?: number;
+};
+
+type TransitGuideMode = "busway" | "bus" | "mrt" | "lrt" | "tram" | "monorail" | "commuter" | "high_speed" | "train";
+
+type TransitGuideRecord = {
+  id: string;
+  name: string;
+  label: string;
+  ref: string;
+  operator: string;
+  network: string;
+  route: string;
+  from: string;
+  to: string;
+  service: string;
+  usage: string;
+  gauge: string;
+  electrified: string;
+  source: "route" | "infrastructure" | "road_lane";
+  color: string;
+  mode: TransitGuideMode;
+  relationId: string;
+  componentIndex: number;
+  componentCount: number;
+  memberCount: number;
+  verifiedFrom: VerifiedTransitEndpoint | null;
+  verifiedTo: VerifiedTransitEndpoint | null;
+  points: L.LatLng[];
+};
+
+type MapOrnamentKind =
+  | "street_lamp"
+  | "surveillance"
+  | "speed_camera"
+  | "traffic_calming"
+  | "barrier"
+  | "guardrail"
+  | "bollard"
+  | "toll_gate"
+  | "hydrant"
+  | "bench"
+  | "waste_basket"
+  | "drinking_water"
+  | "toilets"
+  | "entrance"
+  | "gate"
+  | "elevator"
+  | "escalator"
+  | "manhole"
+  | "drain_grate"
+  | "retaining_wall"
+  | "seawall"
+  | "taxi"
+  | "bicycle_parking"
+  | "charging_station"
+  | "park_and_ride";
+
+type MapOrnamentRecord = {
+  id: string;
+  name: string;
+  kind: MapOrnamentKind;
+  tagKey: string;
+  tagValue: string;
+  detail: MapDetailProperties;
+  geometry: "point" | "line";
+  points: L.LatLng[];
 };
 
 type MapPointGuideRecord = {
@@ -415,10 +557,15 @@ type MapPointGuideRecord = {
   latlng: L.LatLng;
 };
 
+type SchoolGuideRecord = MapPointGuideRecord & {
+  kind: "school" | "kindergarten" | "college" | "university";
+};
+
 type WaterGuideRecord = {
   id: string;
   name: string;
   waterway: string;
+  detail: MapDetailProperties;
   points: L.LatLng[];
 };
 
@@ -432,11 +579,14 @@ type GreenGuideRecord = {
 type RoadGuideBundle = {
   roads: RoadGuideRecord[];
   rails: RailGuideRecord[];
+  transit: TransitGuideRecord[];
   crossings: CrossingGuideRecord[];
   waterways: WaterGuideRecord[];
   greens: GreenGuideRecord[];
   signals: MapPointGuideRecord[];
   trees: MapPointGuideRecord[];
+  schools: SchoolGuideRecord[];
+  ornaments: MapOrnamentRecord[];
 };
 
 type VisionFeatureKind = "road" | "sidewalk" | "vegetation" | "water" | "building";
@@ -508,13 +658,13 @@ type ItsAndroidBridge = {
 // ─── Constants ──────────────────────────────────────────────────
 
 const DEFAULT_CONFIG: Required<AppConfig> = {
-  snapshotUrl: "./data/its-state.json",
+  snapshotUrl: "https://itstelkom-default-rtdb.asia-southeast1.firebasedatabase.app/devices.json",
   refreshMs: 10000,
 };
 
 // DEFAULT_CENTER — fallback jika tidak ada device. Akan di-override saat snapshot dimuat.
 // User harus set ITS_LATITUDE & ITS_LONGITUDE di env var controller untuk lokasi yang tepat.
-const DEFAULT_CENTER: L.LatLngExpression = [-6.180487, 106.90368];
+const DEFAULT_CENTER: L.LatLngExpression = [-6.977254, 107.631817];
 const DEFAULT_ZOOM = 17;
 const OFFLINE_AFTER_MS = 5 * 60_000;
 const HARDWARE_HEARTBEAT_STALE_MS = 30_000;
@@ -612,8 +762,7 @@ const WEBRTC_ICE_SERVERS: RTCIceServer[] = [
 
 const BEARING_STEP = 90;
 const BEARING_SNAP = 5;
-const MAPLIBRE_STYLE_URL = "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json";
-const MAPLIBRE_3D_PITCH = 60;
+const MAPLIBRE_3D_PITCH = 67;
 const VISION_SEGMENTATION_MODEL = "Xenova/segformer-b0-finetuned-ade-512-512";
 const VISION_MIN_ZOOM = 16;
 const VISION_CANVAS_SIZE = 512;
@@ -621,6 +770,53 @@ const VISION_FEATURE_CACHE_STORAGE_KEY = "its-map-vision-features:v2";
 const VISION_FEATURE_CACHE_LIMIT = 54;
 const VISION_FEATURE_CACHE_MAX_AGE = 1000 * 60 * 60 * 24 * 45;
 const LAST_DEVICE_POSITIONS_STORAGE_KEY = "its-web-device-positions:v1";
+
+function initialMapCenter(): L.LatLngExpression {
+  const valid = (lat: number, lng: number) => Number.isFinite(lat)
+    && Number.isFinite(lng)
+    && Math.abs(lat) <= 90
+    && Math.abs(lng) <= 180
+    && !(Math.abs(lat) < 0.000001 && Math.abs(lng) < 0.000001);
+  const params = new URLSearchParams(window.location.search);
+  const sharedLat = Number(params.get("lat"));
+  const sharedLng = Number(params.get("lng"));
+  if (valid(sharedLat, sharedLng)) return [sharedLat, sharedLng];
+
+  try {
+    const raw = localStorage.getItem(LAST_DEVICE_POSITIONS_STORAGE_KEY);
+    if (!raw) return DEFAULT_CENTER;
+    const positions = JSON.parse(raw) as Record<string, { lat?: unknown; lng?: unknown; updatedAt?: unknown }>;
+    const freshest = Object.values(positions)
+      .map((position) => ({
+        lat: Number(position.lat),
+        lng: Number(position.lng),
+        updatedAt: Number(position.updatedAt) || 0,
+      }))
+      .filter((position) => valid(position.lat, position.lng))
+      .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+    return freshest ? [freshest.lat, freshest.lng] : DEFAULT_CENTER;
+  } catch {
+    return DEFAULT_CENTER;
+  }
+}
+
+function initialMapZoom(): number {
+  const params = new URLSearchParams(window.location.search);
+  const rawRequested = params.get("z") ?? params.get("zoom");
+  if (rawRequested === null) return DEFAULT_ZOOM;
+  const requested = Number(rawRequested);
+  return Number.isFinite(requested) ? Math.max(3, Math.min(20, requested)) : DEFAULT_ZOOM;
+}
+
+function initialMapBearing(): number {
+  const requested = Number(new URLSearchParams(window.location.search).get("bearing"));
+  return Number.isFinite(requested) ? ((requested % 360) + 360) % 360 : 0;
+}
+
+function initialMapMode(): BaseMapMode {
+  const mode = new URLSearchParams(window.location.search).get("mode");
+  return mode === "3d" || mode === "satellite" ? mode : "street";
+}
 const SNAPSHOT_HISTORY_STORAGE_KEY = "its-map-snapshot-history:v1";
 const SNAPSHOT_HISTORY_LIMIT = 36;
 const PROFILE_MEMBER_COUNT = 4;
@@ -714,7 +910,7 @@ function staticTerminalResponse(command: string): string[] {
     }
     if (topic === "map") {
       return [
-        "Map layer: street (CARTO), satellite (Esri), 3D (MapLibre/OpenFreeMap).",
+        "Map layer: street/2D memakai CARTO Voyager melalui Leaflet; 3D memakai MapLibre/OpenFreeMap; satellite memakai Esri.",
         "Sheet mobile mengubah inset, radius, dan offset tombol agar peta tetap usable saat panel terbuka.",
       ];
     }
@@ -761,7 +957,7 @@ function staticTerminalResponse(command: string): string[] {
   if (normalized === "clear") return ["__CLEAR__"];
   if (normalized === "docs") {
     return [
-      "Dokumentasi mencakup website, PWA/native browser install, notifikasi publik, map Carto+OSM, modal download aplikasi, Windows Electron, service worker, Firebase, dan installer custom.",
+      "Dokumentasi mencakup website, PWA/native browser install, notifikasi publik, peta 2D CARTO+OSM, peta 3D OpenFreeMap, modal download aplikasi, Windows Electron, service worker, Firebase, dan installer custom.",
     ];
   }
   if (normalized === "structure") {
@@ -781,9 +977,9 @@ function staticTerminalResponse(command: string): string[] {
   }
   if (normalized === "map") {
     return [
-      "2D tile: CARTO Voyager.",
-      "Data nama jalan/bangunan/POI: OSM melalui tile dan Overpass.",
-      "3D: MapLibre/OpenFreeMap, satelit: Esri World Imagery.",
+      "2D/street: CARTO Voyager melalui Leaflet sebagai basemap utama.",
+      "Data nama jalan/bangunan/POI: OpenStreetMap melalui vector tile dan Overpass.",
+      "3D: MapLibre/OpenFreeMap; satelit: Esri World Imagery.",
       "Lisensi dibuka dari tombol Lisensi Peta di attribution.",
     ];
   }
@@ -975,8 +1171,8 @@ function docsPageHtml(): string {
 
     <section class="static-section" id="notifikasi" data-doc-anchor="Notifikasi Publik">
       <h2>Notifikasi publik</h2>
-      <p>Website mendaftarkan service worker, meminta izin notifikasi, dan service worker siap menerima push event. Saat notifikasi ditekan, link tujuan dari payload dibuka dengan benar, misalnya /new untuk catatan pembaruan.</p>
-      <button class="static-action" type="button" data-enable-notifications>Aktifkan notifikasi</button>
+      <p>Website mendaftarkan service worker dan token Firebase Cloud Messaging ke Cloudflare Worker. Push publik tetap dapat membangunkan service worker saat tab ditutup; ketika notifikasi ditekan, URL internal yang aman akan dibuka. Langganan dapat dihentikan dari tombol yang sama.</p>
+      <button class="static-action" type="button" data-enable-notifications>${publicPushOptedIn() ? "Nonaktifkan notifikasi" : "Aktifkan notifikasi"}</button>
     </section>
 
     <section class="static-section" id="build" data-doc-anchor="Build dan Deploy Firebase">
@@ -1058,6 +1254,65 @@ function renderMathIn(root: ParentNode): void {
       node.dataset.katexDone = "true";
     });
   }).catch((error) => console.warn("KaTeX lokal gagal dimuat; formula TeX tetap ditampilkan.", error));
+}
+
+/**
+ * Chat responses are normally plain text so they remain safe to type out one
+ * character at a time.  After typing finishes, promote explicit TeX tokens to
+ * KaTeX nodes.  This covers $...$, \\(...\\), \\[...\\], and the common
+ * parenthesised form (\\hat{\\sigma}) used in the DETR explanation.
+ */
+function hydrateChatMath(node: HTMLElement, text: string): void {
+  const fragment = document.createDocumentFragment();
+  const appendPlainText = (value: string) => {
+    const lines = value.split("\n");
+    lines.forEach((line, index) => {
+      if (line) fragment.appendChild(document.createTextNode(line));
+      if (index < lines.length - 1) fragment.appendChild(document.createElement("br"));
+    });
+  };
+  const appendText = (value: string) => {
+    const citationPattern = /\[S(\d+)\]/g;
+    let citationCursor = 0;
+    for (const citation of value.matchAll(citationPattern)) {
+      const start = citation.index ?? 0;
+      appendPlainText(value.slice(citationCursor, start));
+      const id = citation[1];
+      const link = document.createElement("a");
+      link.className = "its-ai-citation";
+      link.href = `#its-ai-reference-${id}`;
+      link.dataset.aiCitation = id;
+      link.textContent = citation[0];
+      link.setAttribute("aria-label", `Buka referensi ${id}`);
+      fragment.appendChild(link);
+      citationCursor = start + citation[0].length;
+    }
+    appendPlainText(value.slice(citationCursor));
+  };
+  const appendMath = (expression: string, display = false) => {
+    const math = document.createElement(display ? "div" : "span");
+    math.className = display ? "its-ai-inline-display-math" : "its-ai-inline-math";
+    if (display) math.dataset.katexDisplay = expression.trim();
+    else math.dataset.katexInline = expression.trim();
+    fragment.appendChild(math);
+  };
+
+  // Accept normal TeX delimiters as users type them: \(...\), \[...\],
+  // $...$, and the common legacy form (\hat{\sigma}). The previous pattern
+  // accidentally required two literal backslashes, leaving formulas as text.
+  const tokenPattern = /\\\[([\s\S]*?)\\\]|\\\(([\s\S]*?)\\\)|(?<!\\)\$([^$\n]+?)(?<!\\)\$|\((\\(?:[A-Za-z]+)(?:\{(?:[^{}]|\{[^{}]*\})*\}|[^)])*)\)/g;
+  let cursor = 0;
+  for (const match of text.matchAll(tokenPattern)) {
+    const start = match.index ?? 0;
+    appendText(text.slice(cursor, start));
+    const display = Boolean(match[1]);
+    const expression = match[1] || match[2] || match[3] || match[4] || "";
+    appendMath(expression, display);
+    cursor = start + match[0].length;
+  }
+  appendText(text.slice(cursor));
+  node.replaceChildren(fragment);
+  renderMathIn(node.parentElement || node);
 }
 
 function newsPageHtml(): string {
@@ -1192,15 +1447,38 @@ if (staticRoute) {
   // ─── Map init ───────────────────────────────────────────────────
 
   const map = L.map(mapRoot, {
-    center: DEFAULT_CENTER,
-    zoom: DEFAULT_ZOOM,
+    center: initialMapCenter(),
+    zoom: initialMapZoom(),
     zoomControl: false,
     preferCanvas: true,
     rotate: true,
-    bearing: 0,
+    bearing: initialMapBearing(),
     touchRotate: true,
     rotateControl: false,
   });
+
+  // The map stack is deliberate and stable across latitude/zoom sorting:
+  // base road/transit geometry < road ornaments < POI < Raspberry devices.
+  // Separate panes prevent a dense route or POI cluster from ever covering a
+  // realtime traffic controller.
+  const ROAD_ORNAMENT_PANE = "itsRoadOrnamentPane";
+  const POI_PANE = "itsPoiPane";
+  const RASPBERRY_PANE = "itsRaspberryPane";
+  const transportGuidePane = map.createPane("transportGuidePane");
+  transportGuidePane.style.zIndex = "445";
+  transportGuidePane.style.pointerEvents = "none";
+  const roadOrnamentPane = map.createPane(ROAD_ORNAMENT_PANE);
+  roadOrnamentPane.style.zIndex = "460";
+  roadOrnamentPane.style.pointerEvents = "none";
+  const poiPane = map.createPane(POI_PANE);
+  poiPane.style.zIndex = "640";
+  poiPane.style.pointerEvents = "none";
+  const raspberryPane = map.createPane(RASPBERRY_PANE);
+  raspberryPane.style.zIndex = "680";
+  raspberryPane.style.pointerEvents = "none";
+  mapRoot.dataset.layerStack = "road:425,transit:445,ornament:460,json-point:620,poi:640,raspberry:680";
+  const transportGuideRenderer = L.svg({ pane: "transportGuidePane", padding: 0.35 });
+  const roadDetailRenderer = L.svg({ pane: "overlayPane", padding: 0.35 });
 
   map.whenReady(() => {
     itsMapReady = true;
@@ -1242,15 +1520,36 @@ if (staticRoute) {
     videoAiSegments: [] as VideoAiSegment[],
     videoFullscreenStartedAt: 0,
     videoFullscreenPausedRefreshMs: 0,
-    hasCentered: false,
-    baseMode: "street" as BaseMapMode,
+    // A shared/deep-linked location is an explicit navigation request. Mark
+    // it as the initial center immediately so the first asynchronous RTDB
+    // snapshot cannot move the map back to the Raspberry device.
+    hasCentered: (() => {
+      const params = new URLSearchParams(window.location.search);
+      const lat = Number(params.get("lat"));
+      const lng = Number(params.get("lng"));
+      return Number.isFinite(lat) && Number.isFinite(lng)
+        && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+    })(),
+    baseMode: initialMapMode(),
     compassNeedle: null as SVGGElement | null,
     compassBtn: null as HTMLButtonElement | null,
     cameraPreview: null as HTMLDivElement | null,
     cameraButton: null as HTMLButtonElement | null,
     markers: new Map<string, L.Marker>(),
     poiMarkers: new Map<string, L.Marker>(),
+    poiClusterMarkers: new Map<string, L.Marker>(),
+    poiClusters: [] as PoiClusterRecord[],
     poiData: new Map<string, PoiRecord>(),
+    poiLabelVisibility: new Map<string, boolean>(),
+    poiVisible: (() => {
+      try { return localStorage.getItem("its-poi-visible:v1") !== "false"; } catch { return true; }
+    })(),
+    transitModeFilter: new Set<TransitGuideMode>(["busway", "bus", "mrt", "lrt", "tram", "monorail", "commuter", "high_speed", "train"]),
+    roadClassFilter: new Set<"major" | "street" | "foot" | "service">(["major", "street", "foot", "service"]),
+    greenVisible: true,
+    waterVisible: true,
+    cctvVisible: true,
+    poiVisibilityButton: null as HTMLButtonElement | null,
     trafficById: new Map<string, TrafficState>(),
     roadNameById: new Map<string, string>(),
     maplibreMap: null as any,
@@ -1266,6 +1565,10 @@ if (staticRoute) {
     lastUserLocation: null as { lat: number; lng: number; accuracy?: number; source: string; updatedAt: number } | null,
     userLocationWatchId: null as number | null,
     nativeLocationPollTimer: 0,
+    mapNavigationSeq: 0,
+    pendingDeviceFocusTimer: 0,
+    homeNorthTimer: 0,
+    homeNorthMoveHandler: null as (() => void) | null,
     activeModalDeviceId: null as string | null,
     activeModalPoiId: null as string | null,
     trafficRefreshTimer: 0,
@@ -1296,7 +1599,9 @@ if (staticRoute) {
     } as WebRtcRuntime,
   };
 
-  const OVERPASS_TIMEOUT_MS = 16_000;
+  // The detail query declares an 18 second server-side limit. Keep the client
+  // deadline above it so a valid response is not aborted first.
+  const OVERPASS_TIMEOUT_MS = 22_000;
   const OVERPASS_COOLDOWN_MS = 5 * 60 * 1000;
   const OVERPASS_ENDPOINTS = [
     "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
@@ -1305,8 +1610,10 @@ if (staticRoute) {
   ] as const;
   const OVERPASS_NETWORK_ENABLED = (() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("overpass") === "0") return false;
-    return true;
+    // The national PMTiles + verified shard pipeline is the production source.
+    // Direct public Overpass calls remain an explicit diagnostics option; they
+    // otherwise generate visible 504 errors and duplicate national features.
+    return params.get("overpass") === "1";
   })();
   let overpassPoiCooldownUntil = 0;
   let overpassRoadCooldownUntil = 0;
@@ -1334,24 +1641,23 @@ if (staticRoute) {
   // ─── Tile layers ────────────────────────────────────────────────
 
   const CARTO_TILE_URL = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
+  // Keep provider credits in the dedicated map-licence sheet, while restoring
+  // the application's legal/help actions that users expect in the map footer.
+  // `ITS Maps` itself is supplied by Leaflet's attribution prefix below.
   const CARTO_ATTRIBUTION = [
-    '<a class="map-license-link" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
+    '<button type="button" class="map-license-link" data-map-license aria-label="Buka sumber dan lisensi peta" title="Sumber dan lisensi peta">Lisensi Peta</button>',
     '<span class="map-license-separator" aria-hidden="true">|</span>',
-    '<a class="map-license-link" href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>',
+    '<button type="button" class="map-license-link" data-ai-license aria-label="Buka lisensi AI" title="Lisensi AI">Lisensi AI</button>',
     '<span class="map-license-separator" aria-hidden="true">|</span>',
-    '<button type="button" class="map-license-link" data-map-license>Lisensi Peta</button>',
+    '<button type="button" class="map-license-link" data-roadmap-story aria-label="Buka Roadmap ITS Maps" title="Roadmap ITS Maps">Roadmap</button>',
     '<span class="map-license-separator" aria-hidden="true">|</span>',
-    '<button type="button" class="map-license-link" data-ai-license>Lisensi AI</button>',
+    '<button type="button" class="map-license-link" data-privacy-modal aria-label="Buka kebijakan privasi" title="Kebijakan privasi">Privasi</button>',
     '<span class="map-license-separator" aria-hidden="true">|</span>',
-    '<button type="button" class="map-license-link" data-roadmap-story>Roadmap</button>',
+    '<a class="map-license-link" href="/documentation/" target="_blank" rel="noopener" aria-label="Buka dokumentasi ITS Maps">Dokumentasi</a>',
     '<span class="map-license-separator" aria-hidden="true">|</span>',
-    '<button type="button" class="map-license-link" data-privacy-modal>Privasi</button>',
+    '<button type="button" class="map-license-link" data-app-license aria-label="Buka licence aplikasi" title="Licence aplikasi">Licence</button>',
     '<span class="map-license-separator" aria-hidden="true">|</span>',
-    '<a class="map-license-link" href="https://itstelkom.web.app/documentation" target="_blank" rel="noopener">Dokumentasi</a>',
-    '<span class="map-license-separator" aria-hidden="true">|</span>',
-    '<button type="button" class="map-license-link" data-app-license>Licence</button>',
-    '<span class="map-license-separator" aria-hidden="true">|</span>',
-    '<button type="button" class="map-license-link" data-about-site>About</button>',
+    '<button type="button" class="map-license-link" data-about-site aria-label="Buka informasi tentang ITS Maps" title="Tentang ITS Maps">About</button>',
   ].join(" ");
 
   const streetLayer = L.tileLayer(CARTO_TILE_URL, {
@@ -1378,251 +1684,246 @@ if (staticRoute) {
   state.roadGuideLayer = L.layerGroup().addTo(map);
   state.visionLayer = L.layerGroup().addTo(map);
 
+  function openMapDynamicsPoint(feature: MapDetailFeatureCollection["features"][number], point: L.LatLng): void {
+    const properties = feature.properties || {};
+    const kind = String(properties.kind || "").toLowerCase();
+    if (!/(?:cctv|camera|surveillance|speed_camera)/.test(kind)) return;
+    document.getElementById("map-dynamics-camera-modal")?.remove();
+    const name = String(properties.name || properties.title || "Kamera CCTV");
+    const source = String(properties.source || "Sumber data peta");
+    const sourceUrl = usablePublicMediaUrl(String(properties.sourceUrl || ""));
+    const streamCandidate = String(properties.streamUrl || properties.publicUrl || properties.website || properties.linkLive || properties.link_live || "");
+    // Never move credentials embedded by an upstream metadata service into
+    // client HTML. A public player is rendered only for a credential-free URL.
+    const streamUrl = /^(?:https?):\/\//i.test(streamCandidate) && !/@/.test(streamCandidate)
+      ? usablePublicMediaUrl(streamCandidate)
+      : "";
+    const streamStatus = String(properties.streamStatus || (streamUrl ? "public-live" : "metadata-only"));
+    const isThirdPartyPublicPage = streamStatus === "public-page-third-party";
+    const address = String(properties.address || properties.location || "").trim();
+    const modal = document.createElement("div");
+    modal.id = "map-dynamics-camera-modal";
+    modal.className = "map-license-modal map-camera-source-modal";
+    modal.innerHTML = `
+      <section class="map-license-sheet map-camera-source-sheet" role="dialog" aria-modal="true" aria-labelledby="map-camera-source-title">
+        <div class="map-license-grip" data-swipe-handle aria-hidden="true"></div>
+        <header class="map-license-head">
+          <div><span>${isThirdPartyPublicPage ? "Lokasi CCTV terverifikasi · pemutar publik pihak ketiga" : "CCTV terverifikasi"}</span><h2 id="map-camera-source-title">${escapeHtml(name)}</h2></div>
+          <button type="button" data-camera-source-close aria-label="Tutup detail CCTV" title="Tutup"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        </header>
+        ${streamUrl ? `
+          <div class="map-camera-live-badge"><i></i> ${isThirdPartyPublicPage ? "Pemutar publik — status live mengikuti penyedia" : "LIVE dari penyedia sumber"}</div>
+          <div class="map-camera-public-player">
+            <iframe src="${escapeHtml(streamUrl)}" title="Video realtime ${escapeHtml(name)}" loading="eager" allow="autoplay; fullscreen; picture-in-picture" referrerpolicy="no-referrer"></iframe>
+          </div>
+          ${isThirdPartyPublicPage ? `<p class="map-camera-disclaimer">Halaman ini merupakan mirror publik independen. Jika penyedia menolak embed atau membatasi trafik, gunakan tombol buka pemutar.</p>` : ""}
+        ` : `
+          <div class="map-camera-unavailable">
+            <strong>Lokasi kamera tersedia, URL video publik langsung belum tersedia.</strong>
+            <p>ITS Maps tidak menebak URL dan tidak menyalin kredensial kamera ke browser. Status sumber: ${escapeHtml(streamStatus)}.</p>
+          </div>
+        `}
+        <dl class="map-camera-source-meta">
+          <div><dt>Koordinat</dt><dd>${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}</dd></div>
+          <div><dt>Sumber</dt><dd>${escapeHtml(source)}</dd></div>
+          ${address ? `<div><dt>Alamat</dt><dd>${escapeHtml(address)}</dd></div>` : ""}
+        </dl>
+        ${sourceUrl ? `<a class="map-camera-source-link" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">${isThirdPartyPublicPage ? "Buka pemutar publik" : "Buka sumber"}</a>` : ""}
+      </section>`;
+    const close = () => {
+      modal.classList.remove("open");
+      clearSidePanelWidth();
+      window.setTimeout(() => modal.remove(), 220);
+    };
+    modal.addEventListener("click", (event) => { if (event.target === modal) close(); });
+    modal.querySelector("[data-camera-source-close]")?.addEventListener("click", close);
+    document.body.appendChild(modal);
+    const sheet = modal.querySelector<HTMLElement>(".map-camera-source-sheet");
+    if (sheet) setupSheetSwipe(sheet, close);
+    requestAnimationFrame(() => {
+      modal.classList.add("open");
+      setSidePanelWidthFromSheet(sheet);
+    });
+  }
+
+  const mapDynamicsRenderer = new MapDynamicsLeafletRenderer(map, {
+    manifestUrl: "/data/map-dynamics/manifest.json",
+    paneName: "its-map-dynamics",
+    paneZIndex: 425,
+    pointPaneName: "its-map-dynamics-points",
+    pointPaneZIndex: 620,
+    moveDebounceMs: 260,
+    refreshIntervalMs: 5 * 60_000,
+    onPointClick: openMapDynamicsPoint,
+  });
+
   function applySharedLocationFromUrl(): void {
     const params = new URLSearchParams(window.location.search);
     const lat = Number(params.get("lat"));
     const lng = Number(params.get("lng"));
     if (!isValidCoordinate(lat, lng)) return;
-    const zoom = clamp(Number(params.get("z")) || DEFAULT_ZOOM, 12, 20);
-    const title = params.get("place") || "Lokasi dibagikan";
-    const latlng = L.latLng(lat, lng);
-    map.setView(latlng, zoom, { animate: false });
-    L.circleMarker(latlng, {
-      radius: 7,
-      color: "#2563eb",
-      weight: 2,
-      fillColor: "#ffffff",
-      fillOpacity: 0.9,
-    }).addTo(map).bindPopup(escapeHtml(title)).openPopup();
+    const rawRequestedZoom = params.get("z") ?? params.get("zoom");
+    const rawRequestedBearing = params.get("bearing");
+    const requestedZoom = rawRequestedZoom === null ? Number.NaN : Number(rawRequestedZoom);
+    const requestedBearing = rawRequestedBearing === null ? Number.NaN : Number(rawRequestedBearing);
+    map.setView(
+      [lat, lng],
+      Number.isFinite(requestedZoom) ? clamp(requestedZoom, 3, 20) : map.getZoom(),
+      { animate: false },
+    );
+    if (Number.isFinite(requestedBearing)) map.setBearing(requestedBearing);
+  }
+
+  function syncMapStateToUrl(): void {
+    const center = map.getCenter();
+    const params = new URLSearchParams(window.location.search);
+    // Keep the current map view shareable, matching familiar map URLs. This is
+    // replaceState (not a new history entry) so panning never floods Back/Forward.
+    params.set("lat", center.lat.toFixed(6));
+    params.set("lng", center.lng.toFixed(6));
+    params.set("z", String(Math.round(map.getZoom() * 100) / 100));
+    params.set("bearing", String(Math.round((map.getBearing?.() ?? 0) * 10) / 10));
+    params.set("mode", state.baseMode);
+    params.delete("zoom");
+    const query = params.toString();
+    const next = `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`;
+    window.history.replaceState(window.history.state, "", next);
   }
 
   map.whenReady(applySharedLocationFromUrl);
+  window.addEventListener("popstate", applySharedLocationFromUrl);
+  map.whenReady(() => {
+    const requestedMode = initialMapMode();
+    // CARTO remains the native Leaflet surface for street/2D. MapLibre is
+    // created only when an explicit 3D mode is requested.
+    void setBaseMap(requestedMode);
+  });
 
-  // ─── Scale Control ──────────────────────────────────────────────
-  // Custom scale ruler yang dinamis sesuai zoom level
-  const ScaleControl = L.Control.extend({
-    options: { position: "bottomleft" },
-    onAdd(): HTMLElement {
-      const container = L.DomUtil.create("div", "map-scale-control");
-      const updateScale = () => {
-        const bounds = map.getBounds();
-        const maxMeters = bounds.getNorthEast().distanceTo(bounds.getSouthWest()) / 2;
-        let dist: string, unit = "m";
-        if (maxMeters > 1000) {
-          dist = (maxMeters / 1000).toFixed(1);
-          unit = "km";
-        } else {
-          dist = Math.round(maxMeters).toString();
-        }
-        container.innerHTML = `<div class="scale-label">≈ ${dist} ${unit}</div>`;
-      };
-      map.on("moveend zoomend", updateScale);
-      updateScale();
+  // Leaflet derives the ruler from the current latitude and zoom, then uses a
+  // readable metric distance such as 5 m, 100 m, or 1 km.
+  L.control.scale({
+    position: "bottomleft",
+    maxWidth: 96,
+    metric: true,
+    imperial: false,
+    updateWhenIdle: false,
+  }).addTo(map);
+
+  function poiVisibilityIcon(visible: boolean): string {
+    return visible
+      ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.8"/></svg>'
+      : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.7 6.1A10.2 10.2 0 0 1 12 6c6 0 9.5 6 9.5 6a17 17 0 0 1-2.2 3M6.2 6.2C3.9 8 2.5 12 2.5 12s3.5 6 9.5 6a10 10 0 0 0 3.2-.5M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
+  }
+
+  function updatePoiVisibilityButton(): void {
+    const button = state.poiVisibilityButton;
+    if (!button) return;
+    const label = state.poiVisible ? "Sembunyikan POI" : "Tampilkan POI";
+    button.innerHTML = poiVisibilityIcon(state.poiVisible);
+    button.classList.toggle("is-active", state.poiVisible);
+    button.setAttribute("aria-pressed", String(state.poiVisible));
+    button.setAttribute("aria-label", label);
+    button.title = label;
+  }
+
+  function setPoiVisibility(visible: boolean): void {
+    state.poiVisible = visible;
+    try { localStorage.setItem("its-poi-visible:v1", String(visible)); } catch { /* Preference persistence is optional. */ }
+    updatePoiVisibilityButton();
+    renderCurrentPoiDataset();
+    if (visible) void refreshOverpassLayer(true);
+    window.dispatchEvent(new CustomEvent("its:poi-visibility", { detail: { visible } }));
+  }
+
+  const PoiVisibilityControl = L.Control.extend({
+    options: { position: "bottomright" },
+    onAdd: () => {
+      const container = L.DomUtil.create("div", "leaflet-control poi-visibility-control");
+      const button = L.DomUtil.create("button", "poi-visibility-button", container) as HTMLButtonElement;
+      button.type = "button";
+      state.poiVisibilityButton = button;
+      L.DomEvent.disableClickPropagation(container);
+      L.DomEvent.disableScrollPropagation(container);
+      L.DomEvent.on(button, "click", (event) => {
+        L.DomEvent.stop(event);
+        setPoiVisibility(!state.poiVisible);
+      });
+      updatePoiVisibilityButton();
       return container;
     },
   });
-  new ScaleControl().addTo(map);
+  new PoiVisibilityControl().addTo(map);
 
   // ─── POI Layer ─────────────────────────────────────────────────────
 
-  const POI_LIBRARY: Record<PoiKind, {
-    rating: string;
-    imageUrl: string;
-    description: string;
-  }> = {
-    hospital: {
-      rating: "4.7",
-      imageUrl: "https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&w=900&q=80",
-      description: "Layanan kesehatan dengan akses darurat, IGD, dan area parkir pasien.",
-    },
-    mall: {
-      rating: "4.5",
-      imageUrl: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=900&q=80",
-      description: "Area belanja, restoran, dan fasilitas publik yang ramai di jam sibuk.",
-    },
-    campus: {
-      rating: "4.8",
-      imageUrl: "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=900&q=80",
-      description: "Area pendidikan dengan gedung perkuliahan, kantor akademik, dan akses pejalan kaki.",
-    },
-    parking: {
-      rating: "4.2",
-      imageUrl: "https://images.unsplash.com/photo-1502877338535-766e1452684a?auto=format&fit=crop&w=900&q=80",
-      description: "Zona parkir kendaraan dengan akses masuk-keluar yang terkontrol.",
-    },
-    park: {
-      rating: "4.6",
-      imageUrl: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80",
-      description: "Ruang hijau untuk istirahat, jalan santai, dan titik orientasi di peta.",
-    },
-    worship: {
-      rating: "4.7",
-      imageUrl: "https://images.unsplash.com/photo-1514222497938-d0edb2e47c23?auto=format&fit=crop&w=900&q=80",
-      description: "Tempat ibadah dan pusat kegiatan keagamaan di sekitar lokasi.",
-    },
-    school: {
-      rating: "4.4",
-      imageUrl: "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=900&q=80",
-      description: "Fasilitas pendidikan seperti sekolah dasar, menengah, dan setara.",
-    },
-    office: {
-      rating: "4.1",
-      imageUrl: "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=900&q=80",
-      description: "Bangunan kantor, administrasi, dan fasilitas kerja.",
-    },
-    restaurant: {
-      rating: "4.3",
-      imageUrl: "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=900&q=80",
-      description: "Tempat makan, kafe, atau layanan kuliner di area sekitar.",
-    },
-    terminal: {
-      rating: "4.0",
-      imageUrl: "https://images.unsplash.com/photo-1501594907352-04cda38ebc29?auto=format&fit=crop&w=900&q=80",
-      description: "Terminal transportasi dengan akses angkutan dan titik naik-turun penumpang.",
-    },
-    station: {
-      rating: "4.1",
-      imageUrl: "https://images.unsplash.com/photo-1474487548417-781cb71495f3?auto=format&fit=crop&w=900&q=80",
-      description: "Stasiun transportasi untuk transit dan perjalanan lanjutan.",
-    },
-    shelter: {
-      rating: "4.0",
-      imageUrl: "https://images.unsplash.com/photo-1528928716400-4a2f2f6df4fc?auto=format&fit=crop&w=900&q=80",
-      description: "Shelter atau halte untuk tunggu kendaraan umum.",
-    },
-    cemetery: {
-      rating: "4.0",
-      imageUrl: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=900&q=80",
-      description: "Area pemakaman atau kuburan terdekat.",
-    },
-    transport: {
-      rating: "4.0",
-      imageUrl: "https://images.unsplash.com/photo-1519501025264-65ba15a82390?auto=format&fit=crop&w=900&q=80",
-      description: "Titik transportasi umum di sekitar lokasi.",
-    },
-    monument: {
-      rating: "4.2",
-      imageUrl: "https://images.unsplash.com/photo-1508804185872-d7badad00f7d?auto=format&fit=crop&w=900&q=80",
-      description: "Landmark, monumen, atau penanda sejarah yang mudah dikenali.",
-    },
-    other: {
-      rating: "4.0",
-      imageUrl: "https://images.unsplash.com/photo-1524429656589-6633a470097c?auto=format&fit=crop&w=900&q=80",
-      description: "Titik orientasi umum di peta.",
-    },
-  };
-
-  const POI_VISUALS: Record<PoiKind, { icon: string; color: string }> = {
-    hospital: { icon: "RS", color: "#e5484d" },
-    mall: { icon: "Mall", color: "#7c3aed" },
-    campus: { icon: "Edu", color: "#2563eb" },
-    parking: { icon: "P", color: "#64748b" },
-    park: { icon: "Park", color: "#16a34a" },
-    worship: { icon: "Ibd", color: "#d97706" },
-    school: { icon: "Sch", color: "#0f6cbd" },
-    office: { icon: "Off", color: "#0f766e" },
-    restaurant: { icon: "Eat", color: "#e11d48" },
-    terminal: { icon: "Bus", color: "#0f766e" },
-    station: { icon: "Rail", color: "#2563eb" },
-    shelter: { icon: "Stop", color: "#0284c7" },
-    cemetery: { icon: "Cem", color: "#64748b" },
-    transport: { icon: "Bus", color: "#0284c7" },
-    monument: { icon: "Mon", color: "#a16207" },
-    other: { icon: "•", color: "#475569" },
-  };
-
-  const POI_SPRITES: Partial<Record<PoiKind, { image: string; x: number; y: number }>> = {
-    worship: { image: poiAssetUrl("poi5.png"), x: 0, y: 52 },
-    monument: { image: poiAssetUrl("monas.png"), x: 50, y: 50 },
-    park: { image: poiAssetUrl("tamanminiindonesia.png"), x: 50, y: 50 },
-    campus: { image: poiAssetUrl("poi1.png"), x: 0, y: 52 },
-    school: { image: poiAssetUrl("poi1.png"), x: 0, y: 52 },
-    station: { image: poiAssetUrl("poi3.png"), x: 50, y: 52 },
-    terminal: { image: poiAssetUrl("poi3.png"), x: 50, y: 52 },
-    transport: { image: poiAssetUrl("poi3.png"), x: 50, y: 52 },
-  };
-
-  const POI_HERO_BY_KIND: Partial<Record<PoiKind, string>> = {
-    worship: poiAssetUrl("poi5.png"),
-    monument: poiAssetUrl("monas.png"),
-    park: poiAssetUrl("tamanminiindonesia.png"),
-    campus: poiAssetUrl("gedungsate.png"),
-    school: poiAssetUrl("poi1.png"),
-    station: poiAssetUrl("poi3.png"),
-    terminal: poiAssetUrl("poi3.png"),
-    transport: poiAssetUrl("poi3.png"),
-  };
-
-  function customPoiImageForTags(tags: Record<string, string>, kind: PoiKind): string {
-    const name = `${tags.name || ""} ${tags["name:id"] || ""}`.toLowerCase();
-    if (name.includes("monas") || name.includes("monumen nasional")) return poiAssetUrl("monas.png");
-    if (name.includes("gedung sate")) return poiAssetUrl("gedungsate.png");
-    if (name.includes("taman mini")) return poiAssetUrl("tamanminiindonesia.png");
-    if (name.includes("konferensi asia afrika") || name.includes("kaa")) return poiAssetUrl("musium kaa.png");
-    if (name.includes("alun-alun") || name.includes("alun alun")) return poiAssetUrl("alunalunbandung.png");
-    if (name.includes("prj") || name.includes("jakarta international expo")) return poiAssetUrl("monumenPRJB.png");
-    return POI_HERO_BY_KIND[kind] || ITS_APP_ICON;
+  function poiDefinition(poi: PoiRecord): PoiIconDefinition {
+    return poiIconById(poi.iconId);
   }
 
-  function classifyPoiKind(tags: Record<string, string>): PoiKind {
-    const amenity = tags.amenity;
-    const tourism = tags.tourism;
-    if (amenity === "hospital" || tags.healthcare === "hospital" || tags.healthcare === "clinic" || tags.healthcare === "doctor") return "hospital";
-    if (amenity === "place_of_worship" || tags.religion) return "worship";
-    if (amenity === "school" || amenity === "kindergarten" || tags.education === "school" || tags.building === "school") return "school";
-    if (amenity === "university" || amenity === "college" || tourism === "university" || tags.building === "university") return "campus";
-    if (amenity === "restaurant" || amenity === "cafe" || amenity === "fast_food") return "restaurant";
-    if (amenity === "parking" || tags.parking) return "parking";
-    if (amenity === "bus_station" || amenity === "ferry_terminal" || amenity === "terminal") return "terminal";
-    if (tags.railway === "station" || tags.public_transport === "station") return "station";
-    if (amenity === "bus_stop" || tags.highway === "bus_stop" || tags.public_transport === "platform") return "shelter";
-    if (amenity === "grave_yard" || tags.landuse === "cemetery") return "cemetery";
-    if (amenity === "public_transport" || tags.public_transport) return "transport";
-    if (amenity === "office" || tags.office || tags.craft || tags.man_made) return "office";
-    if (tags.shop) return "mall";
-    if (tags.historic === "monument" || tourism === "attraction" || tags.building === "monument" || tags.tourism === "museum") return "monument";
-    if (tags.leisure === "park" || tags.landuse === "grass" || tags.place === "neighbourhood" || tags.place === "suburb") return "park";
-    return "other";
-  }
-
-  function poiVisual(kind: PoiKind): { icon: string; color: string } {
-    return POI_VISUALS[kind] || POI_VISUALS.other;
+  function normalizePoiRecord(value: PoiRecord): PoiRecord {
+    const tags = value.tags && typeof value.tags === "object" ? value.tags : {};
+    const definition = value.iconId ? poiIconById(value.iconId) : resolvePoiIcon(tags, [value.kind]);
+    const osmMatch = String(value.id || "").match(/overpass-(node|way|relation)-(\d+)/);
+    const sourceUrl = value.sourceUrl || (osmMatch ? `https://www.openstreetmap.org/${osmMatch[1]}/${osmMatch[2]}` : "https://www.openstreetmap.org/");
+    const legacyRecord = !value.sourceLabel;
+    return {
+      ...value,
+      kind: definition.category,
+      iconId: definition.id,
+      icon: definition.glyph,
+      tags,
+      description: legacyRecord ? tags.description || tags.note || "" : value.description || "",
+      imageUrl: legacyRecord ? poiIconAssetUrl(definition, "hero") || ITS_APP_ICON : value.imageUrl || poiIconAssetUrl(definition, "hero") || ITS_APP_ICON,
+      sourceLabel: value.sourceLabel || "OpenStreetMap",
+      sourceUrl,
+    };
   }
 
   function poiMarkerSizeByZoom(): number {
-    const zoom = map.getZoom();
-    return clamp(18 + (zoom - 13) * 1.6, 18, 34);
+    // POI symbols use stable screen pixels. Zoom reveals more records and
+    // labels without making existing markers jump or grow.
+    return window.matchMedia("(max-width: 720px)").matches ? 17 : 18;
   }
 
-  function makePoiIcon(poi: PoiRecord, size: number): L.DivIcon {
-    const visual = poiVisual(poi.kind);
-    const sprite = POI_SPRITES[poi.kind];
-    const width = Math.max(size + 16, 24 + visual.icon.length * 5);
-    const hitWidth = Math.max(44, width);
-    const hitHeight = Math.max(44, size + 10);
-    const spriteHtml = sprite
-      ? `<span class="poi-marker-sprite" style="--poi-sprite:url('${escapeHtml(sprite.image)}'); --poi-sprite-x:${sprite.x}%; --poi-sprite-y:${sprite.y}%;"></span>`
-      : "";
+  function makePoiIcon(poi: PoiRecord, baseSize: number): L.DivIcon {
+    const definition = poiDefinition(poi);
+    const selected = state.activeModalPoiId === poi.id;
+    const variant = "micro";
+    const imageUrl = poiIconAssetUrl(definition, variant) || ITS_APP_ICON;
+    const size = selected
+      ? clamp(baseSize * 1.22, 20, 26)
+      : clamp(baseSize * (definition.baseSize / 18), 14, 21);
+    const label = poi.title.trim().replace(/\s+/g, " ");
+    const showLabel = state.poiLabelVisibility.get(poi.id) !== false;
+    const lineCount = Math.min(2, Math.max(1, Math.ceil(label.length / 18)));
+    const longestLine = Math.min(22, Math.max(8, Math.ceil(label.length / lineCount)));
+    const labelWidth = showLabel ? clamp(longestLine * 6.1 + 12, 52, 142) : 0;
+    // Keep the cartographic symbol small while making the marker's actual
+    // interactive box meet the 48 CSS px touch-target recommendation.
+    const hitWidth = Math.max(48, Math.round(size + (showLabel ? labelWidth + 7 : 0)));
+    const hitHeight = Math.max(48, Math.round(Math.max(size + 9, lineCount > 1 ? 31 : 24)));
     return L.divIcon({
       className: "poi-marker-icon",
-      html: `<div class="poi-marker ${sprite ? "poi-marker-custom" : ""} poi-kind-${poi.kind}" data-kind="${poi.kind}" title="${escapeHtml(poi.title)}" style="--poi-accent:${visual.color}; --poi-size:${size}px; --poi-width:${width}px;">
-    ${spriteHtml}
-    <span class="poi-marker-glyph">${escapeHtml(visual.icon)}</span>
-  </div>`,
+      html: `<div class="poi-marker ${selected ? "is-selected" : ""}" data-kind="${escapeHtml(poi.kind)}" data-icon-id="${escapeHtml(definition.id)}" title="${escapeHtml(poi.title)}" style="--poi-accent:${definition.color}; --poi-size:${Math.round(size)}px;">
+        <span class="poi-image-marker" style="width:${Math.round(size)}px;height:${Math.round(size)}px"><img src="${escapeHtml(imageUrl)}" alt="" draggable="false" width="${Math.round(size)}" height="${Math.round(size)}"></span>
+        ${showLabel ? `<span class="poi-marker-label">${escapeHtml(label)}</span>` : ""}
+      </div>`,
       iconSize: [hitWidth, hitHeight],
-      iconAnchor: [Math.round(hitWidth / 2), Math.round(hitHeight / 2)],
+      iconAnchor: [Math.round(size / 2), hitHeight],
+      popupAnchor: [0, -Math.round(size)],
     });
   }
 
   function renderPoiModal(poi: PoiRecord): string {
-    const visual = poiVisual(poi.kind);
+    const definition = poiDefinition(poi);
+    const heroImage = poi.imageUrl || poiIconAssetUrl(definition, "hero") || ITS_APP_ICON;
     return `
   <div class="sheet-panel-header poi-panel-header">
     <button class="sheet-icon-btn modal-close" data-action="close" aria-label="Kembali" title="Kembali">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
     </button>
     <div class="sheet-title-cluster">
-      <div class="sheet-place-icon" style="--poi-accent:${visual.color};">${escapeHtml(poi.icon)}</div>
+      <div class="sheet-place-icon poi-sheet-place-icon" style="--poi-accent:${definition.color};"><img src="${escapeHtml(poiIconAssetUrl(definition, "micro") || ITS_APP_ICON)}" alt=""></div>
       <div class="sheet-title-copy">
         <h2 class="modal-title">${escapeHtml(poi.title)}</h2>
         <p>${escapeHtml(poi.kind)}${poi.address ? ` · ${escapeHtml(poi.address)}` : ""}</p>
@@ -1650,10 +1951,10 @@ if (staticRoute) {
   </div>
   <div class="modal-content poi-modal-content">
     <div class="poi-hero">
-      <img class="poi-hero-image ${poi.imageUrl === ITS_APP_ICON ? "poi-hero-image-contained" : ""}" src="${escapeHtml(poi.imageUrl)}" alt="${escapeHtml(poi.title)}">
+      <img class="poi-hero-image ${heroImage === ITS_APP_ICON ? "poi-hero-image-contained" : ""}" src="${escapeHtml(heroImage)}" alt="Ilustrasi kategori ${escapeHtml(poi.kind)} untuk ${escapeHtml(poi.title)}">
       <div class="poi-hero-overlay">
         <span class="poi-badge">${escapeHtml(poi.kind.toUpperCase())}</span>
-        <span class="poi-rating">★ ${escapeHtml(poi.rating)}</span>
+        <a class="poi-source-badge" href="${escapeHtml(poi.sourceUrl)}" target="_blank" rel="noopener">${escapeHtml(poi.sourceLabel)}</a>
       </div>
     </div>
     <div class="poi-summary">
@@ -1664,7 +1965,7 @@ if (staticRoute) {
         <div class="poi-meta"><span data-field="poi-distance">-</span> • <span data-field="poi-eta">-</span></div>
       </div>
     </div>
-    <div class="poi-description">${escapeHtml(poi.description)}</div>
+    ${poi.description ? `<div class="poi-description">${escapeHtml(poi.description)}</div>` : ""}
     <div class="poi-route-summary" data-field="poi-route"></div>
     <div class="info-row"><span class="label">Kategori</span><span class="value">${escapeHtml(poi.kind)}</span></div>
     <div class="info-row"><span class="label">Koordinat</span><span class="value">${poi.lat.toFixed(6)}, ${poi.lng.toFixed(6)}</span></div>
@@ -1680,6 +1981,7 @@ if (staticRoute) {
     closeModal(false);
     closePromptPanels();
     state.activeModalPoiId = poi.id;
+    renderCurrentPoiDataset();
     const overlay = createSwipeableSheetModal(
       "m-poi-modal",
       "m-poi-sheet m-device-sheet",
@@ -1866,25 +2168,25 @@ if (staticRoute) {
       return abs < 35 ? 'Belok kiri' : 'Ke kiri';
     }
 
-    function ensureSkeletonCard(id: string, title: string, kind: string): HTMLElement {
-      const existing = poiCards.get(id);
+    function ensureSkeletonCard(poi: PoiRecord): HTMLElement {
+      const existing = poiCards.get(poi.id);
       if (existing) return existing;
       const card = document.createElement('button');
       card.type = 'button';
       card.className = 'ar-poi-card ar-skeleton-card';
-      card.dataset.poiId = id;
-      card.title = title;
+      card.dataset.poiId = poi.id;
+      card.title = poi.title;
       card.innerHTML = `
-    <div class="ar-poi-icon">${escapeHtml(poiVisual(kind as PoiKind).icon)}</div>
+    <div class="ar-poi-icon">${escapeHtml(poi.icon)}</div>
     <div class="ar-poi-distance">-</div>
   `;
       card.addEventListener('click', () => {
-        const poi = activePoiLookup.get(id);
-        if (!poi) return;
-        openPoiModal(poi);
+        const selectedPoi = activePoiLookup.get(poi.id);
+        if (!selectedPoi) return;
+        openPoiModal(selectedPoi);
       });
       poiLayerEl.appendChild(card);
-      poiCards.set(id, card);
+      poiCards.set(poi.id, card);
       return card;
     }
 
@@ -1977,7 +2279,7 @@ if (staticRoute) {
       card.classList.remove('ar-skeleton-card');
       card.title = `${poi.title} · ${dirLabel} · ${turnLabel}`;
       card.innerHTML = `
-    <div class="ar-poi-icon">${escapeHtml(poi.icon || poiVisual(poi.kind).icon)}</div>
+    <div class="ar-poi-icon">${escapeHtml(poi.icon)}</div>
     <div class="ar-poi-distance">${formatDistance(dist)}</div>
   `;
       card.classList.toggle('ar-poi-centered', centered);
@@ -2009,14 +2311,14 @@ if (staticRoute) {
       let pois = await fetchOverpassFeaturesForBounds(bounds).catch(() => [] as PoiRecord[]);
       if (token !== nearbyFetchToken) return;
       if (!pois.length) {
-        setStatus("POI OSM belum tersedia untuk area ini");
+        setStatus("POI belum tersedia untuk area ini");
       }
       pois = pois.slice(0, 12);
       activePoiLookup = new Map(pois.map((p) => [p.id, p]));
       const activePoiIds = new Set<string>();
       activePoiIds.add(currentTarget.id);
       pois.forEach((poi) => {
-        const card = ensureSkeletonCard(poi.id, poi.title, poi.kind);
+        const card = ensureSkeletonCard(poi);
         if (placePoiCard(card, poi)) activePoiIds.add(poi.id);
       });
       cleanupCollections(activePoiIds, new Set(objectCards.keys()));
@@ -2263,9 +2565,12 @@ if (staticRoute) {
   }
 
   function syncPoiMarkers(anchor: L.LatLngExpression): void {
-    if (state.maplibreMap && state.baseMode !== "satellite") {
-      for (const marker of state.poiMarkers.values()) map.removeLayer(marker);
-      state.poiMarkers.clear();
+    if (!state.poiVisible) {
+      renderCurrentPoiDataset();
+      return;
+    }
+    if (state.maplibreMap && state.baseMode === "3d") {
+      renderCurrentPoiDataset();
       return;
     }
 
@@ -2279,48 +2584,10 @@ if (staticRoute) {
     const lngDelta = Math.abs(radiusMeters / (111320 * Math.cos((lat * Math.PI) / 180)));
     const bounds = L.latLngBounds([lat - latDelta, lng - lngDelta], [lat + latDelta, lng + lngDelta]);
     void fetchOverpassFeaturesForBounds(bounds).then((pois) => {
-      const finalPois = pois;
-
-      const keep = new Set<string>();
-      const iconSize = poiMarkerSizeByZoom();
-      finalPois.filter((poi) => poi.kind !== "other").forEach((poi) => {
-        keep.add(poi.id);
-        state.poiData.set(poi.id, poi);
-        const existing = state.poiMarkers.get(poi.id);
-        const icon = makePoiIcon(poi, iconSize);
-        if (!existing) {
-          const marker = L.marker([poi.lat, poi.lng], {
-            icon,
-            interactive: true,
-            riseOnHover: true,
-            zIndexOffset: 500,
-          }).addTo(map);
-          (marker.options as any).poiId = poi.id;
-          marker.on("click", () => handlePoiClick(poi));
-          const el = marker.getElement() as HTMLElement | null;
-          if (el) el.style.display = '';
-          state.poiMarkers.set(poi.id, marker);
-          setMarkerA11y(marker, `${poi.title}, kategori ${poi.kind}. Buka detail lokasi.`);
-          return;
-        }
-        existing.setLatLng([poi.lat, poi.lng]);
-        existing.setIcon(icon);
-        existing.off("click");
-        existing.on("click", () => handlePoiClick(poi));
-        const el2 = existing.getElement() as HTMLElement | null;
-        if (el2) el2.style.display = '';
-        setMarkerA11y(existing, `${poi.title}, kategori ${poi.kind}. Buka detail lokasi.`);
-      });
-
-      // Remove stale POI markers
-      for (const [id, marker] of state.poiMarkers.entries()) {
-        id;
-        if (!keep.has(id)) {
-          map.removeLayer(marker);
-          state.poiMarkers.delete(id);
-          state.poiData.delete(id);
-        }
+      if (pois.length) {
+        mergePoiDataset(pois);
       }
+      renderCurrentPoiDataset();
     }).catch(() => { /* ignore */ });
   }
 
@@ -2372,33 +2639,100 @@ if (staticRoute) {
   }
 
   function poiPriority(poi: PoiRecord): number {
-    const weights: Record<PoiKind, number> = {
-      station: 1,
-      terminal: 2,
-      shelter: 3,
-      hospital: 4,
-      campus: 5,
-      school: 6,
-      worship: 7,
-      parking: 8,
-      mall: 9,
-      restaurant: 10,
-      office: 11,
-      park: 12,
-      monument: 13,
-      transport: 14,
-      cemetery: 15,
-      other: 20,
-    };
-    return weights[poi.kind] ?? 20;
+    return poiDisplayRule(poi).priority;
   }
 
-  function visiblePoiLimit(): number {
-    const zoom = map.getZoom();
-    if (zoom < 14) return 24;
-    if (zoom < 16) return 56;
-    if (zoom < 18) return 110;
-    return 180;
+  function poiDisplayRule(poi: PoiRecord): PoiDisplayRule {
+    const definition = poiDefinition(poi);
+    return {
+      minZoom: definition.minZoom,
+      labelZoom: definition.labelZoom,
+      priority: definition.priority,
+    };
+  }
+
+  function stablePoiHash(value: string): number {
+    let hash = 2166136261;
+    for (let index = 0; index < value.length; index += 1) {
+      hash ^= value.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+  }
+
+  function poiRenderLimitByZoom(zoom = map.getZoom()): number {
+    const flatLimit = zoom < 12
+      ? 24
+      : zoom < 14
+        ? 48
+        : zoom < 16
+          ? 80
+          : zoom < 18
+            ? 140
+            : zoom < 19
+              ? 220
+              : 320;
+    return state.baseMode === "3d" ? Math.max(24, Math.round(flatLimit * 0.55)) : flatLimit;
+  }
+
+  function poiClusterTitle(cluster: PoiClusterRecord): string {
+    const dominant = dominantPoiForCluster(cluster.pois);
+    const names = cluster.pois
+      .filter((poi) => poi.id !== dominant.id)
+      .map((poi) => poi.title.trim())
+      .filter(Boolean)
+      .slice(0, 2);
+    const suffix = cluster.pois.length > names.length + 1 ? ` +${cluster.pois.length - names.length - 1}` : "";
+    return `${dominant.title} mewakili ${cluster.pois.length} lokasi berdekatan${names.length ? ` · termasuk ${names.join(", ")}${suffix}` : ""}`;
+  }
+
+  function dominantPoiForCluster(pois: readonly PoiRecord[]): PoiRecord {
+    return [...pois].sort((left, right) => {
+      const priority = poiPriority(left) - poiPriority(right);
+      if (priority) return priority;
+      const named = Number(!left.title.trim()) - Number(!right.title.trim());
+      return named || stablePoiHash(left.id) - stablePoiHash(right.id);
+    })[0] || pois[0];
+  }
+
+  function makePoiClusterIcon(cluster: PoiClusterRecord): L.DivIcon {
+    const dominant = dominantPoiForCluster(cluster.pois);
+    const definition = poiDefinition(dominant);
+    const imageUrl = poiIconAssetUrl(definition, "micro") || ITS_APP_ICON;
+    const title = poiClusterTitle(cluster);
+    const size = Math.round(clamp(definition.baseSize * 1.15, 20, 26));
+    return L.divIcon({
+      className: "poi-cluster-icon poi-dominant-cluster-icon",
+      html: `<span class="poi-dominant-cluster-symbol" data-poi-cluster="${cluster.pois.length}" data-poi-dominant-id="${escapeHtml(dominant.id)}" role="img" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}" style="--poi-accent:${definition.color};--poi-size:${size}px"><img src="${escapeHtml(imageUrl)}" alt="" draggable="false" width="${size}" height="${size}"></span>`,
+      iconSize: [56, 56],
+      iconAnchor: [28, 28],
+    });
+  }
+
+  function poiCollisionGridSize(zoom = map.getZoom()): number {
+    if (zoom < 15) return 64;
+    if (zoom < 17) return 60;
+    return 56;
+  }
+
+  function poiGridKeysForRect(left: number, top: number, width: number, height: number, gridSize: number): string[] {
+    const minX = Math.floor(left / gridSize);
+    const maxX = Math.floor((left + width) / gridSize);
+    const minY = Math.floor(top / gridSize);
+    const maxY = Math.floor((top + height) / gridSize);
+    const keys: string[] = [];
+    for (let x = minX; x <= maxX; x += 1) {
+      for (let y = minY; y <= maxY; y += 1) keys.push(`${x}:${y}`);
+    }
+    return keys;
+  }
+
+  function poiKeysAreFree(keys: string[], occupied: Set<string>): boolean {
+    return !keys.some((key) => occupied.has(key));
+  }
+
+  function occupyPoiKeys(keys: string[], occupied: Set<string>): void {
+    keys.forEach((key) => occupied.add(key));
   }
 
   async function fetchOverpassJson(query: string, kind: "poi" | "road"): Promise<any> {
@@ -2449,45 +2783,120 @@ if (staticRoute) {
   }
 
   function rankPoisForView(pois: PoiRecord[]): PoiRecord[] {
-    const center = map.getCenter();
+    if (!state.poiVisible) return [];
     const zoom = map.getZoom();
-    const size = map.getSize();
-    const cellSize = zoom >= 18 ? 46 : zoom >= 16 ? 58 : 76;
+    const bounds = map.getBounds().pad(0.08);
+    const gridSize = poiCollisionGridSize(zoom);
     const occupied = new Set<string>();
+    const viewport = map.getSize();
+    const labelBudget = clamp(
+      Math.round((viewport.x * viewport.y) / 32_000),
+      window.matchMedia("(max-width: 720px)").matches ? 10 : 18,
+      state.baseMode === "3d" ? 24 : zoom >= 18 ? 60 : 40,
+    );
+    let renderedLabelCount = 0;
+    state.poiLabelVisibility.clear();
     const ranked = pois
       .filter((poi) => isValidCoordinate(poi.lat, poi.lng))
-      .filter((poi) => zoom >= 15 || ["station", "terminal", "hospital", "campus"].includes(poi.kind))
+      .filter((poi) => bounds.contains([poi.lat, poi.lng]))
+      .filter((poi) => zoom >= poiDisplayRule(poi).minZoom)
       .sort((a, b) => {
         const priority = poiPriority(a) - poiPriority(b);
         if (priority !== 0) return priority;
-        const da = center.distanceTo([a.lat, a.lng]);
-        const db = center.distanceTo([b.lat, b.lng]);
-        return da - db;
+        const namedA = a.title.trim() ? 0 : 1;
+        const namedB = b.title.trim() ? 0 : 1;
+        if (namedA !== namedB) return namedA - namedB;
+        return stablePoiHash(a.id) - stablePoiHash(b.id);
+      });
+    // A marker may render a small pictogram, but its interactive hit box is
+    // 48 CSS px. Keep neighbouring marker centres farther apart so Lighthouse
+    // and touch users do not see overlapping targets.
+    const clusterCellSize = zoom >= 19 ? 52 : zoom >= 17 ? 56 : zoom >= 15 ? 60 : 64;
+    const clusterBuckets = new Map<string, PoiRecord[]>();
+    ranked.forEach((poi) => {
+      const worldPoint = map.project([poi.lat, poi.lng], Math.floor(zoom));
+      const key = `${Math.floor(worldPoint.x / clusterCellSize)}:${Math.floor(worldPoint.y / clusterCellSize)}`;
+      const bucket = clusterBuckets.get(key) || [];
+      bucket.push(poi);
+      clusterBuckets.set(key, bucket);
+    });
+    const clusteredIds = new Set<string>();
+    state.poiClusters = [...clusterBuckets.values()]
+      .filter((bucket) => bucket.length > 1)
+      .map((bucket) => {
+        const sorted = [...bucket].sort((a, b) => a.id.localeCompare(b.id));
+        const dominant = dominantPoiForCluster(sorted);
+        sorted.forEach((poi) => clusteredIds.add(poi.id));
+        return {
+          id: `poi-cluster-${Math.floor(zoom)}-${stablePoiHash(sorted.map((poi) => poi.id).join("|"))}`,
+          // Use the real coordinate of the representative POI rather than a
+          // synthetic centroid, so the visible symbol always has a source.
+          lat: dominant.lat,
+          lng: dominant.lng,
+          pois: sorted,
+        };
       });
     const selected: PoiRecord[] = [];
     for (const poi of ranked) {
+      if (clusteredIds.has(poi.id)) continue;
+      if (selected.length >= poiRenderLimitByZoom(zoom)) break;
       const point = map.latLngToContainerPoint([poi.lat, poi.lng]);
-      if (point.x < -40 || point.y < -40 || point.x > size.x + 40 || point.y > size.y + 40) continue;
-      const key = `${Math.floor(point.x / cellSize)}:${Math.floor(point.y / cellSize)}`;
-      if (occupied.has(key)) continue;
-      occupied.add(key);
-      selected.push(poi);
-      if (selected.length >= visiblePoiLimit()) break;
+      const rule = poiDisplayRule(poi);
+      const wantsLabel = renderedLabelCount < labelBudget
+        && zoom >= rule.labelZoom
+        && poi.title.trim().length > 0;
+      const labelWidth = wantsLabel ? clamp(Math.min(22, Math.max(8, Math.ceil(poi.title.length / 2))) * 5.5, 44, 142) : 0;
+      const touchSize = 52;
+      const fullWidth = touchSize + (wantsLabel ? labelWidth + 9 : 0);
+      const fullHeight = Math.max(touchSize, wantsLabel && poi.title.length > 20 ? 32 : 24);
+      const fullKeys = poiGridKeysForRect(
+        point.x - touchSize / 2,
+        point.y - fullHeight / 2,
+        fullWidth,
+        fullHeight,
+        gridSize,
+      );
+      if (poiKeysAreFree(fullKeys, occupied)) {
+        occupyPoiKeys(fullKeys, occupied);
+        state.poiLabelVisibility.set(poi.id, wantsLabel);
+        if (wantsLabel) renderedLabelCount += 1;
+        selected.push(poi);
+        continue;
+      }
+
+      // Retain an interactive icon when its label would collide with another POI.
+      const iconKeys = poiGridKeysForRect(
+        point.x - touchSize / 2,
+        point.y - touchSize / 2,
+        touchSize,
+        touchSize,
+        gridSize,
+      );
+      if (poiKeysAreFree(iconKeys, occupied)) {
+        occupyPoiKeys(iconKeys, occupied);
+        state.poiLabelVisibility.set(poi.id, false);
+        selected.push(poi);
+      }
     }
     return selected;
   }
 
-  async function fetchOverpassFeaturesForBounds(bounds: L.LatLngBounds): Promise<PoiRecord[]> {
-    const zoom = Math.max(13, Math.min(18, Math.floor(map.getZoom())));
-    const center = bounds.getCenter();
-    const scale = 2 ** zoom;
-    const tileX = Math.floor(((center.lng + 180) / 360) * scale);
-    const latitude = Math.max(-85.0511, Math.min(85.0511, center.lat)) * Math.PI / 180;
-    const tileY = Math.floor((1 - Math.asinh(Math.tan(latitude)) / Math.PI) / 2 * scale);
-    const cacheKey = `poi:${zoom}:${tileX}:${tileY}`;
-    const cached = await mapDetailCache.get<PoiRecord[]>(cacheKey, 24 * 60 * 60 * 1000);
-    const validCached = cached?.length ? cached : null;
-    if (!OVERPASS_NETWORK_ENABLED || shouldSkipOverpass("poi")) return validCached || [];
+  async function fetchOverpassFeaturesForBounds(
+    bounds: L.LatLngBounds,
+    zoomValue = map.getZoom(),
+  ): Promise<PoiRecord[]> {
+    const zoom = Math.max(13, Math.min(18, Math.floor(zoomValue)));
+    const cacheKey = poiCacheKeyForBounds(bounds, zoom);
+    const freshCache = await mapDetailCache.get<PoiRecord[]>(cacheKey, 7 * 24 * 60 * 60 * 1000);
+    const storedCache = freshCache || await mapDetailCache.peek<PoiRecord[]>(cacheKey);
+    const validCached = storedCache?.length ? storedCache.map(normalizePoiRecord) : null;
+    if (freshCache && validCached) return validCached;
+    if (!OVERPASS_NETWORK_ENABLED || shouldSkipOverpass("poi")) {
+      // Keep the full cached dataset. The renderer applies semantic zoom and
+      // collision rules, so a closer zoom can reveal more POIs without a new
+      // network request.
+      return validCached || [];
+    }
     const bbox = buildOverpassBBoxString(bounds);
     // Query common POI tags; return nodes + ways + relations with center
     const q = `
@@ -2535,39 +2944,58 @@ if (staticRoute) {
     way["man_made"]["name"](${bbox});
     node["sport"]["name"](${bbox});
     way["sport"]["name"](${bbox});
+    relation["sport"]["name"](${bbox});
+    node["leisure"](${bbox});
+    way["leisure"](${bbox});
+    relation["leisure"](${bbox});
+    node["aeroway"]["name"](${bbox});
+    way["aeroway"]["name"](${bbox});
+    node["barrier"~"gate|lift_gate"](${bbox});
+    node["entrance"~"yes|main|service"](${bbox});
+    node["highway"~"traffic_signals|crossing"](${bbox});
+    node["natural"]["name"](${bbox});
+    way["natural"]["name"](${bbox});
+    relation["natural"]["name"](${bbox});
+    way["landuse"]["name"](${bbox});
+    relation["landuse"]["name"](${bbox});
     node["building"]["name"](${bbox});
     way["building"]["name"](${bbox});
   );
-  out center tags;
+  out center tags 2500;
 `;
 
     try {
       const data = await fetchOverpassJson(q, "poi");
       const elements = Array.isArray(data.elements) ? data.elements : [];
       const pois: PoiRecord[] = elements.map((el: any) => {
-        const tags = el.tags || {};
+        const tags = Object.fromEntries(Object.entries(el.tags || {}).map(([key, value]) => [key, String(value)])) as Record<string, string>;
         const name = poiExplicitNameFromTags(tags);
         const lat = el.type === 'node' ? el.lat : (el.center && el.center.lat) || el.lat || 0;
         const lng = el.type === 'node' ? el.lon : (el.center && el.center.lon) || el.lon || 0;
-        const kind = classifyPoiKind(tags);
-        const imageUrl = tags.image || tags['image:source'] || customPoiImageForTags(tags, kind);
-        const description = tags.description || tags['note'] || POI_LIBRARY[kind].description;
+        const definition = resolvePoiIcon(tags);
+        const imageUrl = tags.image || poiIconAssetUrl(definition, "hero") || ITS_APP_ICON;
+        const description = tags.description || tags.note || "";
         const address = poiAddressFromTags(tags);
         return {
           id: `overpass-${el.type}-${el.id}`,
-          kind,
+          kind: definition.category,
+          iconId: definition.id,
           title: name,
           description: description || '',
           address: address || '',
           imageUrl: imageUrl || ITS_APP_ICON,
-          rating: POI_LIBRARY[kind].rating,
-          icon: poiVisual(kind).icon,
+          icon: definition.glyph,
+          tags,
+          sourceLabel: "OpenStreetMap",
+          sourceUrl: `https://www.openstreetmap.org/${encodeURIComponent(String(el.type))}/${encodeURIComponent(String(el.id))}`,
           lat, lng,
         };
       }).filter((p: PoiRecord) => Boolean(p.title) && isValidCoordinate(p.lat, p.lng));
-      const ranked = rankPoisForView(pois);
-      if (ranked.length) void mapDetailCache.set(cacheKey, ranked);
-      return ranked;
+      // Cache the raw provider records. The viewport renderer decides which
+      // records and labels are visible at the current zoom, so cached POIs can
+      // become available as a visitor zooms in without another network call.
+      if (pois.length) void mapDetailCache.set(cacheKey, pois);
+      return pois;
     } catch (err) {
       console.debug("Overpass fetch failed; no POI is fabricated:", err);
       return validCached || [];
@@ -2581,6 +3009,181 @@ if (staticRoute) {
     if (!raw) return 0;
     const parsed = Number(String(raw).split(";")[0].trim());
     return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  const ROAD_DETAIL_STRING_TAGS: ReadonlyArray<readonly [string, string]> = [
+    ["service", "service"],
+    ["toll", "toll"],
+    ["bridge", "bridge"],
+    ["bridge:name", "bridgeName"],
+    ["bridge:structure", "bridgeStructure"],
+    ["tunnel", "tunnel"],
+    ["covered", "covered"],
+    ["footway", "footway"],
+    ["indoor", "indoor"],
+    ["bicycle", "bicycle"],
+    ["segregated", "segregated"],
+    ["ramp", "ramp"],
+    ["incline", "incline"],
+    ["lit", "lit"],
+    ["smoothness", "smoothness"],
+    ["condition", "condition"],
+    ["road_condition", "roadCondition"],
+    ["road:condition", "roadCondition"],
+    ["road_function", "roadFunction"],
+    ["road:function", "roadFunction"],
+    ["road_system", "roadSystem"],
+    ["road:system", "roadSystem"],
+    ["road_status", "roadStatus"],
+    ["road:status", "roadStatus"],
+    ["road_class", "roadClass"],
+    ["road:class", "roadClass"],
+    ["center_marking", "centerMarking"],
+    ["centre_marking", "centerMarking"],
+    ["dual_carriageway", "divided"],
+    ["divider", "divider"],
+    ["median:type", "medianType"],
+    ["busway", "busway"],
+    ["busway:left", "busway:left"],
+    ["busway:right", "busway:right"],
+    ["busway:both", "busway:both"],
+    ["lanes:psv", "lanes:psv"],
+    ["lanes:bus", "lanes:bus"],
+    ["bus:lanes", "bus:lanes"],
+    ["cycleway", "cycleway"],
+    ["cycleway:left", "cyclewayLeft"],
+    ["cycleway:right", "cyclewayRight"],
+    ["cycleway:both", "cyclewayBoth"],
+    ["cycleway:left:lane", "cyclewayLeftLane"],
+    ["cycleway:right:lane", "cyclewayRightLane"],
+    ["cycleway:both:lane", "cyclewayBothLane"],
+    ["cycleway:buffer", "cyclewayBuffer"],
+    ["access", "access"],
+    ["special_lane", "specialLane"],
+    ["lane:type", "laneType"],
+    ["motorcycle:lanes", "motorcycleLane"],
+    ["taxi:lanes", "taxiLane"],
+    ["evacuation:lane", "evacuationLane"],
+    ["reversible", "reversible"],
+    ["shoulder", "shoulder"],
+    ["sidewalk:left", "sidewalkLeft"],
+    ["sidewalk:right", "sidewalkRight"],
+    ["sidewalk:surface", "sidewalkSurface"],
+    ["kerb", "kerb"],
+    ["tactile_paving", "tactilePaving"],
+    ["parking:lane:left", "parkingLeft"],
+    ["parking:lane:right", "parkingRight"],
+    ["turn:lanes", "turnLanes"],
+    ["maxspeed", "maxspeed"],
+    ["embankment", "embankment"],
+    ["cutting", "cutting"],
+    ["ford", "ford"],
+    ["temporary", "temporary"],
+    ["tracktype", "tracktype"],
+  ];
+
+  const ROAD_DETAIL_NUMBER_TAGS: ReadonlyArray<readonly [string, string]> = [
+    ["lanes:forward", "lanesForward"],
+    ["lanes:backward", "lanesBackward"],
+    ["width", "width"],
+    ["layer", "layer"],
+  ];
+
+  const RAIL_DETAIL_STRING_TAGS: ReadonlyArray<readonly [string, string]> = [
+    ["ref", "ref"],
+    ["operator", "operator"],
+    ["network", "network"],
+    ["route", "route"],
+    ["from", "from"],
+    ["to", "to"],
+    ["service", "service"],
+    ["usage", "usage"],
+    ["gauge", "gauge"],
+    ["electrified", "electrified"],
+    ["voltage", "voltage"],
+    ["frequency", "frequency"],
+    ["highspeed", "highspeed"],
+    ["bridge", "bridge"],
+    ["tunnel", "tunnel"],
+    ["covered", "covered"],
+  ];
+
+  const RAIL_DETAIL_NUMBER_TAGS: ReadonlyArray<readonly [string, string]> = [
+    ["maxspeed", "maxspeed"],
+    ["layer", "layer"],
+  ];
+
+  const WATER_DETAIL_STRING_TAGS: ReadonlyArray<readonly [string, string]> = [
+    ["official_name", "officialName"],
+    ["alt_name", "alternateName"],
+    ["local_name", "localName"],
+    ["ref", "ref"],
+    ["operator", "operator"],
+    ["lined", "lined"],
+    ["intermittent", "intermittent"],
+    ["seasonal", "seasonal"],
+    ["tunnel", "tunnel"],
+    ["location", "location"],
+    ["corridorId", "corridorId"],
+    ["corridor_id", "corridorId"],
+    ["corridor:id", "corridorId"],
+  ];
+
+  const WATER_DETAIL_NUMBER_TAGS: ReadonlyArray<readonly [string, string]> = [
+    ["width", "width"],
+    ["layer", "layer"],
+  ];
+
+  function allowlistedDetailProperties(
+    tags: Record<string, string>,
+    stringTags: ReadonlyArray<readonly [string, string]>,
+    numberTags: ReadonlyArray<readonly [string, string]>,
+  ): MapDetailProperties {
+    const properties: MapDetailProperties = {};
+    stringTags.forEach(([source, target]) => {
+      const value = String(tags[source] || "").trim();
+      if (value && !(target in properties)) properties[target] = value;
+    });
+    numberTags.forEach(([source, target]) => {
+      if (!(source in tags)) return;
+      const value = Number(String(tags[source]).split(";")[0].trim());
+      if (Number.isFinite(value)) properties[target] = value;
+    });
+    return properties;
+  }
+
+  function roadDetailProperties(tags: Record<string, string>): MapDetailProperties {
+    return allowlistedDetailProperties(tags, ROAD_DETAIL_STRING_TAGS, ROAD_DETAIL_NUMBER_TAGS);
+  }
+
+  function railDetailProperties(tags: Record<string, string>): MapDetailProperties {
+    return allowlistedDetailProperties(tags, RAIL_DETAIL_STRING_TAGS, RAIL_DETAIL_NUMBER_TAGS);
+  }
+
+  function waterDetailProperties(tags: Record<string, string>): MapDetailProperties {
+    return allowlistedDetailProperties(tags, WATER_DETAIL_STRING_TAGS, WATER_DETAIL_NUMBER_TAGS);
+  }
+
+  function firstMappedTag(tags: Record<string, string>, keys: string[]): string {
+    for (const key of keys) {
+      const value = String(tags[key] || "").trim();
+      if (value) return value;
+    }
+    return "";
+  }
+
+  function mappedFeatureName(tags: Record<string, string>): string {
+    return firstMappedTag(tags, ["name:id", "name", "official_name", "short_name", "local_name", "alt_name"]);
+  }
+
+  function mappedWaterName(tags: Record<string, string>): string {
+    // Keep the provider's real hydrological name. A waterway ref or its type
+    // is metadata, not a substitute for a river/canal name on the map.
+    return firstMappedTag(tags, ["name:id", "name", "official_name", "local_name", "alt_name"]);
+  }
+
+  function meaningfulMappedValue(value: unknown): boolean {
+    return Boolean(String(value || "").trim() && !/^(?:0|false|no|none)$/i.test(String(value).trim()));
   }
 
   function elementGeometryPoints(el: any): L.LatLng[] {
@@ -2620,17 +3223,13 @@ if (staticRoute) {
     return url.toString();
   }
 
-  function roadNameLooksAvenue(name: string): boolean {
-    return /\b(raya|boulevard|avenue|arteri|ring road|lingkar|protokol|jenderal|perintis|kemerdekaan|sudirman|thamrin|gatot|tol)\b/i.test(name);
-  }
-
-  function detectRoadType(tags: Record<string, string>, name: string): RoadGuideRecord["roadType"] {
+  function detectRoadType(tags: Record<string, string>, _name: string): RoadGuideRecord["roadType"] {
     const highway = tags.highway || "";
-    if (/motorway|trunk/.test(highway) || /\btol\b/i.test(name)) return "expressway";
-    if (/footway|path|pedestrian|cycleway|steps/.test(highway)) return "foot";
+    if (/motorway|trunk/.test(highway)) return "expressway";
+    if (/footway|path|pedestrian|corridor|cycleway|steps/.test(highway)) return "foot";
     if (/service|track/.test(highway)) return "service";
     const lanes = numberTag(tags, "lanes") || numberTag(tags, "lanes:forward") + numberTag(tags, "lanes:backward");
-    if (/primary|secondary|tertiary/.test(highway) || lanes >= 4 || roadNameLooksAvenue(name)) return "avenue";
+    if (/primary|secondary|tertiary/.test(highway) || lanes >= 4) return "avenue";
     return "street";
   }
 
@@ -2645,38 +3244,78 @@ if (staticRoute) {
     return clamp(0.84 + (map.getZoom() - 15) * 0.12, min, max);
   }
 
+  function roadPaletteKey(road: RoadGuideRecord): string {
+    const highway = String(road.highway || road.roadType || "road").toLowerCase();
+    const service = String(road.detail.service || "").toLowerCase();
+    const surface = String(road.surface || "").toLowerCase();
+    const bridge = meaningfulMappedValue(road.detail.bridge);
+    const tunnel = meaningfulMappedValue(road.detail.tunnel) || meaningfulMappedValue(road.detail.covered);
+    const base = highway === "service" && service ? `service-${service}` : highway;
+    return [base, surface && `surface-${surface}`, bridge ? "bridge" : tunnel ? "tunnel" : ""]
+      .filter(Boolean)
+      .join("|");
+  }
+
+  function roadPaletteClassName(road: RoadGuideRecord): string {
+    return roadPaletteKey(road).replace(/[^a-z0-9_-]+/g, "-");
+  }
+
+  function roadSurfaceFamily(road: RoadGuideRecord): "paved" | "unpaved" | "rough" | "unknown" {
+    const surface = String(road.surface || "").toLowerCase();
+    if (/^(?:asphalt|concrete|concrete:lanes|concrete:plates|paved|metal|wood)$/.test(surface)) return "paved";
+    if (/^(?:cobblestone|sett|unhewn_cobblestone|paving_stones|bricks)$/.test(surface)) return "rough";
+    if (/^(?:unpaved|compacted|fine_gravel|gravel|pebblestone|ground|dirt|earth|mud|sand|grass|grass_paver)$/.test(surface)) return "unpaved";
+    return "unknown";
+  }
+
   function roadGuideStyle(road: RoadGuideRecord, casing = false): L.PolylineOptions {
-    const cls = roadRenderClass(road);
+    const highway = String(road.highway || "road").toLowerCase();
+    const surfaceFamily = roadSurfaceFamily(road);
+    const bridge = meaningfulMappedValue(road.detail.bridge);
+    const tunnel = meaningfulMappedValue(road.detail.tunnel) || meaningfulMappedValue(road.detail.covered);
+    const construction = highway === "construction";
+    const proposed = highway === "proposed";
+    const pedestrian = /^(?:footway|path|pedestrian|corridor|cycleway|steps)$/.test(highway);
+    const widths: Record<string, number> = {
+      motorway: 8.6, motorway_link: 5.6, trunk: 8, trunk_link: 5.4,
+      primary: 7.4, primary_link: 5.2, secondary: 6.6, secondary_link: 4.8,
+      tertiary: 5.8, tertiary_link: 4.5, residential: 4.3, unclassified: 4.1,
+      living_street: 4, service: 3.4, track: 2.8, road: 3.8,
+      construction: 3.7, proposed: 3.2, bus_guideway: 4.6,
+      pedestrian: 2.8, footway: 2.2, path: 2.1, corridor: 2.1, cycleway: 2.5, steps: 2.2,
+    };
+    const colors: Record<string, string> = {
+      motorway: "#f08f62", motorway_link: "#f4aa7c", trunk: "#f3a66e", trunk_link: "#f5bc8d",
+      primary: "#efc95f", primary_link: "#f3d581", secondary: "#f2dda0", secondary_link: "#f5e7bc",
+      tertiary: "#f5ebc9", tertiary_link: "#f7f0da", residential: "#ffffff", unclassified: "#fbfdff",
+      living_street: "#e7f3ea", service: "#e3e9ef", track: "#cdbb91", road: "#f8fafc",
+      construction: "#e5a94c", proposed: "#aeb8c4", bus_guideway: "#dbeafe",
+      pedestrian: "#b8ded5", footway: "#b8ded5", path: "#c4d8cf", corridor: "#d5e3ed", cycleway: "#83d3b2", steps: "#c3ceda",
+    };
     const scale = roadZoomScale();
+    const width = (widths[highway] || (road.roadType === "avenue" ? 6.6 : road.roadType === "service" ? 3.4 : 4.2)) * scale;
+    const className = `road-guide-path road-palette-${roadPaletteClassName(road)}${casing ? " road-guide-casing" : " road-guide-fill"}`;
     if (casing) {
       return {
-        color: road.roadType === "expressway" ? "#fff7d6" : cls === "major" ? "#ffffff" : "#f8fafc",
-        weight: (road.roadType === "expressway" ? 13 : cls === "major" ? 11 : cls === "foot" ? 4 : 7) * scale,
-        opacity: cls === "foot" ? 0.75 : 0.88,
+        color: bridge ? "#7b8794" : tunnel ? "#b7c0ca" : pedestrian ? "#f7fafc" : "#ffffff",
+        weight: width + (bridge ? 4.2 : pedestrian ? 1.8 : 3.2) * scale,
+        opacity: tunnel ? 0.46 : pedestrian ? 0.58 : 0.72,
+        dashArray: tunnel ? "7 6" : proposed ? "4 7" : construction ? "8 5" : undefined,
+        className,
         interactive: false,
       };
     }
-    if (cls === "foot") {
-      return {
-        color: road.hasSidewalk ? "#77d5c6" : "#b7c6d8",
-        weight: 2.2 * scale,
-        opacity: 0.84,
-        dashArray: "7 7",
-        interactive: false,
-      };
-    }
-    if (cls === "major") {
-      return {
-        color: road.roadType === "expressway" ? "#ffb36c" : road.roadType === "avenue" ? "#ffd878" : "#ffe08a",
-        weight: (road.roadType === "expressway" ? 8.4 : road.roadType === "avenue" ? 7.4 : 6.6) * scale,
-        opacity: 0.9,
-        interactive: false,
-      };
-    }
-    if (cls === "service") {
-      return { color: "#d8e1ea", weight: 3.4 * scale, opacity: 0.82, interactive: false };
-    }
-    return { color: "#ffffff", weight: 4.2 * scale, opacity: 0.92, interactive: false };
+    const mappedColor = colors[highway] || colors.road;
+    const color = surfaceFamily === "unpaved" ? "#c9aa75" : surfaceFamily === "rough" ? "#d2c1a6" : mappedColor;
+    return {
+      color,
+      weight: width,
+      opacity: tunnel ? 0.48 : pedestrian ? 0.68 : 0.76,
+      dashArray: proposed ? "4 7" : construction ? "9 6" : tunnel ? "7 6" : surfaceFamily === "unpaved" ? "5 3" : pedestrian ? "7 7" : undefined,
+      lineCap: pedestrian || construction || proposed ? "round" : "butt",
+      className,
+      interactive: false,
+    };
   }
 
   function mapLibrePitchByZoom(zoom: number): number {
@@ -2688,6 +3327,333 @@ if (staticRoute) {
     const normalized = (zoom - startZoom) / (fullZoom - startZoom);
     const smooth = normalized * normalized * (3 - 2 * normalized);
     return MAPLIBRE_3D_PITCH * smooth;
+  }
+
+  function elementMemberGeometryPaths(el: any, outerOnly = false): L.LatLng[][] {
+    const members = Array.isArray(el?.members) ? el.members : [];
+    return members
+      .filter((member: any) => !outerOnly || String(member?.role || "").toLowerCase() !== "inner")
+      .map((member: any) => elementGeometryPoints(member))
+      .filter((points: L.LatLng[]) => points.length >= 2);
+  }
+
+  function transitEndpointMemberCandidates(
+    relation: any,
+    elementIndex: ReadonlyMap<string, any>,
+  ): TransitEndpointMemberCandidate[] {
+    const members = Array.isArray(relation?.members) ? relation.members : [];
+    return members.flatMap((member: any, memberIndex: number) => {
+      const memberType = String(member?.type || "");
+      const memberRef = String(member?.ref ?? "");
+      if (!memberType || !memberRef) return [];
+      const source = elementIndex.get(`${memberType}/${memberRef}`);
+      const tags = source?.tags && typeof source.tags === "object"
+        ? source.tags as Record<string, string>
+        : member?.tags && typeof member.tags === "object"
+          ? member.tags as Record<string, string>
+          : {};
+      const lat = Number(source?.lat ?? member?.lat ?? source?.center?.lat ?? member?.center?.lat);
+      const lng = Number(source?.lon ?? member?.lon ?? source?.center?.lon ?? member?.center?.lon);
+      const mappedPoint = isValidCoordinate(lat, lng)
+        ? L.latLng(lat, lng)
+        : guideCentroid(elementGeometryPoints(source || member));
+      if (!mappedPoint) return [];
+      return [{
+        memberIndex,
+        memberType,
+        memberRef,
+        memberRole: String(member?.role || ""),
+        tags,
+        point: { lat: mappedPoint.lat, lng: mappedPoint.lng },
+      }];
+    });
+  }
+
+  function ornamentKindFromTags(tags: Record<string, string>): { kind: MapOrnamentKind; tagKey: string; tagValue: string } | null {
+    const highway = String(tags.highway || "").toLowerCase();
+    const amenity = String(tags.amenity || "").toLowerCase();
+    const barrier = String(tags.barrier || "").toLowerCase();
+    const manMade = String(tags.man_made || "").toLowerCase();
+    const parkRide = String(tags.park_ride || tags["parking:park_ride"] || "").toLowerCase();
+    if (amenity === "parking" && meaningfulMappedValue(parkRide)) return { kind: "park_and_ride", tagKey: tags.park_ride ? "park_ride" : "parking:park_ride", tagValue: parkRide };
+    if (highway === "street_lamp") return { kind: "street_lamp", tagKey: "highway", tagValue: highway };
+    if (highway === "speed_camera") return { kind: "speed_camera", tagKey: "highway", tagValue: highway };
+    if (highway === "toll_gantry") return { kind: "toll_gate", tagKey: "highway", tagValue: highway };
+    if (highway === "elevator" || amenity === "elevator") return { kind: "elevator", tagKey: highway === "elevator" ? "highway" : "amenity", tagValue: highway || amenity };
+    if (manMade === "surveillance" || meaningfulMappedValue(tags.surveillance)) return { kind: "surveillance", tagKey: manMade === "surveillance" ? "man_made" : "surveillance", tagValue: manMade === "surveillance" ? manMade : String(tags.surveillance) };
+    if (meaningfulMappedValue(tags.traffic_calming)) return { kind: "traffic_calming", tagKey: "traffic_calming", tagValue: String(tags.traffic_calming) };
+    if (barrier === "guard_rail") return { kind: "guardrail", tagKey: "barrier", tagValue: barrier };
+    if (barrier === "bollard") return { kind: "bollard", tagKey: "barrier", tagValue: barrier };
+    if (barrier === "toll_booth") return { kind: "toll_gate", tagKey: "barrier", tagValue: barrier };
+    if (/^(?:gate|lift_gate|swing_gate|sliding_gate|hampshire_gate)$/.test(barrier)) return { kind: "gate", tagKey: "barrier", tagValue: barrier };
+    if (/^(?:block|chain|cycle_barrier|jersey_barrier|cattle_grid|stile|kerb)$/.test(barrier)) return { kind: "barrier", tagKey: "barrier", tagValue: barrier };
+    if (tags.emergency === "fire_hydrant") return { kind: "hydrant", tagKey: "emergency", tagValue: tags.emergency };
+    const amenities: Partial<Record<string, MapOrnamentKind>> = {
+      bench: "bench",
+      waste_basket: "waste_basket",
+      drinking_water: "drinking_water",
+      toilets: "toilets",
+      taxi: "taxi",
+      bicycle_parking: "bicycle_parking",
+      charging_station: "charging_station",
+    };
+    if (amenities[amenity]) return { kind: amenities[amenity] as MapOrnamentKind, tagKey: "amenity", tagValue: amenity };
+    if (meaningfulMappedValue(tags.entrance)) return { kind: "entrance", tagKey: "entrance", tagValue: String(tags.entrance) };
+    if (meaningfulMappedValue(tags.escalator) || (highway === "steps" && meaningfulMappedValue(tags.conveying))) {
+      return { kind: "escalator", tagKey: meaningfulMappedValue(tags.escalator) ? "escalator" : "conveying", tagValue: String(tags.escalator || tags.conveying) };
+    }
+    if (meaningfulMappedValue(tags.manhole)) return { kind: String(tags.manhole).toLowerCase() === "drain" ? "drain_grate" : "manhole", tagKey: "manhole", tagValue: String(tags.manhole) };
+    if (meaningfulMappedValue(tags.drain)) return { kind: "drain_grate", tagKey: "drain", tagValue: String(tags.drain) };
+    if (manMade === "manhole") return { kind: "manhole", tagKey: "man_made", tagValue: manMade };
+    if (manMade === "retaining_wall" || barrier === "retaining_wall") return { kind: "retaining_wall", tagKey: manMade === "retaining_wall" ? "man_made" : "barrier", tagValue: "retaining_wall" };
+    if (manMade === "seawall") return { kind: "seawall", tagKey: "man_made", tagValue: manMade };
+    return null;
+  }
+
+  function ornamentDetailProperties(tags: Record<string, string>): MapDetailProperties {
+    const detail: MapDetailProperties = {};
+    [
+      "highway", "amenity", "barrier", "man_made", "surveillance", "surveillance:type",
+      "camera:type", "traffic_calming", "emergency", "fire_hydrant:type", "entrance", "access",
+      "conveying", "escalator", "manhole", "drain", "park_ride", "parking:park_ride",
+      "bicycle_parking", "capacity", "operator", "ref", "level",
+    ].forEach((key) => {
+      const value = String(tags[key] || "").trim();
+      if (value) detail[key] = value;
+    });
+    return detail;
+  }
+
+  function mapOrnamentFromElement(el: any, tags: Record<string, string>): MapOrnamentRecord | null {
+    const mapped = ornamentKindFromTags(tags);
+    if (!mapped) return null;
+    const sourcePoints = elementGeometryPoints(el);
+    const linearKinds = new Set<MapOrnamentKind>(["barrier", "guardrail", "retaining_wall", "seawall"]);
+    if (linearKinds.has(mapped.kind) && sourcePoints.length >= 2) {
+      return {
+        id: `ornament-${mapped.kind}-${el.type}-${el.id}`,
+        name: mappedFeatureName(tags),
+        ...mapped,
+        detail: ornamentDetailProperties(tags),
+        geometry: "line",
+        points: sourcePoints,
+      };
+    }
+    const lat = Number(el.lat ?? el.center?.lat);
+    const lng = Number(el.lon ?? el.center?.lon);
+    const point = isValidCoordinate(lat, lng) ? L.latLng(lat, lng) : guideCentroid(sourcePoints);
+    if (!point) return null;
+    return {
+      id: `ornament-${mapped.kind}-${el.type}-${el.id}`,
+      name: mappedFeatureName(tags),
+      ...mapped,
+      detail: ornamentDetailProperties(tags),
+      geometry: "point",
+      points: [point],
+    };
+  }
+
+  function hasMappedBusLane(tags: Record<string, string>): boolean {
+    const falseTokens = new Set(["", "0", "false", "no", "none"]);
+    const values = [
+      tags.busway,
+      tags["busway:left"],
+      tags["busway:right"],
+      tags["busway:both"],
+      tags["bus:lanes"],
+      tags["lanes:bus"],
+      tags["lanes:psv"],
+    ];
+    const hasActiveValue = values.some((value) => String(value || "")
+      .toLowerCase()
+      .split(/[;|]/)
+      .some((token) => !falseTokens.has(token.trim())));
+    return /^(?:busway|bus_guideway)$/.test(tags.highway || "") || hasActiveValue;
+  }
+
+  function hasMappedCycleway(tags: Record<string, string>): boolean {
+    if (tags.highway === "cycleway") return true;
+    const inactive = new Set(["", "0", "false", "no", "none", "separate"]);
+    return [
+      tags.cycleway,
+      tags["cycleway:left"],
+      tags["cycleway:right"],
+      tags["cycleway:both"],
+      tags["cycleway:left:lane"],
+      tags["cycleway:right:lane"],
+      tags["cycleway:both:lane"],
+    ].some((value) => String(value || "")
+      .toLowerCase()
+      .split(/[;|]/)
+      .some((token) => !inactive.has(token.trim())));
+  }
+
+  function pedestrianStructureFromTags(tags: Record<string, string>): RoadGuideRecord["pedestrianStructure"] {
+    if (!/^(?:footway|path|pedestrian|corridor|steps)$/.test(tags.highway || "")) return "";
+    const identity = [
+      mappedFeatureName(tags),
+      tags.bridge,
+      tags["bridge:name"],
+      tags["bridge:structure"],
+      tags.man_made,
+    ].join(" ").toLowerCase();
+    const elevated = meaningfulMappedValue(tags.bridge) || numberTag(tags, "layer") > 0;
+    if (/\bjpo\b|jembatan penyeberangan|pedestrian[_ -]?(?:overpass|bridge)/i.test(identity)) return "jpo";
+    if (elevated) return "footbridge";
+    if (meaningfulMappedValue(tags.covered) || tags.indoor === "yes") return "covered_walkway";
+    return "";
+  }
+
+  function transitModeFromTags(tags: Record<string, string>): TransitGuideMode {
+    const route = (tags.route || "").toLowerCase();
+    const railway = (tags.railway || "").toLowerCase();
+    const identity = [
+      mappedFeatureName(tags), tags.ref, tags.operator, tags.network, tags.brand,
+      tags.service, tags.usage, tags.highspeed,
+    ].join(" ").toLowerCase();
+    if (meaningfulMappedValue(tags.highspeed) || /kereta cepat|high[ -]?speed|\bwhoosh\b|\bkcic\b/.test(identity)) return "high_speed";
+    if (route === "subway" || railway === "subway" || /\bmrt\b|mass rapid transit/.test(identity)) return "mrt";
+    if (route === "light_rail" || railway === "light_rail" || /\blrt\b|light rail transit/.test(identity)) return "lrt";
+    if (railway === "monorail" || /monorail|monorel/.test(identity)) return "monorail";
+    if (route === "tram" || railway === "tram") return "tram";
+    if (/\bkrl\b|commuter(?:line)?|kai commuter|kereta komuter/.test(identity)) return "commuter";
+    if (route === "train" || /rail|narrow_gauge|funicular/.test(railway)) return "train";
+    const rapidBus = /\bbrt\b|bus rapid transit|transjakarta|trans semarang|trans jogja|trans metro bandung/.test(identity);
+    return hasMappedBusLane(tags) || (route === "bus" && rapidBus) ? "busway" : "bus";
+  }
+
+  function transitModeLabel(mode: TransitGuideMode): string {
+    if (mode === "mrt") return "MRT";
+    if (mode === "lrt") return "LRT";
+    if (mode === "busway") return "BRT";
+    if (mode === "tram") return "Tram";
+    if (mode === "monorail") return "Monorel";
+    if (mode === "commuter") return "KRL";
+    if (mode === "high_speed") return "KA Cepat";
+    if (mode === "train") return "KA";
+    return "Bus";
+  }
+
+  function transitOperationalDescriptor(tags: Record<string, string>): string {
+    const service = String(tags.service || "").toLowerCase();
+    const usage = String(tags.usage || "").toLowerCase();
+    const serviceLabels: Record<string, string> = {
+      branch: "cabang",
+      crossover: "sepur silang",
+      siding: "sepur simpang",
+      spur: "sepur cabang",
+      yard: "emplasemen",
+    };
+    const usageLabels: Record<string, string> = {
+      main: "jalur utama",
+      branch: "jalur cabang",
+      industrial: "jalur industri",
+      military: "jalur militer",
+      tourism: "jalur wisata",
+    };
+    return serviceLabels[service] || usageLabels[usage] || service || usage;
+  }
+
+  function semanticTransitLabel(
+    tags: Record<string, string>,
+    mode: TransitGuideMode,
+    source: TransitGuideRecord["source"],
+  ): string {
+    const modeLabel = transitModeLabel(mode);
+    const actualName = source === "road_lane" ? "" : mappedFeatureName(tags);
+    const genericName = /^(?:jalur\s+)?(?:kereta(?:\s+api)?|rail(?:way|road)?|train|bus(?:way)?|tram|mrt|lrt|krl|ka)$/i.test(actualName);
+    const routeRef = source === "road_lane"
+      ? firstMappedTag(tags, ["route_ref", "bus:route_ref", "public_transport:ref"])
+      : firstMappedTag(tags, ["ref", "route_ref"]);
+    const from = String(tags.from || "").trim();
+    const to = String(tags.to || "").trim();
+    const endpoints = from && to ? `${from}–${to}` : from || to;
+    const organisation = firstMappedTag(tags, ["network", "operator", "brand"]);
+    const operational = transitOperationalDescriptor(tags);
+    const gauge = String(tags.gauge || "").trim();
+    const electrified = String(tags.electrified || "").trim().toLowerCase();
+    const electricLabel = /^(?:contact_line|yes)$/.test(electrified)
+      ? "listrik aliran atas"
+      : electrified === "rail"
+        ? "listrik rel ketiga"
+        : electrified === "no"
+          ? "nonlistrik"
+          : "";
+    const technical = [gauge && `sepur ${mappedGaugeLabel(gauge)}`, electricLabel].filter(Boolean).join(" · ");
+
+    let identity = !genericName ? actualName : "";
+    if (!identity && routeRef) identity = routeRef;
+    if (!identity && endpoints) identity = endpoints;
+    if (!identity && organisation) identity = organisation;
+    if (!identity && operational) identity = operational;
+    if (!identity && source === "infrastructure" && technical) identity = technical;
+    if (!identity && source === "infrastructure" && /^(?:disused|abandoned)$/.test(tags.railway || "")) identity = "jalur nonaktif";
+    if (!identity && source === "infrastructure" && mode !== "train") identity = `jalur ${modeLabel}`;
+    // A raw rail commonly has only railway=rail. Do not turn every OSM way
+    // segment into the same misleading "Kereta Api" pill; it remains visible
+    // as infrastructure and receives a label only when OSM provides identity
+    // or operational context.
+    if (!identity) return "";
+
+    const typeAlreadyPresent = /\b(?:mrt|lrt|krl|ka|kereta|train|tram|monorail|monorel|bus|brt|transjakarta)\b/i.test(identity);
+    const refSuffix = routeRef && identity !== routeRef && !identity.toLowerCase().includes(routeRef.toLowerCase())
+      ? ` ${routeRef}`
+      : "";
+    return typeAlreadyPresent ? `${identity}${refSuffix}` : `${modeLabel}${refSuffix} · ${identity}`;
+  }
+
+  function transitColorFromTags(tags: Record<string, string>, mode: TransitGuideMode): string {
+    const mapped = String(tags.colour || tags.color || "").trim();
+    if (/^#[0-9a-f]{3,8}$/i.test(mapped)) return mapped;
+    if (/^[0-9a-f]{6}$/i.test(mapped)) return `#${mapped}`;
+    if (mode === "mrt") return "#1677ff";
+    if (mode === "lrt") return "#00a88f";
+    if (mode === "tram") return "#7c3aed";
+    if (mode === "monorail") return "#0f766e";
+    if (mode === "commuter") return "#dc2626";
+    if (mode === "high_speed") return "#d97706";
+    if (mode === "train") return "#475569";
+    if (mode === "busway") return "#e53935";
+    return "#2563eb";
+  }
+
+  function transitGuideFromTags(
+    id: string,
+    tags: Record<string, string>,
+    mode: TransitGuideMode,
+    points: L.LatLng[],
+    source: TransitGuideRecord["source"],
+    component: Partial<Pick<TransitGuideRecord, "relationId" | "componentIndex" | "componentCount" | "memberCount">> = {},
+    verifiedEndpoints: { from?: VerifiedTransitEndpoint | null; to?: VerifiedTransitEndpoint | null } = {},
+  ): TransitGuideRecord {
+    const routeRef = source === "road_lane"
+      ? firstMappedTag(tags, ["route_ref", "bus:route_ref", "public_transport:ref"])
+      : firstMappedTag(tags, ["ref", "route_ref"]);
+    return {
+      id,
+      name: source === "road_lane" ? "" : mappedFeatureName(tags),
+      label: semanticTransitLabel(tags, mode, source),
+      ref: routeRef,
+      operator: String(tags.operator || "").trim(),
+      network: String(tags.network || "").trim(),
+      route: String(tags.route || "").trim(),
+      from: String(tags.from || "").trim(),
+      to: String(tags.to || "").trim(),
+      service: String(tags.service || "").trim(),
+      usage: String(tags.usage || "").trim(),
+      gauge: String(tags.gauge || "").trim(),
+      electrified: String(tags.electrified || "").trim(),
+      source,
+      color: transitColorFromTags(tags, mode),
+      mode,
+      relationId: component.relationId || "",
+      componentIndex: component.componentIndex || 0,
+      componentCount: component.componentCount || 1,
+      memberCount: component.memberCount || 1,
+      verifiedFrom: verifiedEndpoints.from || null,
+      verifiedTo: verifiedEndpoints.to || null,
+      points,
+    };
   }
 
   function roadMedianStyle(road: RoadGuideRecord): L.PolylineOptions {
@@ -2722,6 +3688,8 @@ if (staticRoute) {
       opacity: cls === "foot" ? 0 : 0.62,
       dashArray: road.hasSidewalk ? "10 9" : "2 14",
       lineCap: "round",
+      className: "road-sidewalk-path",
+      renderer: roadDetailRenderer,
       interactive: false,
     };
   }
@@ -2818,6 +3786,75 @@ if (staticRoute) {
     };
   }
 
+  function roadCyclewayStyle(road: RoadGuideRecord, casing = false): L.PolylineOptions {
+    const scale = roadZoomScale(0.76, 1.18);
+    return {
+      color: casing ? "#ffffff" : "#24a866",
+      weight: (casing ? 4.6 : 2.4) * scale,
+      opacity: casing ? 0.86 : 0.94,
+      dashArray: road.highway === "cycleway" ? undefined : "12 8",
+      lineCap: "round",
+      interactive: false,
+    };
+  }
+
+  function roadBusLaneStyle(): L.PolylineOptions {
+    const scale = roadZoomScale(0.76, 1.18);
+    return {
+      color: "#b83a3a",
+      weight: 1.65 * scale,
+      opacity: 0.8,
+      dashArray: "6 2",
+      lineCap: "butt",
+      interactive: false,
+    };
+  }
+
+  function pedestrianBridgeStyle(casing = false): L.PolylineOptions {
+    const scale = roadZoomScale(0.76, 1.18);
+    return {
+      color: casing ? "#64748b" : "#f8fafc",
+      weight: (casing ? 7 : 4.2) * scale,
+      opacity: 0.94,
+      dashArray: undefined,
+      lineCap: "round",
+      interactive: false,
+    };
+  }
+
+  function nearestRoadMetrics(latlng: L.LatLng, roads: RoadGuideRecord[]): { bearing: number; widthPx: number } {
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    let nearestBearing = 0;
+    let nearestWidthPx = 8;
+    const target = map.latLngToLayerPoint(latlng);
+    // A mapped crossing is often a short footway. It must not become its own
+    // direction reference: the zebra bars need the bearing of the carriageway.
+    const carriageways = roads.filter((road) => !/footway|path|pedestrian|corridor|steps|cycleway|crossing/.test(road.highway));
+    (carriageways.length ? carriageways : roads).forEach((road) => {
+      for (let index = 0; index < road.points.length - 1; index += 1) {
+        const startLatLng = road.points[index];
+        const endLatLng = road.points[index + 1];
+        const start = map.latLngToLayerPoint(startLatLng);
+        const end = map.latLngToLayerPoint(endLatLng);
+        const dx = end.x - start.x;
+        const dy = end.y - start.y;
+        const lengthSquared = dx * dx + dy * dy;
+        if (lengthSquared < 0.01) continue;
+        const progress = clamp(((target.x - start.x) * dx + (target.y - start.y) * dy) / lengthSquared, 0, 1);
+        const projectedX = start.x + dx * progress;
+        const projectedY = start.y + dy * progress;
+        const distance = (target.x - projectedX) ** 2 + (target.y - projectedY) ** 2;
+        if (distance >= nearestDistance) continue;
+        nearestDistance = distance;
+        nearestBearing = computeBearing(startLatLng.lat, startLatLng.lng, endLatLng.lat, endLatLng.lng);
+        const mappedWeight = Number(roadGuideStyle(road, false).weight) || 0;
+        const laneWidth = clamp((road.lanes || 1) * 1.8, 3.8, 18);
+        nearestWidthPx = Math.max(mappedWeight, laneWidth);
+      }
+    });
+    return { bearing: nearestBearing, widthPx: nearestWidthPx };
+  }
+
   function makeRoundaboutIcon(road: RoadGuideRecord): L.DivIcon {
     const label = road.name || road.ref || "Bundaran";
     return L.divIcon({
@@ -2829,12 +3866,19 @@ if (staticRoute) {
   }
 
   function makeRailCrossingIcon(crossing: CrossingGuideRecord): L.DivIcon {
-    const size = clamp(20 + (map.getZoom() - 15) * 3, 20, 34);
+    const isRoadCrossing = crossing.type === "road";
+    const size = isRoadCrossing
+      ? clamp((crossing.roadWidthPx || 8) * 1.25, 10, 28)
+      : clamp(11 + (map.getZoom() - 16) * 1.5, 11, 16);
+    const depth = clamp(size * 0.66, 7, 15);
+    // The zebra's long axis spans across the carriageway. An unrotated CSS
+    // rectangle is east-west, already perpendicular to a northbound road.
+    const cssBearing = ((crossing.bearing + 540) % 360) - 180;
     return L.divIcon({
-      className: "rail-crossing-icon",
-      html: `<span class="rail-crossing-mark" style="--crossing-size:${size}px" title="${escapeHtml(crossing.name || "Perlintasan kereta")}"></span>`,
-      iconSize: [size, size],
-      iconAnchor: [size / 2, size / 2],
+      className: isRoadCrossing ? "road-crossing-icon" : "rail-crossing-icon",
+      html: `<span class="${isRoadCrossing ? "road-crossing-mark" : "rail-crossing-mark"}" role="img" style="--crossing-size:${size}px;--crossing-depth:${depth}px;--crossing-bearing:${cssBearing}deg" title="${escapeHtml(crossing.name || (isRoadCrossing ? "Penyeberangan" : "Perlintasan kereta"))}" aria-label="${escapeHtml(crossing.name || (isRoadCrossing ? "Penyeberangan" : "Perlintasan kereta"))}"></span>`,
+      iconSize: [48, 48],
+      iconAnchor: [24, 24],
     });
   }
 
@@ -2850,31 +3894,93 @@ if (staticRoute) {
 
   async function fetchRoadGuidesForBounds(bounds: L.LatLngBounds): Promise<RoadGuideBundle> {
     const emptyBundle = (): RoadGuideBundle => ({
-      roads: [], rails: [], crossings: [], waterways: [], greens: [], signals: [], trees: [],
+      roads: [], rails: [], transit: [], crossings: [], waterways: [], greens: [], signals: [], trees: [], schools: [], ornaments: [],
     });
     if (!OVERPASS_NETWORK_ENABLED) return emptyBundle();
     if (shouldSkipOverpass("road")) return emptyBundle();
     const bbox = buildOverpassBBoxString(bounds);
     const zoom = map.getZoom();
     const roadClasses = zoom >= 15
-      ? "motorway|trunk|primary|secondary|tertiary|residential|unclassified|service|living_street|pedestrian|footway|path|cycleway|steps"
-      : "motorway|trunk|primary|secondary|tertiary";
+      ? "motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|residential|unclassified|service|living_street|pedestrian|footway|path|corridor|cycleway|steps|track|road|construction|proposed|bus_guideway"
+      : "motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link";
     const finePointQueries = zoom >= 15
-      ? `node["railway"~"level_crossing|crossing|tram_crossing"](${bbox});\n    node["highway"="crossing"](${bbox});`
+      ? `node["railway"~"level_crossing|crossing|tram_crossing"](${bbox});\n    node["highway"="crossing"](${bbox});\n    way["highway"~"footway|path"]["footway"="crossing"](${bbox});\n    way["highway"="crossing"](${bbox});`
       : "";
     const trafficSignalQuery = zoom >= 16 ? `node["highway"="traffic_signals"](${bbox});` : "";
     const treeQueries = zoom >= 17
       ? `way["natural"="tree_row"](${bbox});${zoom >= 18 ? `\n    node["natural"="tree"](${bbox});` : ""}`
       : "";
+    const transitRelationQueries = zoom >= 13
+      ? `relation["type"="route"]["route"~"^(bus|subway|light_rail|tram|monorail|train)$"](${bbox});`
+      : "";
+    const transitStopMemberQueries = zoom >= 13
+      ? `node["public_transport"~"^(stop_position|platform)$"](${bbox});
+    way["public_transport"="platform"](${bbox});
+    node["highway"="bus_stop"](${bbox});
+    way["highway"="platform"](${bbox});
+    node["railway"~"^(station|halt|tram_stop|subway_entrance)$"](${bbox});
+    way["railway"="platform"](${bbox});`
+      : "";
+    const waterRelationQueries = zoom >= 15
+      ? `relation["type"="waterway"](${bbox});\n    relation["type"="multipolygon"]["natural"="water"](${bbox});\n    relation["type"="multipolygon"]["water"](${bbox});`
+      : "";
+    const schoolQueries = zoom >= 16
+      ? `node["amenity"~"school|kindergarten|college|university"](${bbox});\n    way["amenity"~"school|kindergarten|college|university"](${bbox});\n    relation["amenity"~"school|kindergarten|college|university"](${bbox});`
+      : "";
+    const denseOrnamentQueries = zoom >= 18
+      ? `node["highway"="street_lamp"](${bbox});
+    node["amenity"~"bench|waste_basket"](${bbox});
+    node["barrier"="bollard"](${bbox});
+    node["entrance"](${bbox});
+    node["manhole"](${bbox});
+    node["man_made"="manhole"](${bbox});
+    node["drain"](${bbox});`
+      : "";
+    const ornamentQueries = zoom >= 17
+      ? `node["man_made"="surveillance"](${bbox});
+    node["surveillance"](${bbox});
+    node["highway"="speed_camera"](${bbox});
+    node["traffic_calming"](${bbox});
+    node["barrier"~"^(block|chain|cycle_barrier|jersey_barrier|cattle_grid|stile|kerb|gate|lift_gate|swing_gate|sliding_gate|hampshire_gate|toll_booth)$"](${bbox});
+    way["barrier"~"^(guard_rail|retaining_wall)$"](${bbox});
+    node["highway"="toll_gantry"](${bbox});
+    way["highway"="toll_gantry"](${bbox});
+    node["emergency"="fire_hydrant"](${bbox});
+    node["amenity"~"^(drinking_water|toilets|taxi|bicycle_parking|charging_station|elevator)$"](${bbox});
+    way["amenity"~"^(drinking_water|toilets|taxi|bicycle_parking|charging_station|elevator)$"](${bbox});
+    node["highway"="elevator"](${bbox});
+    way["highway"="elevator"](${bbox});
+    node["escalator"](${bbox});
+    way["highway"="steps"]["conveying"](${bbox});
+    way["man_made"~"^(retaining_wall|seawall)$"](${bbox});
+    node["amenity"="parking"]["park_ride"](${bbox});
+    way["amenity"="parking"]["park_ride"](${bbox});
+    relation["amenity"="parking"]["park_ride"](${bbox});
+    node["amenity"="parking"]["parking:park_ride"](${bbox});
+    way["amenity"="parking"]["parking:park_ride"](${bbox});
+    ${denseOrnamentQueries}`
+      : "";
     const q = `
   [out:json][timeout:18];
   (
-    way["highway"~"${roadClasses}"](${bbox});
-    way["railway"~"rail|light_rail|tram|subway|narrow_gauge"](${bbox});
+    way["highway"~"^(${roadClasses})$"](${bbox});
+    way["railway"~"^(rail|light_rail|tram|subway|narrow_gauge|monorail|funicular|disused|abandoned)$"](${bbox});
+    way["highway"]["busway"](${bbox});
+    way["highway"]["busway:left"](${bbox});
+    way["highway"]["busway:right"](${bbox});
+    way["highway"]["busway:both"](${bbox});
+    way["highway"]["bus:lanes"](${bbox});
+    way["highway"]["lanes:bus"](${bbox});
+    way["highway"]["lanes:psv"](${bbox});
+    ${transitRelationQueries}
+    ${transitStopMemberQueries}
     ${finePointQueries}
     ${trafficSignalQuery}
     ${treeQueries}
-    way["waterway"~"river|stream|canal|drain|ditch"](${bbox});
+    ${schoolQueries}
+    ${ornamentQueries}
+    ${waterRelationQueries}
+    way["waterway"~"river|stream|canal|drain|ditch|tidal_channel"](${bbox});
     way["man_made"~"canal|drain|ditch"](${bbox});
     way["natural"="water"](${bbox});
     way["water"~"river|stream|canal|drain|ditch|pond|lake|reservoir"](${bbox});
@@ -2882,35 +3988,96 @@ if (staticRoute) {
     way["landuse"~"grass|forest|meadow|village_green|recreation_ground"](${bbox});
     way["natural"~"wood|grassland|scrub"](${bbox});
   );
-  out tags geom 650;
+  out tags center geom 1400;
 `;
 
     try {
       const data = await fetchOverpassJson(q, "road");
       const elements = Array.isArray(data.elements) ? data.elements : [];
+      const elementIndex = new Map<string, any>(elements.flatMap((element: any) => (
+        element?.type && element?.id !== undefined ? [[`${element.type}/${element.id}`, element] as const] : []
+      )));
       const bundle: RoadGuideBundle = {
         roads: [],
         rails: [],
+        transit: [],
         crossings: [],
         waterways: [],
         greens: [],
         signals: [],
         trees: [],
+        schools: [],
+        ornaments: [],
       };
 
       elements.forEach((el: any) => {
         const tags = el.tags || {};
+        const ornament = mapOrnamentFromElement(el, tags);
+        if (ornament) bundle.ornaments.push(ornament);
+
+        if (el.type === "relation" && tags.type === "route" && /^(bus|subway|light_rail|tram|monorail|train)$/.test(tags.route || "")) {
+          const mode = transitModeFromTags(tags);
+          const memberPaths = elementMemberGeometryPaths(el);
+          const components = stitchTransitMemberPaths(memberPaths);
+          const endpointMembers = transitEndpointMemberCandidates(el, elementIndex);
+          const verifiedEndpoints = {
+            from: verifyTransitEndpoint(String(tags.from || ""), "from", endpointMembers),
+            to: verifyTransitEndpoint(String(tags.to || ""), "to", endpointMembers),
+          };
+          components.forEach((component, componentIndex) => {
+            bundle.transit.push(transitGuideFromTags(
+              `transit-${el.id}-${componentIndex}`,
+              tags,
+              mode,
+              component.points,
+              "route",
+              {
+                relationId: String(el.id),
+                componentIndex,
+                componentCount: components.length,
+                memberCount: component.memberCount,
+              },
+              verifiedEndpoints,
+            ));
+          });
+          return;
+        }
+
+        if (el.type === "relation" && (
+          tags.type === "waterway"
+          || (tags.type === "multipolygon" && (tags.natural === "water" || Boolean(tags.water)))
+        )) {
+          elementMemberGeometryPaths(el, true).forEach((path, pathIndex) => {
+            bundle.waterways.push({
+              id: `water-${el.id}-${pathIndex}`,
+              name: mappedWaterName(tags),
+              waterway: tags.waterway || tags.water || tags.natural || "waterway",
+              detail: waterDetailProperties(tags),
+              points: path,
+            });
+          });
+          return;
+        }
 
         if (el.type === "node") {
           const lat = Number(el.lat);
           const lng = Number(el.lon);
           if (!isValidCoordinate(lat, lng)) return;
+          if (/^(school|kindergarten|college|university)$/.test(tags.amenity || "")) {
+            bundle.schools.push({
+              id: `school-${el.id}`,
+              name: tags["name:id"] || tags.name || "Zona sekolah",
+              kind: tags.amenity,
+              latlng: L.latLng(lat, lng),
+            });
+          }
           if (/level_crossing|crossing|tram_crossing/.test(tags.railway || "")) {
             bundle.crossings.push({
               id: `crossing-${el.id}`,
               name: tags.name || tags.ref || "Perlintasan kereta",
               latlng: L.latLng(lat, lng),
               type: "rail",
+              bearing: 0,
             });
           } else if (tags.highway === "traffic_signals") {
             bundle.signals.push({
@@ -2924,6 +4091,7 @@ if (staticRoute) {
               name: tags.name || tags.ref || "Penyeberangan",
               latlng: L.latLng(lat, lng),
               type: "road",
+              bearing: 0,
             });
           } else if (tags.natural === "tree") {
             bundle.trees.push({
@@ -2936,51 +4104,115 @@ if (staticRoute) {
         }
 
         const points = elementGeometryPoints(el);
+        if (/^(school|kindergarten|college|university)$/.test(tags.amenity || "")) {
+          const centerLat = Number(el.center?.lat);
+          const centerLng = Number(el.center?.lon);
+          const center = isValidCoordinate(centerLat, centerLng) ? L.latLng(centerLat, centerLng) : guideCentroid(points);
+          if (center) {
+            bundle.schools.push({
+              id: `school-${el.type}-${el.id}`,
+              name: tags["name:id"] || tags.name || "Zona sekolah",
+              kind: tags.amenity,
+              latlng: center,
+            });
+          }
+        }
         if (points.length < 2) return;
 
         if (tags.highway) {
-          const name = tags["name:id"] || tags.name || tags.ref || tags["addr:street"] || "";
+          if (tags.highway === "crossing" || tags.footway === "crossing" || tags.crossing === "marked") {
+            const center = guideCentroid(points);
+            if (center) {
+              bundle.crossings.push({
+                id: `crossing-${el.type}-${el.id}`,
+                name: tags.name || tags.ref || "Penyeberangan",
+                latlng: center,
+                type: "road",
+                bearing: 0,
+              });
+            }
+          }
+          const name = mappedFeatureName(tags) || tags.ref || tags["addr:street"] || "";
           const lanes = numberTag(tags, "lanes") || (numberTag(tags, "lanes:forward") + numberTag(tags, "lanes:backward"));
           const roadType = detectRoadType(tags, name);
           const isRoundabout = tags.junction === "roundabout" || tags.junction === "circular";
+          const onewayDirection = String(tags.oneway || (isRoundabout ? "yes" : "no")).trim().toLowerCase();
+          const oneway = isRoundabout || /^(?:-1|1|true|yes|reversible)$/.test(onewayDirection);
+          const medianType = String(tags["median:type"] || tags.median || tags.divider || "").trim();
+          const hasExplicitMedian = Boolean(medianType && !/^(?:0|false|no|none)$/i.test(medianType));
           const hasMappedMedian = tags.dual_carriageway === "yes"
-            || Boolean(tags.divider && tags.divider !== "no");
+            || Boolean(tags.divider && tags.divider !== "no")
+            || hasExplicitMedian;
           const hasMappedTreeLine = tags.tree_lined === "yes"
             || tags["tree_lined:both"] === "yes";
+          const busLane = hasMappedBusLane(tags);
+          const hasCycleway = hasMappedCycleway(tags);
+          const pedestrianStructure = pedestrianStructureFromTags(tags);
+          const detail = roadDetailProperties(tags);
+          if (onewayDirection === "reversible" && !("reversible" in detail)) detail.reversible = "yes";
+          if (hasExplicitMedian) detail.medianType = medianType;
+          if (hasCycleway && !("cycleway" in detail)) {
+            detail.cycleway = firstMappedTag(tags, ["cycleway:both", "cycleway:left", "cycleway:right"]) || "designated";
+          }
+          if (pedestrianStructure) detail.pedestrianStructure = pedestrianStructure;
+          const sidewalkTag = String(tags.sidewalk || "").trim().toLowerCase();
+          const hasAttachedSidewalk = /^(?:yes|both|left|right)$/.test(sidewalkTag)
+            || [tags["sidewalk:left"], tags["sidewalk:right"]].some((value) => /^(?:yes|designated)$/i.test(String(value || "")));
           bundle.roads.push({
             id: `road-${el.id}`,
             name,
             ref: tags.ref || "",
             highway: tags.highway,
-            oneway: tags.oneway === "yes" || tags.oneway === "1" || isRoundabout,
-            hasSidewalk: Boolean(tags.sidewalk && tags.sidewalk !== "no") || /footway|pedestrian|path/.test(tags.highway),
+            oneway,
+            onewayDirection,
+            hasSidewalk: hasAttachedSidewalk || /footway|pedestrian|path/.test(tags.highway),
             hasMedian: hasMappedMedian,
+            medianType: hasExplicitMedian ? medianType : "",
             treeLined: hasMappedTreeLine,
             waterMedian: tags.waterway === "stream" || tags.water === "canal",
             isRoundabout,
             lanes,
+            busLane,
+            hasCycleway,
+            pedestrianStructure,
             surface: tags.surface || "",
+            detail,
             roadType,
             points,
           });
+          // A tagged bus lane is road treatment, not evidence of an entire BRT
+          // route. Official route relations own the transit route layer.
           return;
         }
 
-        if (tags.railway && /rail|light_rail|tram|subway|narrow_gauge/.test(tags.railway)) {
+        if (tags.railway && /rail|light_rail|tram|subway|narrow_gauge|monorail|funicular|disused|abandoned/.test(tags.railway)) {
+          const mode = transitModeFromTags(tags);
+          const detail = railDetailProperties(tags);
           bundle.rails.push({
             id: `rail-${el.id}`,
-            name: tags.name || tags.ref || "",
+            name: mappedFeatureName(tags),
+            label: semanticTransitLabel(tags, mode, "infrastructure"),
+            ref: String(tags.ref || "").trim(),
+            operator: String(tags.operator || "").trim(),
+            network: String(tags.network || "").trim(),
+            service: String(tags.service || "").trim(),
+            usage: String(tags.usage || "").trim(),
+            gauge: String(tags.gauge || "").trim(),
+            electrified: String(tags.electrified || "").trim(),
             railway: tags.railway,
+            detail,
             points,
           });
+          bundle.transit.push(transitGuideFromTags(`transit-rail-${el.id}`, tags, mode, points, "infrastructure"));
           return;
         }
 
         if (tags.waterway || tags.natural === "water" || tags.water || /canal|drain|ditch/.test(tags.man_made || "")) {
           bundle.waterways.push({
             id: `water-${el.id}`,
-            name: tags.name || "",
+            name: mappedWaterName(tags),
             waterway: tags.waterway || tags.water || tags.natural || tags.man_made || "water",
+            detail: waterDetailProperties(tags),
             points,
           });
           return;
@@ -2996,11 +4228,302 @@ if (staticRoute) {
         }
       });
 
+      const locatedCrossings = bundle.crossings.map((crossing) => {
+        const roadMetrics = nearestRoadMetrics(crossing.latlng, bundle.roads);
+        return { ...crossing, bearing: roadMetrics.bearing, roadWidthPx: roadMetrics.widthPx };
+      });
+      bundle.crossings = locatedCrossings.filter((crossing, index, records) => records.findIndex((candidate) => (
+        candidate.type === crossing.type
+        && candidate.latlng.distanceTo(crossing.latlng) < 4
+      )) === index);
+
       return bundle;
     } catch (err) {
       console.debug("Overpass road guide failed; no map detail is fabricated:", err);
       return emptyBundle();
     }
+  }
+
+  function makeTrafficSignalGuideIcon(signal: MapPointGuideRecord): L.DivIcon {
+    const label = signal.name || "Lampu lalu lintas";
+    return L.divIcon({
+      className: "traffic-signal-guide-icon",
+      html: `<span role="img" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"><i></i><i></i><i></i></span>`,
+      iconSize: [48, 48],
+      iconAnchor: [24, 24],
+    });
+  }
+
+  function makeTreeGuideIcon(tree: MapPointGuideRecord): L.DivIcon {
+    const label = tree.name || "Pohon terpetakan";
+    return L.divIcon({
+      className: "tree-guide-icon",
+      html: `<span role="img" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"></span>`,
+      iconSize: [48, 48],
+      iconAnchor: [24, 24],
+    });
+  }
+
+  function makeSchoolZoneGuideIcon(school: SchoolGuideRecord): L.DivIcon {
+    const fallback = school.kind === "kindergarten" ? "Zona TK" : school.kind === "university" ? "Kampus" : "Zona sekolah";
+    const label = school.name || fallback;
+    return L.divIcon({
+      className: "school-zone-guide-icon",
+      html: `<span role="img" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"><i aria-hidden="true">S</i><b aria-hidden="true">${escapeHtml(label)}</b></span>`,
+      iconSize: [112, 48],
+      iconAnchor: [11, 24],
+    });
+  }
+
+  function transitGuideCasingStyle(transit: TransitGuideRecord): L.PolylineOptions {
+    const scale = roadZoomScale(0.78, 1.16);
+    return {
+      color: "#ffffff",
+      weight: (transit.mode === "busway" ? 6.6 : 5.8) * scale,
+      opacity: 0.9,
+      lineCap: "round",
+      className: `transit-guide-path transit-guide-casing transit-${transit.mode}`,
+      renderer: transportGuideRenderer,
+      interactive: false,
+    };
+  }
+
+  function transitGuideStyle(transit: TransitGuideRecord): L.PolylineOptions {
+    const scale = roadZoomScale(0.78, 1.16);
+    return {
+      color: transit.color,
+      weight: (transit.mode === "busway" ? 3.4 : 3) * scale,
+      opacity: 0.9,
+      dashArray: transit.mode === "bus" ? "8 7" : transit.mode === "train" ? "12 7" : undefined,
+      lineCap: "round",
+      className: `transit-guide-path transit-guide-line transit-${transit.mode}`,
+      renderer: transportGuideRenderer,
+      interactive: false,
+    };
+  }
+
+  function mappedGaugeLabel(gauge: string): string {
+    const numeric = Number(String(gauge || "").split(";")[0]);
+    return Number.isFinite(numeric) && numeric > 0 ? `${numeric.toLocaleString("id-ID")} mm` : gauge;
+  }
+
+  function transitDetailTitle(transit: TransitGuideRecord): string {
+    const endpoints = transit.from && transit.to ? `${transit.from}–${transit.to}` : transit.from || transit.to;
+    const electric = meaningfulMappedValue(transit.electrified) ? `elektrifikasi ${transit.electrified}` : "";
+    return [
+      transit.label,
+      endpoints,
+      transit.network,
+      transit.operator,
+      transit.service && `layanan ${transit.service}`,
+      transit.usage && `fungsi ${transit.usage}`,
+      transit.gauge && `sepur ${mappedGaugeLabel(transit.gauge)}`,
+      electric,
+    ].filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).join(" · ");
+  }
+
+  function makeTransitNameIcon(transit: TransitGuideRecord): L.DivIcon {
+    const label = transit.ref || transit.name || transit.route || transit.label;
+    const title = transitDetailTitle(transit) || label;
+    return L.divIcon({
+      className: "transit-guide-name-icon",
+      html: `<span role="img" aria-label="${escapeHtml(title)}" style="--transit-color:${escapeHtml(transit.color)}" title="${escapeHtml(title)}">${escapeHtml(label)}</span>`,
+      iconSize: [1, 1],
+      iconAnchor: [0, 0],
+    });
+  }
+
+  function makeTransitEndpointIcon(transit: TransitGuideRecord, role: "from" | "to"): L.DivIcon {
+    const label = role === "from" ? transit.from : transit.to;
+    const sourceTag = `${role}=${label}`;
+    return L.divIcon({
+      className: `transit-route-endpoint transit-route-endpoint-${role}`,
+      html: `<span title="${escapeHtml(sourceTag)}" style="display:inline-flex;align-items:center;gap:5px;transform:translate(-8px,-50%);white-space:nowrap;pointer-events:none"><i aria-hidden="true" style="display:block;width:10px;height:10px;border:2px solid #fff;border-radius:50%;background:${escapeHtml(transit.color)};box-shadow:0 1px 4px rgba(15,23,42,.38)"></i><b style="padding:2px 6px;border:1px solid rgba(148,163,184,.72);border-radius:9px;background:rgba(255,255,255,.94);color:#1f2937;font:600 10px/1.2 system-ui,sans-serif;box-shadow:0 1px 4px rgba(15,23,42,.16)">${escapeHtml(label)}</b></span>`,
+      iconSize: [1, 1],
+      iconAnchor: [0, 0],
+    });
+  }
+
+  function ornamentMinimumZoom(kind: MapOrnamentKind): number {
+    return /^(?:street_lamp|bench|waste_basket|bollard|entrance|manhole|drain_grate)$/.test(kind) ? 18 : 17;
+  }
+
+  function ornamentPriority(kind: MapOrnamentKind): number {
+    const priorities: Partial<Record<MapOrnamentKind, number>> = {
+      speed_camera: 0,
+      toll_gate: 1,
+      surveillance: 2,
+      hydrant: 3,
+      traffic_calming: 4,
+      gate: 5,
+      barrier: 6,
+      elevator: 7,
+      escalator: 8,
+      toilets: 9,
+      drinking_water: 10,
+      charging_station: 11,
+      park_and_ride: 12,
+      taxi: 13,
+      bicycle_parking: 14,
+    };
+    return priorities[kind] ?? 30;
+  }
+
+  function ornamentSymbolMarkup(kind: MapOrnamentKind): { markup: string; wide: boolean } {
+    const compactLabels: Partial<Record<MapOrnamentKind, string>> = {
+      toilets: "WC", taxi: "TX", charging_station: "EV", park_and_ride: "P+R",
+    };
+    const label = compactLabels[kind];
+    if (label) return { markup: `<b aria-hidden="true">${label}</b>`, wide: true };
+
+    // Recognisable pictograms replace the ambiguous one-letter G/B/P markers
+    // used by the first ornament pass.
+    const paths: Partial<Record<MapOrnamentKind, string>> = {
+      street_lamp: '<path d="M7 21h10M12 21V8m0 0c0-3 2-5 5-5h2v5h-7Z"/>',
+      surveillance: '<path d="m4 8 13-3 1 6-13 3-1-6Zm10.5 4.2L17 20M13 20h8"/>',
+      speed_camera: '<rect x="3" y="6" width="14" height="11" rx="2"/><circle cx="10" cy="11.5" r="3"/><path d="m17 9 4-2v9l-4-2"/>',
+      traffic_calming: '<path d="M2 16h3c1-5 3-7 7-7s6 2 7 7h3M5 19h14"/>',
+      barrier: '<path d="M3 9h18v6H3zM6 9l3 6m3-6 3 6m3-6 3 6M6 15v5m12-5v5"/>',
+      guardrail: '<path d="M2 9h20v6H2zM6 15v5m12-5v5M6 12h12"/>',
+      bollard: '<path d="M8 20h8M9 20l1-15h4l1 15M10 9h4"/>',
+      toll_gate: '<path d="M3 21V7h12v14M3 10h12M15 12h6M18 9v6"/>',
+      hydrant: '<path d="M8 21V8a4 4 0 0 1 8 0v13M6 12h12M5 9h3m8 0h3M6 21h12"/>',
+      bench: '<path d="M4 10h16v6H4zM6 16v5m12-5v5M5 7h14v3"/>',
+      waste_basket: '<path d="M7 7h10l-1 14H8L7 7Zm-2 0h14M9 4h6m-5 6v8m4-8v8"/>',
+      drinking_water: '<path d="M12 3s6 7 6 12a6 6 0 0 1-12 0c0-5 6-12 6-12Zm-3 13c1 2 2 3 4 3"/>',
+      entrance: '<path d="M4 21V3h12v18M9 12h12m-3-3 3 3-3 3M13 12h.01"/>',
+      gate: '<path d="M4 21V5h16v16M4 9h16M8 9v12m8-12v12M8 15h8"/>',
+      elevator: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="m9 9 3-3 3 3m-6 6 3 3 3-3M12 6v12"/>',
+      escalator: '<path d="M4 18h4l7-9h5M4 21h6l7-9h3M7 6h.01"/>',
+      manhole: '<circle cx="12" cy="12" r="8"/><path d="M6 12h12M8 8h8m-8 8h8"/>',
+      drain_grate: '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 7v10m4-10v10m4-10v10m4-10v10"/>',
+      retaining_wall: '<path d="M3 19h18M5 19V7h14v12M5 11h14M9 7v12m6-12v12"/>',
+      seawall: '<path d="M3 5v14m4-5c2-3 4-3 6 0s4 3 8 0M7 9c2-3 4-3 6 0s4 3 8 0"/>',
+      bicycle_parking: '<circle cx="7" cy="16" r="4"/><circle cx="18" cy="16" r="4"/><path d="m7 16 4-8 4 8m-8 0h8l-3-5h5M10 5h4"/>',
+    };
+    const path = paths[kind] || '<circle cx="12" cy="12" r="7"/><path d="M12 8v8m-4-4h8"/>';
+    return {
+      markup: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`,
+      wide: false,
+    };
+  }
+
+  function ornamentColor(kind: MapOrnamentKind): string {
+    if (/^(?:speed_camera|surveillance|toll_gate)$/.test(kind)) return "#b91c1c";
+    if (/^(?:hydrant|traffic_calming|barrier|bollard|gate)$/.test(kind)) return "#d97706";
+    if (/^(?:drinking_water|toilets|taxi|bicycle_parking|charging_station|park_and_ride)$/.test(kind)) return "#2563eb";
+    if (/^(?:entrance|elevator|escalator)$/.test(kind)) return "#7c3aed";
+    return "#475569";
+  }
+
+  function makeOrnamentIcon(ornament: MapOrnamentRecord): L.DivIcon {
+    const title = [ornament.name, `${ornament.tagKey}=${ornament.tagValue}`].filter(Boolean).join(" · ");
+    const symbol = ornamentSymbolMarkup(ornament.kind);
+    const width = symbol.wide ? 25 : 20;
+    return L.divIcon({
+      className: `map-ornament-icon map-ornament-${ornament.kind}`,
+      html: `<span role="img" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:grid;place-items:center;width:${width}px;height:20px;border:1.5px solid #fff;border-radius:6px;background:${ornamentColor(ornament.kind)};color:#fff;font:800 7px/1 system-ui,sans-serif;letter-spacing:-.25px;box-shadow:0 1px 4px rgba(15,23,42,.32);pointer-events:none">${symbol.markup}</span>`,
+      iconSize: [48, 48],
+      iconAnchor: [24, 24],
+    });
+  }
+
+  function ornamentLineStyle(ornament: MapOrnamentRecord): L.PolylineOptions {
+    const colors: Partial<Record<MapOrnamentKind, string>> = {
+      guardrail: "#64748b",
+      retaining_wall: "#8b6f55",
+      seawall: "#477d95",
+      barrier: "#6b7280",
+    };
+    return {
+      color: colors[ornament.kind] || "#64748b",
+      weight: ornament.kind === "seawall" ? 3 : 2.2,
+      opacity: 0.76,
+      dashArray: ornament.kind === "guardrail" ? "2 3" : ornament.kind === "barrier" ? "5 3" : undefined,
+      lineCap: "round",
+      className: `map-ornament-line map-ornament-${ornament.kind}`,
+      interactive: false,
+    };
+  }
+
+  function pedestrianStructureLabel(road: RoadGuideRecord): string {
+    if (!road.pedestrianStructure) return "";
+    const kind = road.pedestrianStructure === "jpo"
+      ? "JPO"
+      : road.pedestrianStructure === "footbridge"
+        ? "Jembatan pejalan kaki"
+        : "Jalur pejalan kaki tertutup";
+    const identity = road.name || road.ref;
+    if (!identity || identity.toLocaleLowerCase("id-ID").includes(kind.toLocaleLowerCase("id-ID"))) return identity || kind;
+    return `${kind} · ${identity}`;
+  }
+
+  function cyclewaySemanticLabel(road: RoadGuideRecord): string {
+    if (!road.hasCycleway || (!road.name && !road.ref)) return "";
+    return /jalur sepeda|cycleway|bikeway/i.test(road.name) ? road.name : `Jalur sepeda · ${road.name || road.ref}`;
+  }
+
+  function makeRoadSemanticNameIcon(label: string, bearing: number): L.DivIcon {
+    const readableBearing = bearing > 90 && bearing < 270 ? bearing + 180 : bearing;
+    return L.divIcon({
+      className: "road-guide-name-icon",
+      html: `<span role="img" aria-label="${escapeHtml(label)}" style="--road-label-bearing:${readableBearing}deg" title="${escapeHtml(label)}">${escapeHtml(label)}</span>`,
+      iconSize: [1, 1],
+      iconAnchor: [0, 0],
+    });
+  }
+
+  function makeWaterCharacterIcon(character: string, bearing: number, name: string): L.DivIcon {
+    let readableBearing = ((bearing + 540) % 360) - 180;
+    if (readableBearing > 90) readableBearing -= 180;
+    if (readableBearing < -90) readableBearing += 180;
+    return L.divIcon({
+      className: "water-guide-character-icon",
+      html: `<span style="--water-character-bearing:${readableBearing}deg" title="${escapeHtml(name)}">${escapeHtml(character)}</span>`,
+      iconSize: [1, 1],
+      iconAnchor: [0, 0],
+    });
+  }
+
+  function addCurvedWaterName(layer: L.LayerGroup, water: WaterGuideRecord): boolean {
+    const characters = Array.from(water.name.trim()).slice(0, 28);
+    if (characters.length < 2 || water.points.length < 2) return false;
+
+    const points = water.points.map((point) => map.latLngToLayerPoint(point));
+    const segments: Array<{ start: L.Point; end: L.Point; from: number; length: number }> = [];
+    let totalLength = 0;
+    for (let index = 0; index < points.length - 1; index += 1) {
+      const start = points[index];
+      const end = points[index + 1];
+      const length = start.distanceTo(end);
+      if (length < 1) continue;
+      segments.push({ start, end, from: totalLength, length });
+      totalLength += length;
+    }
+
+    const letterSpacing = clamp(7.2 + (map.getZoom() - 17) * 0.45, 7.2, 8.4);
+    const labelLength = characters.length * letterSpacing;
+    if (!segments.length || totalLength < labelLength + 18) return false;
+    const labelStart = (totalLength - labelLength) / 2;
+
+    characters.forEach((character, index) => {
+      if (!character.trim()) return;
+      const distance = labelStart + (index + 0.5) * letterSpacing;
+      const segment = segments.find((candidate) => distance <= candidate.from + candidate.length) || segments[segments.length - 1];
+      const progress = clamp((distance - segment.from) / segment.length, 0, 1);
+      const point = L.point(
+        segment.start.x + (segment.end.x - segment.start.x) * progress,
+        segment.start.y + (segment.end.y - segment.start.y) * progress,
+      );
+      const bearing = Math.atan2(segment.end.y - segment.start.y, segment.end.x - segment.start.x) * 180 / Math.PI;
+      L.marker(map.layerPointToLatLng(point), {
+        pane: ROAD_ORNAMENT_PANE,
+        icon: makeWaterCharacterIcon(character, bearing, water.name),
+        interactive: false,
+        zIndexOffset: 110,
+      }).addTo(layer);
+    });
+    return true;
   }
 
   function mapDetailCollection(bundle: RoadGuideBundle): MapDetailFeatureCollection {
@@ -3017,19 +4540,136 @@ if (staticRoute) {
     };
 
     bundle.roads.forEach((road) => {
-      const pedestrian = /footway|path|pedestrian|steps|cycleway/.test(road.highway);
-      addLine(road.id, pedestrian ? "pedestrian" : "road", road.name || road.ref, road.points, {
+      const pedestrian = /footway|path|pedestrian|corridor|steps|cycleway/.test(road.highway);
+      const structureLabel = pedestrianStructureLabel(road);
+      const cycleLabel = cyclewaySemanticLabel(road);
+      const semanticName = structureLabel || cycleLabel || road.name || road.ref;
+      const featureKind = road.highway === "cycleway" ? "cycleway" : pedestrian ? "pedestrian" : "road";
+      addLine(road.id, featureKind, semanticName, road.points, {
+        sourceName: road.name,
         roadType: road.roadType,
         highway: road.highway,
+        ...(road.detail || {}),
         lanes: road.lanes,
-        oneway: road.oneway,
+        oneway: road.onewayDirection || (road.oneway ? "yes" : "no"),
         surface: road.surface,
+        busLane: road.busLane,
+        hasCycleway: road.hasCycleway,
+        pedestrianStructure: road.pedestrianStructure,
       });
-      if (road.hasMedian) addLine(`${road.id}-median`, "median", "", road.points);
+      if (road.hasSidewalk && !pedestrian) {
+        addLine(`${road.id}-sidewalk`, "sidewalk", road.name || road.ref, road.points, {
+          roadType: road.roadType,
+        });
+      }
+      if (road.hasMedian) {
+        addLine(`${road.id}-median`, "median", "", road.points, road.medianType ? { medianType: road.medianType } : {});
+      }
     });
 
     bundle.rails.forEach((rail) => {
-      addLine(rail.id, "railway", rail.name, rail.points, { railway: rail.railway });
+      addLine(rail.id, "railway", rail.label, rail.points, {
+        sourceName: rail.name,
+        railway: rail.railway,
+        ref: rail.ref,
+        operator: rail.operator,
+        network: rail.network,
+        service: rail.service,
+        usage: rail.usage,
+        gauge: rail.gauge,
+        electrified: rail.electrified,
+        ...(rail.detail || {}),
+      });
+    });
+
+    bundle.transit.forEach((transit) => {
+      addLine(transit.id, "transit", transit.label, transit.points, {
+        displayLabel: transit.label,
+        sourceName: transit.name,
+        transitMode: transit.mode,
+        source: transit.source,
+        operator: transit.operator,
+        network: transit.network,
+        route: transit.route,
+        from: transit.from,
+        to: transit.to,
+        service: transit.service,
+        usage: transit.usage,
+        gauge: transit.gauge,
+        electrified: transit.electrified,
+        ref: transit.ref,
+        color: transit.color,
+        relationId: transit.relationId,
+        componentIndex: transit.componentIndex,
+        componentCount: transit.componentCount,
+        stitchedMemberCount: transit.memberCount,
+      });
+      if (transit.source !== "route" || !transit.points.length) return;
+      if (transit.componentIndex === 0 && transit.verifiedFrom) {
+        const endpoint = transit.verifiedFrom;
+        features.push({
+          type: "Feature",
+          id: `${transit.id}-from`,
+          properties: {
+            kind: "transit_endpoint",
+            name: endpoint.label,
+            endpointLabel: endpoint.label,
+            endpointRole: "from",
+            transitMode: transit.mode,
+            relationId: transit.relationId,
+            endpointMemberType: endpoint.memberType,
+            endpointMemberRef: endpoint.memberRef,
+            endpointMemberRole: endpoint.memberRole,
+            endpointVerification: endpoint.verification,
+            color: transit.color,
+            confidence: "verified",
+          },
+          geometry: { type: "Point", coordinates: [endpoint.point.lng, endpoint.point.lat] },
+        });
+      }
+      if (transit.componentIndex === transit.componentCount - 1 && transit.verifiedTo) {
+        const endpoint = transit.verifiedTo;
+        features.push({
+          type: "Feature",
+          id: `${transit.id}-to`,
+          properties: {
+            kind: "transit_endpoint",
+            name: endpoint.label,
+            endpointLabel: endpoint.label,
+            endpointRole: "to",
+            transitMode: transit.mode,
+            relationId: transit.relationId,
+            endpointMemberType: endpoint.memberType,
+            endpointMemberRef: endpoint.memberRef,
+            endpointMemberRole: endpoint.memberRole,
+            endpointVerification: endpoint.verification,
+            color: transit.color,
+            confidence: "verified",
+          },
+          geometry: { type: "Point", coordinates: [endpoint.point.lng, endpoint.point.lat] },
+        });
+      }
+    });
+
+    bundle.ornaments.forEach((ornament) => {
+      const properties = {
+        ornamentKind: ornament.kind,
+        tagKey: ornament.tagKey,
+        tagValue: ornament.tagValue,
+        ...(ornament.detail || {}),
+      };
+      if (ornament.geometry === "line") {
+        addLine(ornament.id, "ornament", ornament.name, ornament.points, properties);
+        return;
+      }
+      const point = ornament.points[0];
+      if (!point) return;
+      features.push({
+        type: "Feature",
+        id: ornament.id,
+        properties: { kind: "ornament", name: ornament.name, confidence: "verified", ...properties },
+        geometry: { type: "Point", coordinates: [point.lng, point.lat] },
+      });
     });
 
     bundle.waterways.forEach((water) => {
@@ -3038,7 +4678,13 @@ if (staticRoute) {
       features.push({
         type: "Feature",
         id: water.id,
-        properties: { kind: "waterway", name: water.name, waterway: water.waterway, confidence: "verified" },
+        properties: {
+          kind: "waterway",
+          name: water.name,
+          waterway: water.waterway,
+          confidence: "verified",
+          ...(water.detail || {}),
+        },
         geometry: polygon
           ? { type: "Polygon", coordinates: [coordinates] }
           : { type: "LineString", coordinates },
@@ -3063,7 +4709,7 @@ if (staticRoute) {
       features.push({
         type: "Feature",
         id: crossing.id,
-        properties: { kind: "crossing", name: crossing.name, crossingType: crossing.type, confidence: "verified" },
+        properties: { kind: "crossing", name: crossing.name, crossingType: crossing.type, bearing: crossing.bearing, confidence: "verified" },
         geometry: { type: "Point", coordinates: [crossing.latlng.lng, crossing.latlng.lat] },
       });
     });
@@ -3086,8 +4732,19 @@ if (staticRoute) {
       });
     });
 
+    bundle.schools.forEach((school) => {
+      features.push({
+        type: "Feature",
+        id: school.id,
+        properties: { kind: "school_zone", name: school.name, schoolType: school.kind, confidence: "verified" },
+        geometry: { type: "Point", coordinates: [school.latlng.lng, school.latlng.lat] },
+      });
+    });
+
     return { type: "FeatureCollection", features };
   }
+
+  const MAP_DETAIL_CACHE_VERSION = 6;
 
   function mapDetailTileKey(bounds: L.LatLngBounds, zoom: number): string {
     const zoomBucket = Math.max(11, Math.min(18, Math.floor(zoom)));
@@ -3096,11 +4753,44 @@ if (staticRoute) {
     const tileX = Math.floor(((center.lng + 180) / 360) * scale);
     const latitude = Math.max(-85.0511, Math.min(85.0511, center.lat)) * Math.PI / 180;
     const tileY = Math.floor((1 - Math.asinh(Math.tan(latitude)) / Math.PI) / 2 * scale);
-    return `details:${zoomBucket}:${tileX}:${tileY}:${detailGroupsForZoom(zoom).join(",")}`;
+    return `details-v${MAP_DETAIL_CACHE_VERSION}:${zoomBucket}:${tileX}:${tileY}:${detailGroupsForZoom(zoom).join(",")}`;
+  }
+
+  function poiCacheKeyForBounds(bounds: L.LatLngBounds, zoomValue = map.getZoom()): string {
+    const zoomBucket = Math.max(13, Math.min(18, Math.floor(zoomValue)));
+    const center = bounds.getCenter();
+    const scale = 2 ** zoomBucket;
+    const tileX = Math.floor(((center.lng + 180) / 360) * scale);
+    const latitude = Math.max(-85.0511, Math.min(85.0511, center.lat)) * Math.PI / 180;
+    const tileY = Math.floor((1 - Math.asinh(Math.tan(latitude)) / Math.PI) / 2 * scale);
+    return `poi:${zoomBucket}:${tileX}:${tileY}`;
   }
 
   let lastMapDetailKey = "";
   let mapDetailRequestSequence = 0;
+  const rememberedMapDetailCollections = new Map<string, MapDetailFeatureCollection>();
+  let rememberedMapDetailZoomBucket = "";
+
+  function rememberMapDetailCollection(key: string, collection: MapDetailFeatureCollection): MapDetailFeatureCollection {
+    const zoomBucket = key.split(":").slice(0, 2).join(":");
+    if (rememberedMapDetailZoomBucket && rememberedMapDetailZoomBucket !== zoomBucket) {
+      rememberedMapDetailCollections.clear();
+    }
+    rememberedMapDetailZoomBucket = zoomBucket;
+    rememberedMapDetailCollections.delete(key);
+    rememberedMapDetailCollections.set(key, collection);
+    while (rememberedMapDetailCollections.size > 42) {
+      const oldest = rememberedMapDetailCollections.keys().next().value as string | undefined;
+      if (!oldest) break;
+      rememberedMapDetailCollections.delete(oldest);
+    }
+    const byId = new Map<string, MapDetailFeatureCollection["features"][number]>();
+    rememberedMapDetailCollections.forEach((item) => item.features.forEach((feature, index) => {
+      const featureKey = String(feature.id || `${key}:${index}:${JSON.stringify(feature.geometry)}`);
+      byId.set(featureKey, feature);
+    }));
+    return { type: "FeatureCollection", features: [...byId.values()] };
+  }
 
   async function refreshMapLibreDetailLayer(force = false): Promise<void> {
     const maplibreMap = state.maplibreMap;
@@ -3119,29 +4809,160 @@ if (staticRoute) {
     const requestId = ++mapDetailRequestSequence;
     const cached = await mapDetailCache.get<MapDetailFeatureCollection>(key, 14 * 24 * 60 * 60 * 1000);
     const validCached = cached?.features?.length ? cached : null;
-    if (validCached && requestId === mapDetailRequestSequence) setMapDetailData(maplibreMap, validCached);
+    if (validCached && requestId === mapDetailRequestSequence) {
+      setMapDetailData(maplibreMap, rememberMapDetailCollection(key, validCached));
+    }
 
     const bundle = await fetchRoadGuidesForBounds(bounds.pad(0.12));
     if (requestId !== mapDetailRequestSequence) return;
     const collection = mapDetailCollection(bundle);
     if (!collection.features.length) {
-      if (!validCached) setMapDetailData(maplibreMap, EMPTY_MAP_DETAIL_COLLECTION);
+      if (!validCached && rememberedMapDetailCollections.size === 0) setMapDetailData(maplibreMap, EMPTY_MAP_DETAIL_COLLECTION);
       return;
     }
-    setMapDetailData(maplibreMap, collection);
+    setMapDetailData(maplibreMap, rememberMapDetailCollection(key, collection));
     void mapDetailCache.set(key, collection);
+  }
+
+  const rememberedRoadGuideBundles = new Map<string, RoadGuideBundle>();
+  let visibleRoadGuideBundle: RoadGuideBundle | null = null;
+  // Bump when parsed tags or derived geometry change so old cached bundles do
+  // not silently drop properties required by the MapLibre detail renderer.
+  const ROAD_GUIDE_CACHE_VERSION = 7;
+  const ROAD_GUIDE_PREFETCH_SESSION_LIMIT = 16;
+  const ROAD_GUIDE_PREFETCH_DELAY_MS = 4_800;
+  const roadGuidePrefetchQueue: Array<{ bounds: L.LatLngBounds; key: string }> = [];
+  const roadGuidePrefetchSeen = new Set<string>();
+  let roadGuidePrefetchCount = 0;
+  let roadGuidePrefetchBusy = false;
+  let roadGuidePrefetchTimer = 0;
+
+  function canPrefetchRoadGuides(): boolean {
+    const connection = (navigator as Navigator & {
+      connection?: { saveData?: boolean; effectiveType?: string };
+    }).connection;
+    return OVERPASS_NETWORK_ENABLED
+      && navigator.onLine
+      && !document.hidden
+      && !connection?.saveData
+      && connection?.effectiveType !== "2g"
+      && !shouldSkipOverpass("road")
+      && roadGuidePrefetchCount < ROAD_GUIDE_PREFETCH_SESSION_LIMIT;
+  }
+
+  function scheduleNextRoadGuidePrefetch(): void {
+    window.clearTimeout(roadGuidePrefetchTimer);
+    if (!roadGuidePrefetchQueue.length || roadGuidePrefetchBusy || !canPrefetchRoadGuides()) return;
+    roadGuidePrefetchTimer = window.setTimeout(() => void runNextRoadGuidePrefetch(), ROAD_GUIDE_PREFETCH_DELAY_MS);
+  }
+
+  async function runNextRoadGuidePrefetch(): Promise<void> {
+    if (roadGuidePrefetchBusy || !canPrefetchRoadGuides()) return;
+    const task = roadGuidePrefetchQueue.shift();
+    if (!task) return;
+    roadGuidePrefetchBusy = true;
+    roadGuidePrefetchCount += 1;
+    try {
+      const cached = await mapDetailCache.get<RoadGuideBundle>(task.key, 7 * 24 * 60 * 60 * 1000);
+      let selectedBundle = cached;
+      if (!selectedBundle) {
+        const bundle = await fetchRoadGuidesForBounds(task.bounds);
+        if (Object.values(bundle).some((records) => records.length > 0)) {
+          await mapDetailCache.set(task.key, bundle);
+          selectedBundle = bundle;
+        }
+      }
+      // Keep prefetched neighboring cells ready in memory so a later pan can
+      // draw them immediately without another IndexedDB/network round trip.
+      if (selectedBundle) rememberRoadGuideBundle(task.key, selectedBundle);
+    } catch (error) {
+      console.debug("Road detail background prefetch skipped:", error);
+    } finally {
+      roadGuidePrefetchBusy = false;
+      scheduleNextRoadGuidePrefetch();
+    }
+  }
+
+  function queueAdjacentRoadGuidePrefetch(bounds: L.LatLngBounds, zoom: number): void {
+    if (zoom < 16.75 || !canPrefetchRoadGuides()) return;
+    const offsets = progressivePrefetchOffsets(2);
+    for (const [horizontal, vertical] of offsets) {
+      if (roadGuidePrefetchQueue.length + roadGuidePrefetchCount >= ROAD_GUIDE_PREFETCH_SESSION_LIMIT) break;
+      const candidate = shiftedMapBounds(bounds, horizontal, vertical);
+      const key = `road:v${ROAD_GUIDE_CACHE_VERSION}:${mapDetailTileKey(candidate, zoom)}`;
+      if (roadGuidePrefetchSeen.has(key)) continue;
+      roadGuidePrefetchSeen.add(key);
+      roadGuidePrefetchQueue.push({ bounds: candidate, key });
+    }
+    scheduleNextRoadGuidePrefetch();
+  }
+
+  function rememberRoadGuideBundle(key: string, bundle: RoadGuideBundle): RoadGuideBundle {
+    rememberedRoadGuideBundles.delete(key);
+    rememberedRoadGuideBundles.set(key, bundle);
+    while (rememberedRoadGuideBundles.size > 36) {
+      const oldest = rememberedRoadGuideBundles.keys().next().value as string | undefined;
+      if (!oldest) break;
+      rememberedRoadGuideBundles.delete(oldest);
+    }
+    const mergeById = <T extends { id: string }>(selector: (value: RoadGuideBundle) => T[]): T[] => {
+      const records = new Map<string, T>();
+      rememberedRoadGuideBundles.forEach((value) => selector(value).forEach((record) => records.set(record.id, record)));
+      return [...records.values()];
+    };
+    return {
+      roads: mergeById((value) => value.roads),
+      rails: mergeById((value) => value.rails),
+      transit: mergeById((value) => value.transit),
+      crossings: mergeById((value) => value.crossings),
+      waterways: mergeById((value) => value.waterways),
+      greens: mergeById((value) => value.greens),
+      signals: mergeById((value) => value.signals),
+      trees: mergeById((value) => value.trees),
+      schools: mergeById((value) => value.schools),
+      ornaments: mergeById((value) => value.ornaments),
+    };
+  }
+
+  function makePedestrianStructureIcon(label: string): L.DivIcon {
+    return L.divIcon({
+      className: "road-guide-structure-icon",
+      html: `<span role="img" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 16h18M5 16V9m14 7V9M5 11h14M8 11l2-4h4l2 4M10 16v4m4-4v4"/></svg></span>`,
+      iconSize: [48, 48],
+      iconAnchor: [24, 24],
+    });
+  }
+
+  function resetRoadGuideMetrics(): void {
+    mapRoot.dataset.transitPaths = "0";
+    mapRoot.dataset.transitMemberPaths = "0";
+    mapRoot.dataset.transitStitchedComponents = "0";
+    mapRoot.dataset.transitStitchedJoins = "0";
+    mapRoot.dataset.routeEndpoints = "0";
+    mapRoot.dataset.sidewalkPaths = "0";
+    mapRoot.dataset.ornamentCount = "0";
+    mapRoot.dataset.ornamentVisible = "0";
+    mapRoot.dataset.ornamentKinds = "";
+    mapRoot.dataset.roadPalettes = "";
   }
 
   async function refreshRoadGuideLayer(force = false): Promise<void> {
     if (!state.roadGuideLayer) state.roadGuideLayer = L.layerGroup().addTo(map);
     if (state.baseMode !== "street" || state.maplibreMap) {
       state.roadGuideLayer.clearLayers();
+      visibleRoadGuideBundle = null;
+      resetRoadGuideMetrics();
       return;
     }
 
     const zoom = map.getZoom();
-    if (zoom < 15) {
+    // The basemap already carries road geometry at normal zoom. The optional
+    // Overpass guide is reserved for a close inspection, keeping the initial
+    // map equivalent to the clean 2D view requested by the user.
+    if (zoom < 16.75) {
       state.roadGuideLayer.clearLayers();
+      visibleRoadGuideBundle = null;
+      resetRoadGuideMetrics();
       return;
     }
 
@@ -3149,11 +4970,41 @@ if (staticRoute) {
     if (!force && lastRoadGuideFetchBounds && lastRoadGuideFetchBounds.contains(bounds.getSouthWest()) && lastRoadGuideFetchBounds.contains(bounds.getNorthEast())) return;
     lastRoadGuideFetchBounds = bounds.pad(0.2);
 
-    const guide = await fetchRoadGuidesForBounds(bounds);
+    const regionKey = `road:v${ROAD_GUIDE_CACHE_VERSION}:${mapDetailTileKey(bounds, zoom)}`;
+    const freshGuide = await mapDetailCache.get<RoadGuideBundle>(regionKey, 7 * 24 * 60 * 60 * 1000);
+    const storedGuide = freshGuide || await mapDetailCache.peek<RoadGuideBundle>(regionKey);
+    let selectedGuide = storedGuide;
+    if (!freshGuide) {
+      const fetchedGuide = await fetchRoadGuidesForBounds(bounds.pad(0.12));
+      const hasFetchedData = Object.values(fetchedGuide).some((records) => records.length > 0);
+      if (hasFetchedData) {
+        selectedGuide = fetchedGuide;
+        void mapDetailCache.set(regionKey, fetchedGuide);
+      }
+    }
+    if (!selectedGuide) return;
+    const guide = rememberRoadGuideBundle(regionKey, selectedGuide);
+    visibleRoadGuideBundle = guide;
     state.roadGuideLayer.clearLayers();
+    mapRoot.dataset.transitPaths = String(guide.transit.length);
+    const routeTransit = guide.transit.filter((transit) => transit.source === "route");
+    const routeMemberPaths = routeTransit.reduce((total, transit) => total + transit.memberCount, 0);
+    const routeEndpointCount = routeTransit.reduce((total, transit) => (
+      total
+      + Number(transit.componentIndex === 0 && Boolean(transit.verifiedFrom))
+      + Number(transit.componentIndex === transit.componentCount - 1 && Boolean(transit.verifiedTo))
+    ), 0);
+    mapRoot.dataset.transitMemberPaths = String(routeMemberPaths);
+    mapRoot.dataset.transitStitchedComponents = String(routeTransit.length);
+    mapRoot.dataset.transitStitchedJoins = String(Math.max(0, routeMemberPaths - routeTransit.length));
+    mapRoot.dataset.routeEndpoints = String(routeEndpointCount);
+    mapRoot.dataset.sidewalkPaths = String(guide.roads.filter((road) => road.hasSidewalk && roadRenderClass(road) !== "foot").length);
+    mapRoot.dataset.ornamentCount = String(guide.ornaments.length);
+    mapRoot.dataset.ornamentKinds = [...new Set(guide.ornaments.map((ornament) => ornament.kind))].sort().join(",");
+    mapRoot.dataset.roadPalettes = [...new Set(guide.roads.map((road) => roadPaletteKey(road)))].sort().join(",");
     const limit = zoom >= 18 ? 120 : zoom >= 16 ? 84 : 52;
 
-    guide.greens.slice(0, zoom >= 17 ? 80 : 44).forEach((green) => {
+    (state.greenVisible ? guide.greens : []).slice(0, zoom >= 17 ? 80 : 44).forEach((green) => {
       if (green.points.length >= 4 && isClosedGuideRing(green.points)) {
         L.polygon(green.points, greenGuideStyle(green)).addTo(state.roadGuideLayer as L.LayerGroup);
       } else {
@@ -3161,7 +5012,8 @@ if (staticRoute) {
       }
     });
 
-    guide.waterways.slice(0, zoom >= 17 ? 70 : 36).forEach((water) => {
+    const visibleWaterways = (state.waterVisible ? guide.waterways : []).slice(0, zoom >= 17 ? 70 : 36);
+    visibleWaterways.forEach((water) => {
       if (water.points.length >= 4 && isClosedGuideRing(water.points)) {
         L.polygon(water.points, {
           color: "#8bd8ef",
@@ -3174,23 +5026,115 @@ if (staticRoute) {
       } else {
         L.polyline(water.points, waterGuideStyle(water)).addTo(state.roadGuideLayer as L.LayerGroup);
       }
-      const mid = roadGuideMidpoint(water.points);
-      if (mid && water.name && zoom >= 16) {
+    });
+
+    const selectedWaterLabels = zoom < 16 ? [] : visibleWaterways
+      .map((water) => ({ water, mid: roadGuideMidpoint(water.points) }))
+      .filter((candidate): candidate is { water: WaterGuideRecord; mid: { latlng: L.LatLng; bearing: number } } => Boolean(candidate.mid && candidate.water.name))
+      .sort((a, b) => map.distance(a.mid.latlng, map.getCenter()) - map.distance(b.mid.latlng, map.getCenter()))
+      .reduce<Array<{ water: WaterGuideRecord; mid: { latlng: L.LatLng; bearing: number } }>>((selected, candidate) => {
+        if (selected.length >= (zoom >= 18 ? 14 : 9) || !map.getBounds().contains(candidate.mid.latlng)) return selected;
+        const point = map.latLngToContainerPoint(candidate.mid.latlng);
+        const collides = selected.some((placed) => {
+          const distance = point.distanceTo(map.latLngToContainerPoint(placed.mid.latlng));
+          return distance < 86 || (
+            placed.water.name.toLocaleLowerCase("id-ID") === candidate.water.name.toLocaleLowerCase("id-ID")
+            && distance < 260
+          );
+        });
+        if (!collides) selected.push(candidate);
+        return selected;
+      }, []);
+    selectedWaterLabels.forEach(({ water, mid }) => {
+      const layer = state.roadGuideLayer as L.LayerGroup;
+      if (!addCurvedWaterName(layer, water)) {
         L.marker(mid.latlng, {
+          pane: ROAD_ORNAMENT_PANE,
           icon: makeWaterNameIcon(water.name, mid.bearing),
           interactive: false,
           zIndexOffset: 110,
-        }).addTo(state.roadGuideLayer as L.LayerGroup);
+        }).addTo(layer);
       }
     });
 
-    guide.rails.slice(0, zoom >= 17 ? 55 : 30).forEach((rail) => {
+    const railModesVisible = ["commuter", "high_speed", "train"].some((mode) => state.transitModeFilter.has(mode as TransitGuideMode));
+    (railModesVisible ? guide.rails : []).slice(0, zoom >= 17 ? 55 : 30).forEach((rail) => {
       L.polyline(rail.points, railGuideStyle(true)).addTo(state.roadGuideLayer as L.LayerGroup);
       L.polyline(rail.points, railGuideStyle(false)).addTo(state.roadGuideLayer as L.LayerGroup);
       L.polyline(rail.points, railSleeperStyle()).addTo(state.roadGuideLayer as L.LayerGroup);
     });
 
+    const visibleTransit = guide.transit
+      .filter((transit) => state.transitModeFilter.has(transit.mode))
+      .slice(0, zoom >= 17 ? 80 : 45);
+    visibleTransit.forEach((transit) => {
+      L.polyline(transit.points, transitGuideCasingStyle(transit)).addTo(state.roadGuideLayer as L.LayerGroup);
+      L.polyline(transit.points, transitGuideStyle(transit)).addTo(state.roadGuideLayer as L.LayerGroup);
+    });
+    const transitSourcePriority: Record<TransitGuideRecord["source"], number> = { route: 0, infrastructure: 1, road_lane: 2 };
+    const selectedTransitLabels = zoom < 17 ? [] : visibleTransit
+      .filter((transit) => Boolean(transit.label))
+      .map((transit) => ({ transit, midpoint: roadGuideMidpoint(transit.points) }))
+      .filter((candidate): candidate is { transit: TransitGuideRecord; midpoint: { latlng: L.LatLng; bearing: number } } => Boolean(candidate.midpoint))
+      .sort((a, b) => (
+        transitSourcePriority[a.transit.source] - transitSourcePriority[b.transit.source]
+        || map.distance(a.midpoint.latlng, map.getCenter()) - map.distance(b.midpoint.latlng, map.getCenter())
+      ))
+      .reduce<Array<{ transit: TransitGuideRecord; midpoint: { latlng: L.LatLng; bearing: number } }>>((selected, candidate) => {
+        if (selected.length >= (zoom >= 18 ? 14 : 9) || !map.getBounds().contains(candidate.midpoint.latlng)) return selected;
+        const point = map.latLngToContainerPoint(candidate.midpoint.latlng);
+        const normalizedLabel = candidate.transit.label.toLocaleLowerCase("id-ID");
+        const collides = selected.some((placed) => {
+          const distance = point.distanceTo(map.latLngToContainerPoint(placed.midpoint.latlng));
+          return distance < 104 || (
+            placed.transit.label.toLocaleLowerCase("id-ID") === normalizedLabel
+            && distance < 520
+          );
+        });
+        if (!collides) selected.push(candidate);
+        return selected;
+      }, []);
+    selectedTransitLabels.forEach(({ transit, midpoint }) => {
+      L.marker(midpoint.latlng, {
+        pane: ROAD_ORNAMENT_PANE,
+        icon: makeTransitNameIcon(transit),
+        interactive: false,
+        zIndexOffset: 116,
+      }).addTo(state.roadGuideLayer as L.LayerGroup);
+    });
+
+    const endpointCandidates = zoom < 18 ? [] : visibleTransit.flatMap((transit) => {
+      if (transit.source !== "route" || !transit.points.length) return [];
+      const endpoints: Array<{ transit: TransitGuideRecord; role: "from" | "to"; latlng: L.LatLng }> = [];
+      if (transit.componentIndex === 0 && transit.verifiedFrom) {
+        endpoints.push({ transit, role: "from", latlng: L.latLng(transit.verifiedFrom.point.lat, transit.verifiedFrom.point.lng) });
+      }
+      if (transit.componentIndex === transit.componentCount - 1 && transit.verifiedTo) {
+        endpoints.push({ transit, role: "to", latlng: L.latLng(transit.verifiedTo.point.lat, transit.verifiedTo.point.lng) });
+      }
+      return endpoints;
+    });
+    const selectedEndpoints = endpointCandidates
+      .filter((endpoint) => bounds.contains(endpoint.latlng))
+      .sort((a, b) => map.distance(a.latlng, map.getCenter()) - map.distance(b.latlng, map.getCenter()))
+      .reduce<typeof endpointCandidates>((selected, endpoint) => {
+        if (selected.length >= 12) return selected;
+        const point = map.latLngToContainerPoint(endpoint.latlng);
+        const collides = selected.some((placed) => point.distanceTo(map.latLngToContainerPoint(placed.latlng)) < 112);
+        if (!collides) selected.push(endpoint);
+        return selected;
+      }, []);
+    selectedEndpoints.forEach((endpoint) => {
+      L.marker(endpoint.latlng, {
+        pane: ROAD_ORNAMENT_PANE,
+        icon: makeTransitEndpointIcon(endpoint.transit, endpoint.role),
+        interactive: false,
+        zIndexOffset: 126,
+      }).addTo(state.roadGuideLayer as L.LayerGroup);
+    });
+
     guide.roads
+      .filter((road) => state.roadClassFilter.has(roadRenderClass(road)))
       .sort((a, b) => {
         const ca = roadRenderClass(a);
         const cb = roadRenderClass(b);
@@ -3205,6 +5149,7 @@ if (staticRoute) {
           const center = guideCentroid(road.points);
           if (center && zoom >= 16) {
             L.marker(center, {
+              pane: ROAD_ORNAMENT_PANE,
               icon: makeRoundaboutIcon(road),
               interactive: false,
               zIndexOffset: 107,
@@ -3214,10 +5159,24 @@ if (staticRoute) {
         if (road.hasSidewalk && cls !== "foot") {
           L.polyline(road.points, roadSidewalkStyle(road)).addTo(state.roadGuideLayer as L.LayerGroup);
         }
-        if (cls !== "foot") {
+        if (road.pedestrianStructure) {
+          L.polyline(road.points, pedestrianBridgeStyle(true)).addTo(state.roadGuideLayer as L.LayerGroup);
+          L.polyline(road.points, pedestrianBridgeStyle(false)).addTo(state.roadGuideLayer as L.LayerGroup);
+        } else if (road.highway === "cycleway") {
+          L.polyline(road.points, roadCyclewayStyle(road, true)).addTo(state.roadGuideLayer as L.LayerGroup);
+          L.polyline(road.points, roadCyclewayStyle(road, false)).addTo(state.roadGuideLayer as L.LayerGroup);
+        } else if (cls !== "foot") {
           L.polyline(road.points, roadGuideStyle(road, true)).addTo(state.roadGuideLayer as L.LayerGroup);
+          L.polyline(road.points, roadGuideStyle(road, false)).addTo(state.roadGuideLayer as L.LayerGroup);
+        } else {
+          L.polyline(road.points, roadGuideStyle(road, false)).addTo(state.roadGuideLayer as L.LayerGroup);
         }
-        L.polyline(road.points, roadGuideStyle(road, false)).addTo(state.roadGuideLayer as L.LayerGroup);
+        if (road.hasCycleway && road.highway !== "cycleway") {
+          L.polyline(road.points, roadCyclewayStyle(road, false)).addTo(state.roadGuideLayer as L.LayerGroup);
+        }
+        if (road.busLane) {
+          L.polyline(road.points, roadBusLaneStyle()).addTo(state.roadGuideLayer as L.LayerGroup);
+        }
         if (road.hasMedian) {
           L.polyline(road.points, roadMedianStyle(road)).addTo(state.roadGuideLayer as L.LayerGroup);
         }
@@ -3234,13 +5193,173 @@ if (staticRoute) {
         // so artificial AVE/JLN labels and arrows do not drift over buildings.
       });
 
-    guide.crossings.slice(0, zoom >= 17 ? 80 : 38).forEach((crossing) => {
-      L.marker(crossing.latlng, {
-        icon: makeRailCrossingIcon(crossing),
-        interactive: false,
-        zIndexOffset: 118,
-      }).addTo(state.roadGuideLayer as L.LayerGroup);
+    if (zoom >= 17) {
+      guide.ornaments
+        .filter((ornament) => ornament.geometry === "line" && ornament.points.some((point) => bounds.pad(0.08).contains(point)))
+        .sort((a, b) => ornamentPriority(a.kind) - ornamentPriority(b.kind))
+        .slice(0, zoom >= 18 ? 90 : 48)
+        .forEach((ornament) => {
+          L.polyline(ornament.points, ornamentLineStyle(ornament)).addTo(state.roadGuideLayer as L.LayerGroup);
+        });
+    }
+
+    const pointOrnaments = guide.ornaments
+      .filter((ornament) => state.cctvVisible || (ornament.kind !== "surveillance" && ornament.kind !== "speed_camera"))
+      .filter((ornament) => ornament.geometry === "point" && ornamentMinimumZoom(ornament.kind) <= zoom && Boolean(ornament.points[0]) && bounds.contains(ornament.points[0]))
+      .sort((a, b) => (
+        ornamentPriority(a.kind) - ornamentPriority(b.kind)
+        || map.distance(a.points[0], map.getCenter()) - map.distance(b.points[0], map.getCenter())
+      ));
+    const ornamentLimit = zoom >= 18 ? 84 : 36;
+    const ornamentSeparation = zoom >= 18 ? 20 : 27;
+    const selectedOrnaments = pointOrnaments.reduce<MapOrnamentRecord[]>((selected, ornament) => {
+      if (selected.length >= ornamentLimit) return selected;
+      const point = map.latLngToContainerPoint(ornament.points[0]);
+      const collides = selected.some((placed) => point.distanceTo(map.latLngToContainerPoint(placed.points[0])) < ornamentSeparation);
+      if (!collides) selected.push(ornament);
+      return selected;
+    }, []);
+    mapRoot.dataset.ornamentVisible = String(selectedOrnaments.length);
+    selectedOrnaments.forEach((ornament) => {
+      const title = [ornament.name, `${ornament.tagKey}=${ornament.tagValue}`].filter(Boolean).join(" · ");
+      const marker = L.marker(ornament.points[0], {
+        pane: ROAD_ORNAMENT_PANE,
+        icon: makeOrnamentIcon(ornament),
+        interactive: true,
+        keyboard: true,
+        title,
+        zIndexOffset: 120,
+      }).bindTooltip(escapeHtml(title), { direction: "top", sticky: true, opacity: 0.94 });
+      if (ornament.kind === "surveillance" || ornament.kind === "speed_camera") {
+        marker.on("click", () => openMapDynamicsPoint({
+          type: "Feature",
+          id: ornament.id,
+          geometry: {
+            type: "Point",
+            coordinates: [ornament.points[0].lng, ornament.points[0].lat],
+          },
+          properties: {
+            ...ornament.detail,
+            kind: ornament.kind === "surveillance" ? "cctv" : "speed_camera",
+            name: ornament.name || (ornament.kind === "surveillance" ? "Kamera pengawas" : "Kamera kecepatan"),
+            source: "OpenStreetMap",
+            sourceUrl: "https://www.openstreetmap.org/",
+            streamStatus: "metadata-only",
+          },
+        }, ornament.points[0]));
+      }
+      marker.addTo(state.roadGuideLayer as L.LayerGroup);
     });
+
+    const selectedStructureLabels = zoom < 17 ? [] : guide.roads
+      .map((road) => ({
+        road,
+        label: pedestrianStructureLabel(road) || (road.highway === "cycleway" ? cyclewaySemanticLabel(road) : ""),
+        midpoint: roadGuideMidpoint(road.points),
+      }))
+      .filter((candidate): candidate is { road: RoadGuideRecord; label: string; midpoint: { latlng: L.LatLng; bearing: number } } => Boolean(candidate.label && candidate.midpoint))
+      .sort((a, b) => map.distance(a.midpoint.latlng, map.getCenter()) - map.distance(b.midpoint.latlng, map.getCenter()))
+      .reduce<Array<{ road: RoadGuideRecord; label: string; midpoint: { latlng: L.LatLng; bearing: number } }>>((selected, candidate) => {
+        if (selected.length >= (zoom >= 18 ? 10 : 6) || !map.getBounds().contains(candidate.midpoint.latlng)) return selected;
+        const point = map.latLngToContainerPoint(candidate.midpoint.latlng);
+        const collides = selected.some((placed) => point.distanceTo(map.latLngToContainerPoint(placed.midpoint.latlng)) < 96);
+        if (!collides) selected.push(candidate);
+        return selected;
+      }, []);
+    selectedStructureLabels.forEach(({ road, label, midpoint }) => {
+      const isPedestrianStructure = Boolean(road.pedestrianStructure);
+      const marker = L.marker(midpoint.latlng, {
+        pane: ROAD_ORNAMENT_PANE,
+        icon: isPedestrianStructure
+          ? makePedestrianStructureIcon(label)
+          : makeRoadSemanticNameIcon(label, midpoint.bearing),
+        interactive: isPedestrianStructure,
+        keyboard: isPedestrianStructure,
+        title: isPedestrianStructure ? label : undefined,
+        zIndexOffset: 114,
+      });
+      if (isPedestrianStructure) marker.bindTooltip(escapeHtml(label), { direction: "top", opacity: 0.94 });
+      marker.addTo(state.roadGuideLayer as L.LayerGroup);
+    });
+
+    // Crossing data remains complete in the source bundle/GeoJSON, but the
+    // ornament layer is intentionally decluttered. Prefer rail crossings and
+    // crossings near the viewport centre, then reject symbols whose screen
+    // footprints would overlap. This keeps dense junctions readable without
+    // inventing or discarding any underlying OSM detail.
+    const crossingLimit = 12;
+    const crossingSeparation = 56;
+    const mapCentre = map.getCenter();
+    const selectedCrossings = [...guide.crossings]
+      .sort((a, b) => {
+        const typePriority = Number(b.type === "rail") - Number(a.type === "rail");
+        return typePriority || map.distance(a.latlng, mapCentre) - map.distance(b.latlng, mapCentre);
+      })
+      .reduce<CrossingGuideRecord[]>((selected, crossing) => {
+        if (selected.length >= crossingLimit || !map.getBounds().contains(crossing.latlng)) return selected;
+        const point = map.latLngToContainerPoint(crossing.latlng);
+        const collides = selected.some((placed) => (
+          point.distanceTo(map.latLngToContainerPoint(placed.latlng)) < crossingSeparation
+        ));
+        if (!collides) selected.push(crossing);
+        return selected;
+      }, []);
+    selectedCrossings.forEach((crossing) => {
+      const title = crossing.name || (crossing.type === "road" ? "Penyeberangan" : "Perlintasan kereta");
+      L.marker(crossing.latlng, {
+        pane: ROAD_ORNAMENT_PANE,
+        icon: makeRailCrossingIcon(crossing),
+        interactive: true,
+        keyboard: false,
+        title,
+        zIndexOffset: 118,
+      }).bindTooltip(escapeHtml(title), { direction: "top", sticky: true, opacity: 0.94 })
+        .addTo(state.roadGuideLayer as L.LayerGroup);
+    });
+
+    guide.signals.slice(0, zoom >= 18 ? 64 : 32).forEach((signal) => {
+      const title = signal.name || "Lampu lalu lintas";
+      L.marker(signal.latlng, {
+        pane: ROAD_ORNAMENT_PANE,
+        icon: makeTrafficSignalGuideIcon(signal),
+        interactive: true,
+        keyboard: false,
+        title,
+        zIndexOffset: 121,
+      }).bindTooltip(escapeHtml(title), { direction: "top", sticky: true, opacity: 0.94 })
+        .addTo(state.roadGuideLayer as L.LayerGroup);
+    });
+
+    if (zoom >= 18) {
+      guide.trees.slice(0, 140).forEach((tree) => {
+        const title = tree.name || "Pohon terpetakan";
+        L.marker(tree.latlng, {
+          pane: ROAD_ORNAMENT_PANE,
+          icon: makeTreeGuideIcon(tree),
+          interactive: true,
+          keyboard: false,
+          title,
+          zIndexOffset: 106,
+        }).bindTooltip(escapeHtml(title), { direction: "top", sticky: true, opacity: 0.94 })
+          .addTo(state.roadGuideLayer as L.LayerGroup);
+      });
+    }
+
+    if (zoom >= 17) {
+      guide.schools.slice(0, 28).forEach((school) => {
+        const title = school.name || (school.kind === "university" ? "Kampus" : "Zona sekolah");
+        L.marker(school.latlng, {
+          pane: ROAD_ORNAMENT_PANE,
+          icon: makeSchoolZoneGuideIcon(school),
+          interactive: true,
+          keyboard: false,
+          title,
+          zIndexOffset: 117,
+        }).bindTooltip(escapeHtml(title), { direction: "top", sticky: true, opacity: 0.94 })
+          .addTo(state.roadGuideLayer as L.LayerGroup);
+      });
+    }
+    queueAdjacentRoadGuidePrefetch(bounds.pad(0.12), zoom);
   }
 
   let visionSegmenterPromise: Promise<any> | null = null;
@@ -3667,7 +5786,7 @@ if (staticRoute) {
       showVisionStatus(`Vision 2D selesai - ${features.length} petunjuk real`, 100, true);
     } catch (err) {
       console.warn("Vision enhancement failed:", err);
-      showVisionStatus("Vision belum tersedia, memakai OSM/Overpass", undefined, true);
+      showVisionStatus("Vision belum tersedia, memakai data peta", undefined, true);
     } finally {
       visionBusy = false;
       hideVisionStatusSoon();
@@ -3676,6 +5795,182 @@ if (staticRoute) {
 
   let lastOverpassFetchBounds: L.LatLngBounds | null = null;
   let overpassLayerRequestSequence = 0;
+  let poiRenderFrame = 0;
+  let currentPoiDataset: PoiRecord[] = [];
+  const rememberedPoiDataset = new Map<string, PoiRecord>();
+  const MAX_REMEMBERED_POIS = 6_000;
+  const mapLibrePoiImageTasks = new Map<string, Promise<void>>();
+  const mapLibrePoiReadyImages = new Set<string>();
+  const MAPLIBRE_POI_FALLBACK_IMAGE = "its-poi-fallback";
+  const POI_PREFETCH_SESSION_LIMIT = 16;
+  const POI_PREFETCH_DELAY_MS = 2_400;
+  const poiPrefetchQueue: Array<{ bounds: L.LatLngBounds; key: string; zoom: number }> = [];
+  const poiPrefetchSeen = new Set<string>();
+  let poiPrefetchCount = 0;
+  let poiPrefetchBusy = false;
+  let poiPrefetchTimer = 0;
+
+  function shiftedMapBounds(bounds: L.LatLngBounds, horizontal: number, vertical: number): L.LatLngBounds {
+    const latSpan = bounds.getNorth() - bounds.getSouth();
+    const lngSpan = bounds.getEast() - bounds.getWest();
+    const south = clamp(bounds.getSouth() + vertical * latSpan, -85, 85);
+    const north = clamp(bounds.getNorth() + vertical * latSpan, -85, 85);
+    const west = clamp(bounds.getWest() + horizontal * lngSpan, -180, 180);
+    const east = clamp(bounds.getEast() + horizontal * lngSpan, -180, 180);
+    return L.latLngBounds([south, west], [north, east]);
+  }
+
+  function progressivePrefetchOffsets(maxRadius: number): Array<readonly [number, number]> {
+    const offsets: Array<readonly [number, number]> = [];
+    for (let radius = 1; radius <= maxRadius; radius += 1) {
+      offsets.push([radius, 0], [-radius, 0], [0, radius], [0, -radius]);
+      for (let step = 1; step <= radius; step += 1) {
+        offsets.push(
+          [radius, step], [radius, -step], [-radius, step], [-radius, -step],
+          [step, radius], [-step, radius], [step, -radius], [-step, -radius],
+        );
+      }
+    }
+    const unique = new Map<string, readonly [number, number]>();
+    offsets.forEach((offset) => unique.set(`${offset[0]}:${offset[1]}`, offset));
+    return [...unique.values()];
+  }
+
+  function canPrefetchPoi(): boolean {
+    const connection = (navigator as Navigator & {
+      connection?: { saveData?: boolean; effectiveType?: string };
+    }).connection;
+    return OVERPASS_NETWORK_ENABLED
+      && navigator.onLine
+      && !document.hidden
+      && !connection?.saveData
+      && connection?.effectiveType !== "2g"
+      && !shouldSkipOverpass("poi")
+      && poiPrefetchCount < POI_PREFETCH_SESSION_LIMIT;
+  }
+
+  function scheduleNextPoiPrefetch(): void {
+    window.clearTimeout(poiPrefetchTimer);
+    if (!poiPrefetchQueue.length || poiPrefetchBusy || !canPrefetchPoi()) return;
+    poiPrefetchTimer = window.setTimeout(() => void runNextPoiPrefetch(), POI_PREFETCH_DELAY_MS);
+  }
+
+  async function runNextPoiPrefetch(): Promise<void> {
+    if (poiPrefetchBusy || !canPrefetchPoi()) return;
+    const task = poiPrefetchQueue.shift();
+    if (!task) return;
+    poiPrefetchBusy = true;
+    poiPrefetchCount += 1;
+    try {
+      const pois = await fetchOverpassFeaturesForBounds(task.bounds, task.zoom);
+      if (pois.length) mergePoiDataset(pois);
+    } catch (error) {
+      console.debug("POI background prefetch skipped:", error);
+    } finally {
+      poiPrefetchBusy = false;
+      scheduleNextPoiPrefetch();
+    }
+  }
+
+  function queueAdjacentPoiPrefetch(bounds: L.LatLngBounds, zoom: number): void {
+    if (zoom < 14 || !canPrefetchPoi()) return;
+    // Grow a bounded two-ring cache around the current area. Requests stay
+    // sequential and respect data-saver/network state, while revisited cells
+    // are served immediately from IndexedDB.
+    const offsets = progressivePrefetchOffsets(2);
+    for (const [horizontal, vertical] of offsets) {
+      if (poiPrefetchQueue.length + poiPrefetchCount >= POI_PREFETCH_SESSION_LIMIT) break;
+      const candidate = shiftedMapBounds(bounds, horizontal, vertical);
+      const key = poiCacheKeyForBounds(candidate, zoom);
+      if (poiPrefetchSeen.has(key)) continue;
+      poiPrefetchSeen.add(key);
+      poiPrefetchQueue.push({ bounds: candidate, key, zoom });
+    }
+    scheduleNextPoiPrefetch();
+  }
+
+  function mergePoiDataset(pois: PoiRecord[]): void {
+    pois.forEach((poi) => {
+      // Refresh insertion order so recently visited areas survive the bounded
+      // cache when users explore multiple Indonesian cities.
+      rememberedPoiDataset.delete(poi.id);
+      rememberedPoiDataset.set(poi.id, poi);
+    });
+    while (rememberedPoiDataset.size > MAX_REMEMBERED_POIS) {
+      const oldest = rememberedPoiDataset.keys().next().value as string | undefined;
+      if (!oldest) break;
+      rememberedPoiDataset.delete(oldest);
+    }
+    currentPoiDataset = [...rememberedPoiDataset.values()];
+  }
+
+  function mapLibrePoiImageId(iconId: string): string {
+    return `poi-${iconId.replace(/[^a-z0-9-]+/gi, "-").toLowerCase()}`;
+  }
+
+  function mapLibrePoiFallbackImage(): { width: number; height: number; data: Uint8Array } {
+    const width = 48;
+    const height = 56;
+    const data = new Uint8Array(width * height * 4);
+    const put = (x: number, y: number, rgba: [number, number, number, number]) => {
+      if (x < 0 || y < 0 || x >= width || y >= height) return;
+      data.set(rgba, (y * width + x) * 4);
+    };
+    for (let y = 2; y < 42; y += 1) {
+      for (let x = 4; x < width - 4; x += 1) {
+        const dx = x - width / 2;
+        const dy = y - 22;
+        if ((dx * dx) / 360 + (dy * dy) / 400 <= 1) put(x, y, [15, 117, 216, 255]);
+      }
+    }
+    for (let y = 34; y < height - 2; y += 1) {
+      const half = Math.max(1, Math.round((height - y) * 0.42));
+      for (let x = width / 2 - half; x <= width / 2 + half; x += 1) put(Math.round(x), y, [15, 117, 216, 255]);
+    }
+    for (let y = 12; y < 32; y += 1) {
+      for (let x = 14; x < 34; x += 1) {
+        if (Math.hypot(x - 24, y - 22) <= 8) put(x, y, [255, 255, 255, 255]);
+      }
+    }
+    return { width, height, data };
+  }
+
+  function ensureMapLibrePoiFallbackImage(maplibreMap: any): void {
+    if (!maplibreMap.hasImage?.(MAPLIBRE_POI_FALLBACK_IMAGE)) {
+      maplibreMap.addImage(MAPLIBRE_POI_FALLBACK_IMAGE, mapLibrePoiFallbackImage(), { pixelRatio: 2 });
+    }
+  }
+
+  function ensureMapLibrePoiImage(definition: PoiIconDefinition): Promise<void> {
+    const maplibreMap = state.maplibreMap;
+    const imageId = mapLibrePoiImageId(definition.id);
+    if (!maplibreMap || !maplibreMap.isStyleLoaded?.()) return Promise.resolve();
+    if (maplibreMap.hasImage?.(imageId)) {
+      mapLibrePoiReadyImages.add(imageId);
+      return Promise.resolve();
+    }
+    const existing = mapLibrePoiImageTasks.get(imageId);
+    if (existing) return existing;
+    const task = (async () => {
+      const imageUrl = poiIconAssetUrl(definition, "micro");
+      if (!imageUrl) return;
+      const response = await fetch(imageUrl);
+      if (!response.ok) throw new Error(`POI image ${response.status}`);
+      const bitmap = await createImageBitmap(await response.blob());
+      if (maplibreMap.isStyleLoaded?.() && !maplibreMap.hasImage?.(imageId)) {
+        maplibreMap.addImage(imageId, bitmap, { pixelRatio: 2 });
+      }
+      mapLibrePoiReadyImages.add(imageId);
+      window.requestAnimationFrame(() => updateMapLibrePoiLayer(currentPoiDataset));
+    })().catch((error) => {
+      console.debug(`MapLibre POI image unavailable: ${definition.id}`, error);
+    }).finally(() => {
+      mapLibrePoiImageTasks.delete(imageId);
+    });
+
+    mapLibrePoiImageTasks.set(imageId, task);
+    return task;
+  }
 
   // Helper: Update MapLibre POI layer with GeoJSON features
   function updateMapLibrePoiLayer(pois: PoiRecord[]): void {
@@ -3683,17 +5978,38 @@ if (staticRoute) {
     if (!maplibreMap || state.baseMode === "satellite") return;
 
     try {
-      const features = pois.map(poi => ({
-        type: "Feature",
-        properties: {
-          id: poi.id,
-          title: poi.title,
-          kind: poi.kind,
-          priority: poiPriority(poi),
-          "icon-emoji": poi.icon,
-        },
-        geometry: { type: "Point", coordinates: [poi.lng, poi.lat] }
-      }));
+      ensureMapLibrePoiFallbackImage(maplibreMap);
+      const zoom = map.getZoom();
+      const bounds = map.getBounds().pad(0.08);
+      const visiblePois = state.poiVisible ? pois
+        .filter((poi) => isValidCoordinate(poi.lat, poi.lng))
+        .filter((poi) => bounds.contains([poi.lat, poi.lng]))
+        .filter((poi) => zoom >= poiDisplayRule(poi).minZoom)
+        .sort((left, right) => poiPriority(left) - poiPriority(right)) : [];
+      for (const definition of new Map(visiblePois.map((poi) => [poi.iconId, poiDefinition(poi)])).values()) {
+        void ensureMapLibrePoiImage(definition);
+      }
+      const features = visiblePois
+        .filter((poi) => isValidCoordinate(poi.lat, poi.lng))
+        .filter((poi) => zoom >= poiDisplayRule(poi).minZoom)
+        .sort((left, right) => poiPriority(left) - poiPriority(right))
+        .slice(0, Math.max(120, poiRenderLimitByZoom(zoom) * 3))
+        .map(poi => ({
+          type: "Feature",
+          properties: {
+            id: poi.id,
+            title: state.poiLabelVisibility.get(poi.id) === false ? "" : poi.title,
+            kind: poi.kind,
+            iconId: poi.iconId,
+            mapIconId: mapLibrePoiReadyImages.has(mapLibrePoiImageId(poi.iconId))
+              ? mapLibrePoiImageId(poi.iconId)
+              : MAPLIBRE_POI_FALLBACK_IMAGE,
+            color: poiDefinition(poi).color,
+            priority: poiPriority(poi),
+            "icon-emoji": poi.icon,
+          },
+          geometry: { type: "Point", coordinates: [poi.lng, poi.lat] }
+        }));
 
       const source = maplibreMap.getSource("poi-source");
       if (source && "setData" in source) {
@@ -3704,53 +6020,226 @@ if (staticRoute) {
     }
   }
 
-  async function refreshOverpassLayer(): Promise<void> {
-    const bounds = map.getBounds();
-    // Avoid refetch if bounds similar
-    if (lastOverpassFetchBounds && lastOverpassFetchBounds.contains(bounds.getSouthWest()) && lastOverpassFetchBounds.contains(bounds.getNorthEast())) return;
-    lastOverpassFetchBounds = bounds.pad(0.2);
-    const requestId = ++overpassLayerRequestSequence;
-    const pois = await fetchOverpassFeaturesForBounds(bounds);
-    if (requestId !== overpassLayerRequestSequence) return;
+  function trafficLightMapImage(active: TrafficColor): { width: number; height: number; data: Uint8Array } {
+    const width = 32;
+    const height = 48;
+    const data = new Uint8Array(width * height * 4);
+    const put = (x: number, y: number, rgba: [number, number, number, number]) => {
+      data.set(rgba, (y * width + x) * 4);
+    };
+    for (let y = 1; y < height - 1; y += 1) {
+      for (let x = 4; x < width - 4; x += 1) {
+        const roundedCorner = (x < 7 || x > width - 8) && (y < 4 || y > height - 5);
+        if (!roundedCorner) put(x, y, [17, 24, 39, 255]);
+      }
+    }
+    const lamps: Array<[TrafficColor, number, [number, number, number]]> = [
+      ["red", 11, [239, 68, 68]],
+      ["yellow", 24, [250, 204, 21]],
+      ["green", 37, [34, 197, 94]],
+    ];
+    for (const [color, cy, rgb] of lamps) {
+      for (let y = cy - 6; y <= cy + 6; y += 1) {
+        for (let x = 10; x <= 22; x += 1) {
+          if (Math.hypot(x - 16, y - cy) > 6) continue;
+          put(x, y, color === active ? [...rgb, 255] : [75, 85, 99, 210]);
+        }
+      }
+    }
+    return { width, height, data };
+  }
 
-    // Keep verified OSM records during transient API failures. Do not invent
-    // nearby names or coordinates.
-    let finalPois = pois.length
-      ? pois
-      : Array.from(state.poiData.values()).filter((poi) => bounds.contains([poi.lat, poi.lng]));
+  function ensureMapLibreTrafficLightImages(maplibreMap: any): void {
+    (["red", "yellow", "green"] as TrafficColor[]).forEach((color) => {
+      const id = `its-traffic-light-${color}`;
+      if (!maplibreMap.hasImage?.(id)) maplibreMap.addImage(id, trafficLightMapImage(color));
+    });
+  }
 
-    finalPois = rankPoisForView(finalPois);
+  function updateMapLibreDeviceLayer(): void {
+    const maplibreMap = state.maplibreMap;
+    if (!maplibreMap || state.baseMode === "satellite") return;
+    const source = maplibreMap.getSource?.("its-device-source");
+    if (!source || !("setData" in source)) return;
+    (source as any).setData({
+      type: "FeatureCollection",
+      features: state.devices
+        .filter((device) => isValidCoordinate(device.position.lat, device.position.lng))
+        .map((device) => ({
+          type: "Feature",
+          properties: {
+            id: device.id,
+            label: device.label,
+            imageId: `its-traffic-light-${trafficStateForDevice(device).color}`,
+          },
+          geometry: { type: "Point", coordinates: [device.position.lng, device.position.lat] },
+        })),
+    });
+  }
 
-    if (pois.length) state.poiData.clear();
-    finalPois.forEach((poi) => state.poiData.set(poi.id, poi));
+  function renderCurrentPoiDataset(): void {
+    window.cancelAnimationFrame(poiRenderFrame);
+    poiRenderFrame = window.requestAnimationFrame(() => {
+      if (!state.overpassLayer) state.overpassLayer = L.layerGroup().addTo(map);
 
-    // Update MapLibre POI layer (for 3D)
-    updateMapLibrePoiLayer(finalPois);
+      // Keep every record for search, routing, the AI assistant, and POI
+      // modals. Only the visible subset becomes a Leaflet marker.
+      state.poiData.clear();
+      currentPoiDataset.forEach((poi) => state.poiData.set(poi.id, poi));
+      mapRoot.dataset.poiCacheSize = String(currentPoiDataset.length);
 
-    if (!state.overpassLayer) state.overpassLayer = L.layerGroup().addTo(map);
-    state.overpassLayer.clearLayers();
-    if (state.maplibreMap && state.baseMode !== "satellite") {
+      if (!state.poiVisible) {
+        updateMapLibrePoiLayer([]);
+        for (const marker of state.poiMarkers.values()) {
+          state.overpassLayer?.removeLayer(marker);
+          if (map.hasLayer(marker)) map.removeLayer(marker);
+        }
+        state.poiMarkers.clear();
+        for (const marker of state.poiClusterMarkers.values()) {
+          state.overpassLayer?.removeLayer(marker);
+          if (map.hasLayer(marker)) map.removeLayer(marker);
+        }
+        state.poiClusterMarkers.clear();
+        state.poiClusters = [];
+        mapRoot.dataset.poiClusters = "0";
+        state.poiLabelVisibility.clear();
+        updateTabletCategoryView();
+        return;
+      }
+
+      const visiblePois = rankPoisForView(currentPoiDataset);
+      const visibleIds = new Set(visiblePois.map((poi) => poi.id));
+      const visibleClusterIds = new Set(state.poiClusters.map((cluster) => cluster.id));
+      const useMapLibre = state.baseMode !== "satellite" && Boolean(state.maplibreMap);
+      const markerSize = poiMarkerSizeByZoom();
+
+      updateMapLibrePoiLayer(currentPoiDataset);
+
+      visiblePois.forEach((poi) => {
+        const showLabel = state.poiLabelVisibility.get(poi.id) !== false;
+        const renderKey = `${Math.round(markerSize)}:${showLabel ? 1 : 0}`;
+        let marker = state.poiMarkers.get(poi.id);
+        if (!marker) {
+          marker = L.marker([poi.lat, poi.lng], {
+            pane: POI_PANE,
+            icon: makePoiIcon(poi, markerSize),
+            interactive: true,
+            riseOnHover: true,
+            zIndexOffset: 900 - poiPriority(poi) * 18,
+          });
+          (marker.options as L.MarkerOptions & { poiId?: string; poiRenderKey?: string }).poiId = poi.id;
+          (marker.options as L.MarkerOptions & { poiId?: string; poiRenderKey?: string }).poiRenderKey = renderKey;
+          state.poiMarkers.set(poi.id, marker);
+        } else {
+          marker.setLatLng([poi.lat, poi.lng]);
+          const options = marker.options as L.MarkerOptions & { poiRenderKey?: string };
+          if (options.poiRenderKey !== renderKey) {
+            marker.setIcon(makePoiIcon(poi, markerSize));
+            options.poiRenderKey = renderKey;
+          }
+          marker.setZIndexOffset(900 - poiPriority(poi) * 18);
+        }
+
+        marker.off("click");
+        marker.on("click", () => handlePoiClick(poi));
+        if (!(state.overpassLayer as L.LayerGroup).hasLayer(marker)) {
+          (state.overpassLayer as L.LayerGroup).addLayer(marker);
+        }
+        const element = marker.getElement() as HTMLElement | null;
+        if (element) element.style.display = useMapLibre ? "none" : "";
+        setMarkerA11y(marker, `${poi.title}, kategori ${poi.kind}. Buka detail lokasi.`);
+      });
+
+      state.poiClusters.forEach((cluster) => {
+        const title = poiClusterTitle(cluster);
+        let marker = state.poiClusterMarkers.get(cluster.id);
+        if (!marker) {
+          marker = L.marker([cluster.lat, cluster.lng], {
+            pane: POI_PANE,
+            icon: makePoiClusterIcon(cluster),
+            interactive: true,
+            riseOnHover: true,
+            zIndexOffset: 940,
+            title,
+          });
+          state.poiClusterMarkers.set(cluster.id, marker);
+        } else {
+          marker.setLatLng([cluster.lat, cluster.lng]);
+          marker.setIcon(makePoiClusterIcon(cluster));
+        }
+        marker.off("click");
+        marker.on("click", () => {
+          beginExplicitMapNavigation();
+          const clusterBounds = L.latLngBounds(cluster.pois.map((poi) => [poi.lat, poi.lng] as [number, number]));
+          if (clusterBounds.getNorthEast().distanceTo(clusterBounds.getSouthWest()) < 1) {
+            map.setView([cluster.lat, cluster.lng], Math.min(20, map.getZoom() + 2), { animate: true });
+          } else {
+            map.fitBounds(clusterBounds, { padding: [48, 48], maxZoom: Math.min(20, map.getZoom() + 3), animate: true });
+          }
+        });
+        marker.bindTooltip(escapeHtml(title), { direction: "top", sticky: true, opacity: 0.94 });
+        if (!(state.overpassLayer as L.LayerGroup).hasLayer(marker)) (state.overpassLayer as L.LayerGroup).addLayer(marker);
+        const element = marker.getElement() as HTMLElement | null;
+        if (element) element.style.display = useMapLibre ? "none" : "";
+        setMarkerA11y(marker, `${title}. Perbesar untuk memisahkan ikon.`);
+      });
+      mapRoot.dataset.poiClusters = String(state.poiClusters.length);
+
+      // Remove only markers that no longer qualify. Reusing the others avoids
+      // DOM churn and keeps the map responsive while panning or zooming.
+      for (const [id, marker] of state.poiMarkers.entries()) {
+        if (visibleIds.has(id)) continue;
+        state.overpassLayer?.removeLayer(marker);
+        if (map.hasLayer(marker)) map.removeLayer(marker);
+        state.poiMarkers.delete(id);
+      }
+      for (const [id, marker] of state.poiClusterMarkers.entries()) {
+        if (visibleClusterIds.has(id)) continue;
+        state.overpassLayer?.removeLayer(marker);
+        if (map.hasLayer(marker)) map.removeLayer(marker);
+        state.poiClusterMarkers.delete(id);
+      }
+
       updateTabletCategoryView();
+    });
+  }
+
+  async function refreshOverpassLayer(force = false): Promise<void> {
+    if (!state.poiVisible) {
+      renderCurrentPoiDataset();
       return;
     }
-    finalPois.filter((poi) => poi.kind !== "other").forEach((poi) => {
-      const marker = L.marker([poi.lat, poi.lng], {
-        icon: makePoiIcon(poi, poiMarkerSizeByZoom()),
-        interactive: true,
-        riseOnHover: true,
-        zIndexOffset: 450,
-      }).addTo(state.overpassLayer as L.LayerGroup);
-      (marker.options as any).poiId = poi.id;
-      marker.on('click', () => handlePoiClick(poi));
-      const el = marker.getElement() as HTMLElement | null;
-      if (el) el.style.display = '';
-      // track poi data/marker so other features can use them
-      state.poiData.set(poi.id, poi);
-      state.poiMarkers.set(poi.id, marker);
-      setMarkerA11y(marker, `${poi.title}, kategori ${poi.kind}. Buka detail lokasi.`);
-    });
+    const bounds = map.getBounds();
+    const zoom = map.getZoom();
+    // A country-scale bbox is not useful for an interactive POI layer and can
+    // overload a public Overpass endpoint. The vector basemap keeps national context;
+    // verified custom POIs are requested as visitors zoom into a city.
+    if (zoom < 12) {
+      renderCurrentPoiDataset();
+      return;
+    }
+    const padding = zoom < 14 ? 0.32 : zoom < 17 ? 0.2 : 0.12;
+    const requestBounds = bounds.pad(padding);
+    if (!force && lastOverpassFetchBounds && lastOverpassFetchBounds.contains(bounds.getSouthWest()) && lastOverpassFetchBounds.contains(bounds.getNorthEast())) {
+      renderCurrentPoiDataset();
+      return;
+    }
+    // Mark the buffered region before the request starts. A temporary offline
+    // condition must not trigger a new multi-endpoint Overpass request on every
+    // pan event; moving outside this buffer (or an explicit force refresh)
+    // still retries it.
+    lastOverpassFetchBounds = requestBounds;
+    const requestId = ++overpassLayerRequestSequence;
+    const pois = await fetchOverpassFeaturesForBounds(requestBounds);
+    if (requestId !== overpassLayerRequestSequence) return;
 
-    updateTabletCategoryView();
+    // Preserve verified records through a transient Overpass/network failure.
+    // No fabricated nearby POIs are introduced here.
+    if (pois.length) {
+      mergePoiDataset(pois);
+    }
+    renderCurrentPoiDataset();
+    queueAdjacentPoiPrefetch(requestBounds, zoom);
   }
 
   // When user clicks on raster tile, query a small radius for nearby features and open modal
@@ -3758,10 +6247,38 @@ if (staticRoute) {
     const lat = ev.latlng.lat;
     const lng = ev.latlng.lng;
 
-    // Resolve visible MapLibre POIs while Leaflet remains the interaction plane.
+    // Resolve vector symbols using MapLibre's pitched projection. Leaflet DOM
+    // markers are intentionally hidden in vector modes because their flat
+    // screen projection drifts when the camera is pitched.
     if (state.baseMode !== "satellite" && state.maplibreMap) {
       try {
         const point = state.maplibreMap.project([lng, lat]);
+        const hitBox: [[number, number], [number, number]] = [
+          [point.x - 18, point.y - 18],
+          [point.x + 18, point.y + 18],
+        ];
+        const deviceFeatures = state.maplibreMap.queryRenderedFeatures(hitBox, {
+          layers: ["its-device-symbols"],
+        });
+        const deviceId = String(deviceFeatures[0]?.properties?.id || "");
+        const device = state.devices.find((candidate) => candidate.id === deviceId);
+        if (device) {
+          state.device = device;
+          renderCameraTile();
+          openModal(device);
+          return;
+        }
+
+        const cameraFeatures = state.maplibreMap.queryRenderedFeatures(hitBox, {
+          layers: ["its-detail-ornament-symbols", "its-detail-ornament-points"],
+        }).filter((feature: any) => /^(?:surveillance|speed_camera)$/.test(String(feature.properties?.ornamentKind || "")));
+        const cameraFeature = cameraFeatures[0];
+        if (cameraFeature) {
+          openMapDynamicsPoint(cameraFeature as any, ev.latlng);
+          return;
+        }
+
+        if (!state.poiVisible) return;
         const features = state.maplibreMap.queryRenderedFeatures(point, {
           layers: ["poi-symbols", "poi-halo"],
         });
@@ -3778,6 +6295,8 @@ if (staticRoute) {
         // ignore MapLibre query errors
       }
     }
+
+    if (!state.poiVisible) return;
 
     // Fallback: query Overpass for nearby features
     try {
@@ -3804,19 +6323,22 @@ if (staticRoute) {
       const data = await fetchOverpassJson(q, "poi");
       const el = (data.elements || [])[0];
       if (!el) return;
-      const tags = el.tags || {};
+      const tags = Object.fromEntries(Object.entries(el.tags || {}).map(([key, value]) => [key, String(value)])) as Record<string, string>;
       const latR = el.type === 'node' ? el.lat : (el.center && el.center.lat) || el.lat;
       const lngR = el.type === 'node' ? el.lon : (el.center && el.center.lon) || el.lon;
-      const kind = classifyPoiKind(tags);
+      const definition = resolvePoiIcon(tags);
       const poi: PoiRecord = {
         id: `overpass-click-${el.type}-${el.id}`,
-        kind,
+        kind: definition.category,
+        iconId: definition.id,
         title: poiNameFromTags(tags, `Feature ${el.id}`),
         description: tags.description || tags['note'] || '',
         address: poiAddressFromTags(tags),
-        imageUrl: tags.image || POI_LIBRARY[kind].imageUrl,
-        rating: POI_LIBRARY[kind].rating,
-        icon: poiVisual(kind).icon,
+        imageUrl: tags.image || poiIconAssetUrl(definition, "hero") || ITS_APP_ICON,
+        icon: definition.glyph,
+        tags,
+        sourceLabel: "OpenStreetMap",
+        sourceUrl: `https://www.openstreetmap.org/${encodeURIComponent(String(el.type))}/${encodeURIComponent(String(el.id))}`,
         lat: latR, lng: lngR,
       };
       handlePoiClick(poi);
@@ -3826,8 +6348,8 @@ if (staticRoute) {
   });
 
   map.on('moveend', () => {
+    syncMapStateToUrl();
     if (state.maplibreMap && state.baseMode !== "satellite") {
-      state.overpassLayer?.clearLayers();
       if (state.roadGuideLayer) state.roadGuideLayer.clearLayers();
       if (state.visionLayer) state.visionLayer.clearLayers();
       void refreshOverpassLayer();
@@ -3919,6 +6441,29 @@ if (staticRoute) {
     return `${time} WIB - ${day}`;
   }
 
+  function snapshotHistorySlotPriority(slot: string): number {
+    const normalized = slot.trim().toLowerCase();
+    if (normalized === "image1" || normalized === "snapshot1") return 0;
+    if (normalized === "image2" || normalized === "snapshot2") return 1;
+    return 2;
+  }
+
+  function compareSnapshotHistoryItems(a: SnapshotHistoryItem, b: SnapshotHistoryItem): number {
+    const timeDelta = b.capturedAt - a.capturedAt;
+    const isSameCapture = a.deviceId === b.deviceId && Math.abs(timeDelta) < 1_500;
+    if (isSameCapture) {
+      const slotDelta = snapshotHistorySlotPriority(a.slot) - snapshotHistorySlotPriority(b.slot);
+      if (slotDelta !== 0) return slotDelta;
+    }
+    return timeDelta || snapshotHistorySlotPriority(a.slot) - snapshotHistorySlotPriority(b.slot);
+  }
+
+  function nextPendingSnapshotHistoryItem(): SnapshotHistoryItem | undefined {
+    return state.snapshotHistoryItems
+      .filter((item) => !item.analyzed)
+      .sort(compareSnapshotHistoryItems)[0];
+  }
+
   function appendSnapshotHistoryFromRaw(raw: unknown, device: DeviceRecord | null): boolean {
     const record = objectRecord(raw);
     const source = stringValue(record.source);
@@ -3941,6 +6486,13 @@ if (staticRoute) {
       ) || Date.now();
       const imageKey = Math.abs(hashString(`${imageUrl}:${capturedAt}`)).toString(36);
       const id = keepAppendMode ? `${deviceId}:${key}:${capturedAt}:${imageKey}` : `${deviceId}:${key}`;
+      const analysis = normalizeCameraAnalysis(record[`${key}Analysis`]);
+      const analysisMatchesSnapshot = Boolean(
+        analysis
+        && analysis.frameWidth > 0
+        && analysis.frameHeight > 0
+        && analysis.updatedAt >= capturedAt,
+      );
       const existing = state.snapshotHistoryItems.find((item) =>
         item.id === id
         || (item.imageUrl === imageUrl && Math.abs(item.capturedAt - capturedAt) < 1000),
@@ -3953,13 +6505,15 @@ if (staticRoute) {
         capturedAt,
         deviceId,
         locationText: snapshotHistoryLocationText(device),
-        frameWidth: 0,
-        frameHeight: 0,
-        detections: [],
-        analyzed: false,
-        scanStartedAt: Date.now(),
-        revealedAt: 0,
-        analysisNote: "",
+        frameWidth: analysisMatchesSnapshot ? analysis?.frameWidth || 0 : 0,
+        frameHeight: analysisMatchesSnapshot ? analysis?.frameHeight || 0 : 0,
+        detections: analysisMatchesSnapshot ? analysis?.detections || [] : [],
+        analyzed: analysisMatchesSnapshot,
+        scanStartedAt: analysisMatchesSnapshot ? analysis?.updatedAt || Date.now() : Date.now(),
+        revealedAt: analysisMatchesSnapshot ? Date.now() : 0,
+        analysisNote: analysisMatchesSnapshot
+          ? `RF-DETR tervalidasi${analysis?.fps ? ` ${analysis.fps.toFixed(1)} FPS` : ""}`
+          : "",
       };
       state.snapshotHistoryItems = [item, ...state.snapshotHistoryItems.filter((entry) => {
         if (keepAppendMode) return entry.id !== id;
@@ -3969,14 +6523,38 @@ if (staticRoute) {
       })].slice(0, SNAPSHOT_HISTORY_LIMIT);
       changed = true;
     });
-    state.snapshotHistoryItems = state.snapshotHistoryItems.sort((a, b) => b.capturedAt - a.capturedAt);
-    if (changed) saveSnapshotHistoryItems();
+    state.snapshotHistoryItems = state.snapshotHistoryItems.sort(compareSnapshotHistoryItems);
+    if (changed) {
+      saveSnapshotHistoryItems();
+      scheduleSnapshotHistoryWarmup();
+    }
     return changed;
+  }
+
+  function appendDeviceCameraHistory(device: DeviceRecord | null): boolean {
+    const dataset = device?.cameraDataset;
+    if (!device || !dataset || (!dataset.snapshot1Url && !dataset.snapshot2Url)) return false;
+    return appendSnapshotHistoryFromRaw({
+      deviceId: device.id,
+      source: dataset.source || "device-camera-dataset",
+      image1: dataset.snapshot1Url,
+      image1UpdatedAt: dataset.snapshot1UpdatedAt || dataset.updatedAt || device.cameraUpdatedAt,
+      image1Analysis: dataset.aiDetections?.snapshot1,
+      image2: dataset.snapshot2Url,
+      image2UpdatedAt: dataset.snapshot2UpdatedAt || dataset.updatedAt || device.cameraUpdatedAt,
+      image2Analysis: dataset.aiDetections?.snapshot2,
+      updatedAt: dataset.updatedAt || device.cameraUpdatedAt || Date.now(),
+    }, device);
+  }
+
+  function hasDeviceCameraHistory(device: DeviceRecord | null): boolean {
+    const dataset = device?.cameraDataset;
+    return Boolean(dataset && (isUsableSnapshotImageUrl(dataset.snapshot1Url || "") || isUsableSnapshotImageUrl(dataset.snapshot2Url || "")));
   }
 
   function pruneSnapshotHistoryItemsForClosedPanel(): void {
     state.snapshotHistoryItems = [...state.snapshotHistoryItems]
-      .sort((a, b) => b.capturedAt - a.capturedAt)
+      .sort(compareSnapshotHistoryItems)
       .slice(0, 2);
     saveSnapshotHistoryItems();
   }
@@ -4002,23 +6580,70 @@ if (staticRoute) {
       updatedAt: normalizeEpoch(finiteNumber(record.updatedAt) ?? 0),
       source: stringValue(record.source),
       path: stringValue(record.path),
+      aiDetections: normalizeCameraAnalyses(record.aiDetections),
     };
     return dataset.snapshot1Url || dataset.snapshot2Url || dataset.updatedAt ? dataset : undefined;
   }
 
+  function normalizeCameraAnalysis(raw: unknown): TrafficCameraAnalysis | undefined {
+    const record = objectRecord(raw);
+    if (!Object.keys(record).length) return undefined;
+    const frameWidth = Math.max(0, finiteNumber(record.frameWidth) ?? 0);
+    const frameHeight = Math.max(0, finiteNumber(record.frameHeight) ?? 0);
+    const detections = normalizeDetections(record.detections);
+    const updatedAt = normalizeEpoch(finiteNumber(record.updatedAt) ?? 0);
+    if (!updatedAt || !frameWidth || !frameHeight) return undefined;
+    return {
+      updatedAt,
+      objectCount: Math.max(0, Math.round(finiteNumber(record.objectCount) ?? detections.length)),
+      vehicleCount: Math.max(0, Math.round(finiteNumber(record.vehicleCount) ?? detections.filter((item) => item.vehicle).length)),
+      fps: Math.max(0, finiteNumber(record.fps) ?? 0),
+      frameWidth,
+      frameHeight,
+      modelUrl: stringValue(record.modelUrl),
+      detections,
+    };
+  }
+
+  function normalizeCameraAnalyses(raw: unknown): TrafficCameraDataset["aiDetections"] | undefined {
+    const record = objectRecord(raw);
+    const snapshot1 = normalizeCameraAnalysis(record.snapshot1);
+    const snapshot2 = normalizeCameraAnalysis(record.snapshot2);
+    return snapshot1 || snapshot2 ? { snapshot1, snapshot2 } : undefined;
+  }
+
   function mergeCameraDataset(...datasets: Array<TrafficCameraDataset | undefined>): TrafficCameraDataset | undefined {
     const merged: TrafficCameraDataset = {};
+    let metadataUpdatedAt = 0;
     datasets.forEach((dataset) => {
       if (!dataset) return;
-      if (!merged.snapshot1Url && dataset.snapshot1Url) merged.snapshot1Url = dataset.snapshot1Url;
-      if (!merged.snapshot2Url && dataset.snapshot2Url && dataset.snapshot2Url !== merged.snapshot1Url) merged.snapshot2Url = dataset.snapshot2Url;
-      if (!merged.snapshot1UpdatedAt || (dataset.snapshot1UpdatedAt || 0) > merged.snapshot1UpdatedAt) merged.snapshot1UpdatedAt = dataset.snapshot1UpdatedAt;
-      if (!merged.snapshot2UpdatedAt || (dataset.snapshot2UpdatedAt || 0) > merged.snapshot2UpdatedAt) merged.snapshot2UpdatedAt = dataset.snapshot2UpdatedAt;
-      if (!merged.active && dataset.active) merged.active = dataset.active;
+      const snapshot1UpdatedAt = dataset.snapshot1UpdatedAt || dataset.updatedAt || 0;
+      const snapshot2UpdatedAt = dataset.snapshot2UpdatedAt || dataset.updatedAt || 0;
+      if (dataset.snapshot1Url && (!merged.snapshot1Url || snapshot1UpdatedAt >= (merged.snapshot1UpdatedAt || 0))) {
+        merged.snapshot1Url = dataset.snapshot1Url;
+        merged.snapshot1UpdatedAt = snapshot1UpdatedAt;
+      }
+      if (dataset.snapshot2Url && (!merged.snapshot2Url || snapshot2UpdatedAt >= (merged.snapshot2UpdatedAt || 0))) {
+        merged.snapshot2Url = dataset.snapshot2Url;
+        merged.snapshot2UpdatedAt = snapshot2UpdatedAt;
+      }
       if (!merged.updatedAt || (dataset.updatedAt || 0) > merged.updatedAt) merged.updatedAt = dataset.updatedAt;
-      if (!merged.source && dataset.source) merged.source = dataset.source;
-      if (!merged.path && dataset.path) merged.path = dataset.path;
+      if ((dataset.updatedAt || 0) >= metadataUpdatedAt) {
+        metadataUpdatedAt = dataset.updatedAt || 0;
+        if (dataset.active) merged.active = dataset.active;
+        if (dataset.source) merged.source = dataset.source;
+        if (dataset.path) merged.path = dataset.path;
+      }
+      const snapshot1Analysis = dataset.aiDetections?.snapshot1;
+      const snapshot2Analysis = dataset.aiDetections?.snapshot2;
+      if (snapshot1Analysis && snapshot1Analysis.updatedAt >= (merged.aiDetections?.snapshot1?.updatedAt || 0)) {
+        merged.aiDetections = { ...merged.aiDetections, snapshot1: snapshot1Analysis };
+      }
+      if (snapshot2Analysis && snapshot2Analysis.updatedAt >= (merged.aiDetections?.snapshot2?.updatedAt || 0)) {
+        merged.aiDetections = { ...merged.aiDetections, snapshot2: snapshot2Analysis };
+      }
     });
+    if (merged.snapshot2Url === merged.snapshot1Url) merged.snapshot2Url = undefined;
     return merged.snapshot1Url || merged.snapshot2Url || merged.updatedAt ? merged : undefined;
   }
 
@@ -4997,15 +7622,17 @@ if (staticRoute) {
       "#privacy-info-modal.open",
       "#app-license-info-modal.open",
       "#about-site-info-modal.open",
+      "#map-dynamics-camera-modal.open",
       "#m-device-modal.open",
       "#m-poi-modal.open",
+      "#m-layer-modal.open",
       "#m-ai-history-detail-modal.open",
       "body.ai-history-sheet-open #m-ai-history-sheet",
     ].join(", ");
   }
 
   function isMapSidePanelModal(id: string): boolean {
-    return id === "m-device-modal" || id === "m-poi-modal" || id === "m-ai-history-detail-modal";
+    return id === "m-device-modal" || id === "m-poi-modal" || id === "m-layer-modal" || id === "m-ai-history-detail-modal";
   }
 
   function clearSidePanelWidth(delayMs = 260): void {
@@ -5034,6 +7661,8 @@ if (staticRoute) {
         modal.remove();
         return;
       }
+      modal.querySelector<HTMLElement>(".m-device-sheet, .m-poi-sheet, .m-ai-history-detail-sheet")
+        ?.style.removeProperty("transform");
       modal.classList.remove("open");
       modal.classList.add("closing");
       window.setTimeout(() => modal.remove(), 260);
@@ -5044,6 +7673,7 @@ if (staticRoute) {
     state.trafficRefreshTimer = 0;
     document.body.classList.remove("map-modal-panel-open");
     clearSidePanelWidth();
+    renderCurrentPoiDataset();
   }
 
   function setSheetActiveTab(sheet: HTMLElement, tabName: string): void {
@@ -5069,6 +7699,20 @@ if (staticRoute) {
     requestAnimationFrame(() => {
       overlay.classList.add("open");
       const sheet = overlay.querySelector<HTMLElement>(`.${sheetClass.split(" ")[0]}`);
+      if (sheet && isMapSidePanelModal(id)) {
+        const desktopPanel = usesDesktopSidePanel();
+        sheet.style.transform = desktopPanel ? "translateX(0)" : "translateY(0)";
+        window.setTimeout(() => {
+          if (!overlay.classList.contains("open") || overlay.classList.contains("closing")) return;
+          const matrix = new DOMMatrix(getComputedStyle(sheet).transform);
+          const remainingOffset = desktopPanel ? Math.abs(matrix.m41) : Math.abs(matrix.m42);
+          if (remainingOffset < 1) return;
+          sheet.style.transition = "none";
+          sheet.style.transform = desktopPanel ? "translateX(0)" : "translateY(0)";
+          void sheet.offsetWidth;
+          requestAnimationFrame(() => sheet.style.removeProperty("transition"));
+        }, 380);
+      }
       if (isMapSidePanelModal(id)) {
         document.body.classList.add("map-modal-panel-open");
         setSidePanelWidthFromSheet(sheet);
@@ -5138,8 +7782,8 @@ if (staticRoute) {
   function ensureMarker(device: DeviceRecord): void {
     const traffic = trafficStateForDevice(device);
     const size = markerSizeByZoom();
-    const hitWidth = Math.max(44, size);
-    const hitHeight = Math.max(44, Math.round(size * 1.5));
+    const hitWidth = Math.max(48, size);
+    const hitHeight = Math.max(48, Math.round(size * 1.5));
     const icon = L.divIcon({
       className: "traffic-light-marker-icon",
       html: makeTrafficLightSvg(traffic, size),
@@ -5153,6 +7797,7 @@ if (staticRoute) {
 
     if (!existing) {
       const m = L.marker(latlng, {
+        pane: RASPBERRY_PANE,
         icon,
         interactive: true,
         title: `${device.label} - buka detail traffic light`,
@@ -5174,20 +7819,29 @@ if (staticRoute) {
     // Update position and icon
     existing.setLatLng(latlng);
     existing.setIcon(icon);
+    existing.setZIndexOffset(1000);
 
-    // compute heading from previous position (if any) and apply rotation/greyscale
+    // Compute heading from the previous position. Leaflet owns the marker-root
+    // transform (translate/rotate); only rotate the inner drawing so a realtime
+    // update can never displace the marker from its geographic anchor.
     const prev = state.prevPositionById.get(device.id) || null;
     try {
       const el = existing.getElement?.() as HTMLElement | null;
       if (el) {
+        const visual = el.querySelector<SVGElement>(".traffic-light-marker");
         if (prev) {
           const bearing = computeBearing(prev.lat, prev.lng, latlng.lat, latlng.lng);
-          el.style.transform = `rotate(${bearing}deg)`;
+          if (visual) visual.style.transform = `rotate(${bearing}deg)`;
         } else {
-          el.style.transform = "";
+          visual?.style.removeProperty("transform");
+        }
+        if (visual) {
+          visual.style.transformBox = "fill-box";
+          visual.style.transformOrigin = "50% 100%";
+          visual.style.transition = "transform 300ms linear";
         }
         el.style.filter = "grayscale(0.35)";
-        el.style.transition = "transform 300ms linear, filter 300ms";
+        el.style.transition = "filter 300ms";
         el.style.pointerEvents = "auto";
       }
     } catch { /* ignore DOM access errors */ }
@@ -5208,8 +7862,8 @@ if (staticRoute) {
     for (const device of state.devices) {
       const marker = state.markers.get(device.id);
       if (!marker) continue;
-      const hitWidth = Math.max(44, deviceSize);
-      const hitHeight = Math.max(44, Math.round(deviceSize * 1.5));
+      const hitWidth = Math.max(48, deviceSize);
+      const hitHeight = Math.max(48, Math.round(deviceSize * 1.5));
       marker.setIcon(L.divIcon({
         className: "traffic-light-marker-icon",
         html: makeTrafficLightSvg(trafficStateForDevice(device), deviceSize),
@@ -5220,20 +7874,13 @@ if (staticRoute) {
       setMarkerA11y(marker, `${device.label}, traffic light ${trafficStateForDevice(device).color}. Buka detail perangkat.`);
     }
 
-    const poiSize = poiMarkerSizeByZoom();
-    for (const [id, poi] of state.poiData.entries()) {
-      const marker = state.poiMarkers.get(id);
-      if (!marker) continue;
-      marker.setIcon(makePoiIcon(poi, poiSize));
-      setMarkerA11y(marker, `${poi.title}, kategori ${poi.kind}. Buka detail lokasi.`);
-    }
+    renderCurrentPoiDataset();
 
-    // Rescale MapLibre POI layer text size
+    // Keep MapLibre POI text stable in screen pixels as the camera zooms.
     const maplibreMap = state.maplibreMap;
-    if (maplibreMap && state.baseMode === "3d") {
+    if (maplibreMap && state.baseMode !== "satellite" && maplibreMap.getLayer?.("poi-symbols")) {
       try {
-        const scaledSize = 14 + (map.getZoom() - 13) * 1.2;
-        maplibreMap.setLayoutProperty("poi-symbols", "text-size", Math.min(Math.max(scaledSize, 10), 24));
+        maplibreMap.setLayoutProperty("poi-symbols", "text-size", 11);
       } catch {
         /* ignore */
       }
@@ -5247,6 +7894,7 @@ if (staticRoute) {
         state.markers.delete(deviceId);
       }
     }
+    mapRoot.dataset.raspberryMarkerCount = String(state.markers.size);
   }
 
   // ─── Compass ────────────────────────────────────────────────────
@@ -5288,6 +7936,7 @@ if (staticRoute) {
   }
 
   function handleCompassClick(): void {
+    beginExplicitMapNavigation();
     const norm = normBearing(map.getBearing?.() ?? 0);
     const snapped = Math.round(norm / BEARING_STEP) * BEARING_STEP;
     const nextBearing = (snapped + BEARING_STEP) % 360;
@@ -5301,12 +7950,22 @@ if (staticRoute) {
     return Boolean(state.maplibreContainer?.classList.contains("is-ready"));
   }
 
+  function applyMapLibreDimensionMode(maplibreMap: any): void {
+    const visibility = state.baseMode === "3d" ? "visible" : "none";
+    const layers = maplibreMap.getStyle?.()?.layers || [];
+    layers.forEach((layer: any) => {
+      if (layer?.type !== "fill-extrusion") return;
+      try { maplibreMap.setLayoutProperty(layer.id, "visibility", visibility); } catch { /* Optional style layer. */ }
+    });
+  }
+
   async function ensureMapLibreMap(): Promise<any | null> {
     if (state.maplibreMap) return state.maplibreMap;
 
     try {
       const maplibreglImport = await import("maplibre-gl");
       const maplibregl = (maplibreglImport as any).default || maplibreglImport;
+      const nationalStyle = await nationalVectorStyle(maplibregl);
 
       if (!state.maplibreContainer) {
         const container = document.createElement("div");
@@ -5317,7 +7976,7 @@ if (staticRoute) {
 
       const maplibreMap = new maplibregl.Map({
         container: state.maplibreContainer,
-        style: MAPLIBRE_STYLE_URL,
+        style: nationalStyle,
         center: map.getCenter(),
         zoom: map.getZoom(),
         bearing: map.getBearing?.() ?? 0,
@@ -5329,19 +7988,41 @@ if (staticRoute) {
       });
       state.maplibreMap = maplibreMap;
 
+      // Register before `load`: missing sprite icons can be requested while the
+      // style is still parsing, earlier than the former load-handler listener.
+      maplibreMap.on("styleimagemissing", (event: any) => {
+        const id = event?.id;
+        if (!id || maplibreMap.hasImage(id)) return;
+        // These images have dedicated asynchronous/synchronous loaders. A
+        // transparent placeholder would permanently turn their symbols into dots.
+        if (String(id).startsWith("poi-") || String(id).startsWith("its-traffic-light-")) return;
+        maplibreMap.addImage(id, {
+          width: 1,
+          height: 1,
+          data: new Uint8Array([0, 0, 0, 0]),
+        });
+      });
+
       let surfaceRevealed = false;
       const revealRenderedSurface = () => {
         if (surfaceRevealed || !state.maplibreContainer?.isConnected) return;
+        if (state.baseMode === "satellite" || state.maplibreMap !== maplibreMap) return;
         if (typeof maplibreMap.isStyleLoaded === "function" && !maplibreMap.isStyleLoaded()) return;
         if (typeof maplibreMap.areTilesLoaded === "function" && !maplibreMap.areTilesLoaded()) return;
         surfaceRevealed = true;
         state.maplibreContainer.classList.add("is-ready");
-        if (state.baseMode !== "satellite" && map.hasLayer(streetLayer)) map.removeLayer(streetLayer);
+        // Make the active POI renderer explicit at the map-root level. Leaflet
+        // markers can be created asynchronously after this frame (for example
+        // when an Overpass response arrives), so hiding individual elements is
+        // not sufficient to prevent duplicate vector + DOM symbols.
+        mapRoot.classList.add("maplibre-pois-active");
+        if (map.hasLayer(streetLayer)) map.removeLayer(streetLayer);
       };
       maplibreMap.on("idle", revealRenderedSurface);
       maplibreMap.on("render", revealRenderedSurface);
 
       maplibreMap.on("load", () => {
+        if (state.baseMode === "satellite" || state.maplibreMap !== maplibreMap) return;
         state.roadGuideLayer?.clearLayers();
         state.visionLayer?.clearLayers();
         syncMapLibreView(true);
@@ -5362,53 +8043,15 @@ if (staticRoute) {
 
         // Prevent noisy runtime warnings when style references icons not present
         // in the remote sprite sheet.
-        maplibreMap.on("styleimagemissing", (e: any) => {
-          const id = e?.id;
-          if (!id || maplibreMap.hasImage(id)) return;
-          const transparentPixel = new Uint8Array([0, 0, 0, 0]);
-          maplibreMap.addImage(id, { width: 1, height: 1, data: transparentPixel });
-        });
-
         // Add POI GeoJSON source for 3D rendering (prevents drift)
         try {
           if (!maplibreMap.getSource("poi-source")) {
             maplibreMap.addSource("poi-source", {
               type: "geojson",
               data: { type: "FeatureCollection", features: [] },
-              cluster: true,
-              clusterMaxZoom: 15,
-              clusterRadius: 46,
-            });
-          }
-
-          if (!maplibreMap.getLayer("poi-clusters")) {
-            maplibreMap.addLayer({
-              id: "poi-clusters",
-              type: "circle",
-              source: "poi-source",
-              filter: ["has", "point_count"],
-              paint: {
-                "circle-radius": ["step", ["get", "point_count"], 15, 8, 19, 20, 24],
-                "circle-color": "#ffffff",
-                "circle-stroke-color": "#2563eb",
-                "circle-stroke-width": 2,
-                "circle-opacity": 0.94,
-              },
-            });
-          }
-
-          if (!maplibreMap.getLayer("poi-cluster-count")) {
-            maplibreMap.addLayer({
-              id: "poi-cluster-count",
-              type: "symbol",
-              source: "poi-source",
-              filter: ["has", "point_count"],
-              layout: {
-                "text-field": ["get", "point_count_abbreviated"],
-                "text-size": 11,
-                "text-allow-overlap": true,
-              },
-              paint: { "text-color": "#0f172a" },
+              // Symbol collision keeps a single semantically dominant POI.
+              // Numeric cluster badges are deliberately not used.
+              cluster: false,
             });
           }
 
@@ -5419,30 +8062,18 @@ if (staticRoute) {
               source: "poi-source",
               filter: ["!", ["has", "point_count"]],
               paint: {
-                "circle-radius": ["interpolate", ["linear"], ["zoom"], 14, 4, 18, 10],
-                "circle-color": [
-                  "match", ["get", "kind"],
-                  "hospital", "#ef4444",
-                  "mall", "#8b5cf6",
-                  "campus", "#2563eb",
-                  "school", "#0f6cbd",
-                  "station", "#2563eb",
-                  "terminal", "#0f766e",
-                  "shelter", "#0284c7",
-                  "park", "#16a34a",
-                  "worship", "#d97706",
-                  "restaurant", "#e11d48",
-                  "monument", "#a16207",
-                  "#475569"
-                ],
-                "circle-opacity": 0.9,
-                "circle-stroke-color": "#ffffff",
-                "circle-stroke-width": 2
+                // Keep a generous invisible hit area for touch/click without
+                // exposing a field of ambiguous coloured dots while semantic
+                // bitmap icons are loading.
+                "circle-radius": ["interpolate", ["linear"], ["zoom"], 14, 12, 18, 22],
+                "circle-color": "rgba(0,0,0,0)",
+                "circle-opacity": 0,
+                "circle-stroke-width": 0
               }
             });
           }
 
-          // Add POI symbol layer using compact text labels (simple, no drift)
+          // The same generated POI icon manifest drives Leaflet and MapLibre.
           if (!maplibreMap.getLayer("poi-symbols")) {
             maplibreMap.addLayer({
               id: "poi-symbols",
@@ -5451,16 +8082,22 @@ if (staticRoute) {
               filter: ["!", ["has", "point_count"]],
               minzoom: 13,
               layout: {
+                "icon-image": ["get", "mapIconId"],
+                "icon-size": 0.22,
+                "icon-anchor": "bottom",
+                "icon-allow-overlap": false,
+                "icon-ignore-placement": false,
+                "icon-optional": true,
+                "symbol-sort-key": ["coalesce", ["get", "priority"], 999],
                 "text-field": ["get", "title"],
                 "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
-                "text-size": ["interpolate", ["linear"], ["zoom"], 13, 11, 18, 14],
-                "text-offset": [0, 1.25],
+                "text-size": 11,
+                "text-offset": [0, 1.45],
                 "text-anchor": "top",
                 "text-max-width": 12,
                 "text-allow-overlap": false,
                 "text-ignore-placement": false,
                 "text-optional": true,
-                "symbol-sort-key": ["get", "priority"],
               },
               paint: {
                 "text-color": "#111827",
@@ -5470,6 +8107,31 @@ if (staticRoute) {
               }
             });
           }
+
+          ensureMapLibreTrafficLightImages(maplibreMap);
+          if (!maplibreMap.getSource("its-device-source")) {
+            maplibreMap.addSource("its-device-source", {
+              type: "geojson",
+              data: { type: "FeatureCollection", features: [] },
+            });
+          }
+          if (!maplibreMap.getLayer("its-device-symbols")) {
+            maplibreMap.addLayer({
+              id: "its-device-symbols",
+              type: "symbol",
+              source: "its-device-source",
+              minzoom: 11,
+              layout: {
+                "icon-image": ["get", "imageId"],
+                "icon-size": ["interpolate", ["linear"], ["zoom"], 11, 0.55, 18, 0.9],
+                "icon-anchor": "bottom",
+                "icon-allow-overlap": true,
+                "icon-ignore-placement": true,
+                "symbol-sort-key": 0,
+              },
+            });
+          }
+          updateMapLibreDeviceLayer();
 
           // Add click handler for POI (allow MapLibre to detect clicks)
           // Note: MapLibre is non-interactive by default, so we detect features via ray casting
@@ -5484,6 +8146,12 @@ if (staticRoute) {
             const id = layer.id;
             const sourceLayer = layer['source-layer'];
 
+            // ITS Maps renders its own collision-ranked POIs. Hiding the
+            // basemap POI symbols prevents duplicate icons and labels.
+            if (sourceLayer === "poi" && layer.type === "symbol") {
+              try { maplibreMap.setLayoutProperty(id, "visibility", "none"); } catch { /* Optional style layer. */ }
+            }
+
             // 1. Mewarnai Tata Guna Lahan (Tanah Dasar)
             if (sourceLayer === 'landuse' && layer.type === 'fill') {
               try {
@@ -5492,7 +8160,7 @@ if (staticRoute) {
                   'hospital', '#ffd6d6',
                   'school', '#fff4c2',
                   'education', '#fff4c2',
-                  'residential', '#def7e3',
+                  'residential', '#f4f1ea',
                   'commercial', '#ffe4c7',
                   'industrial', '#e2d9f3',
                   '#eef2f5'
@@ -5527,13 +8195,18 @@ if (staticRoute) {
             }
 
             // 2. Mewarnai Jalan Tol dan Raya
-            if (sourceLayer === 'transportation' && layer.type === 'line') {
+            if (sourceLayer === 'transportation' && layer.type === 'line' && !String(id).startsWith('its-national-')) {
               try {
                 maplibreMap.setPaintProperty(id, 'line-color', [
                   'match', ['get', 'class'],
                   'motorway', '#f59e0b',
                   'trunk', '#f59e0b',
-                  'primary', '#ffffff',
+                  'primary', '#ffd878',
+                  'secondary', '#ffe9a6',
+                  'tertiary', '#fff4cf',
+                  'minor', '#ffffff',
+                  'service', '#eef2f5',
+                  'path', '#e7ddd0',
                   '#f8fafc'
                 ]);
               } catch {
@@ -5541,28 +8214,20 @@ if (staticRoute) {
               }
             }
 
-            // 3. Bangunan 3D Berwarna berdasarkan Tinggi Gedung
+            // Preserve real mapped heights. The former compressed scale made
+            // dense Indonesian city blocks look like flat green footprints.
             if (layer.type === 'fill-extrusion') {
               try {
-                const buildingHeightExpression = [
-                  "interpolate", ["linear"], ["zoom"],
-                  14, 0,
-                  15.5, ["*", ["to-number", ["coalesce", ["get", "render_height"], ["get", "height"], ["*", ["to-number", ["coalesce", ["get", "building:levels"], 2]], 3], 9]], 0.45],
-                  18, ["*", ["to-number", ["coalesce", ["get", "render_height"], ["get", "height"], ["*", ["to-number", ["coalesce", ["get", "building:levels"], 2]], 3], 9]], 1.25]
-                ];
                 maplibreMap.setPaintProperty(id, 'fill-extrusion-color', [
                   'interpolate',
                   ['linear'],
                   ['to-number', ['coalesce', ['get', 'render_height'], ['get', 'height'], ['*', ['to-number', ['coalesce', ['get', 'building:levels'], 0], 0], 3], 0], 0],
-                  0, '#fbbf24',
-                  10, '#4ade80',
-                  25, '#60a5fa',
-                  50, '#a78bfa',
-                  100, '#f87171'
+                  0, '#f1e8d8',
+                  20, '#e8d8c0',
+                  60, '#d9c5ae',
+                  150, '#c6b1a2'
                 ]);
-                maplibreMap.setPaintProperty(id, 'fill-extrusion-height', buildingHeightExpression);
-                maplibreMap.setPaintProperty(id, 'fill-extrusion-base', 0);
-                maplibreMap.setPaintProperty(id, 'fill-extrusion-opacity', 0.92);
+                maplibreMap.setPaintProperty(id, 'fill-extrusion-opacity', 0.93);
               } catch {
                 /* ignore layer incompatibility */
               }
@@ -5570,7 +8235,7 @@ if (staticRoute) {
 
             if ((sourceLayer === 'building' || id.includes('building')) && layer.type === 'fill') {
               try {
-                maplibreMap.setPaintProperty(id, 'fill-color', '#d6e4d4');
+                maplibreMap.setPaintProperty(id, 'fill-color', '#eadfce');
                 maplibreMap.setPaintProperty(id, 'fill-opacity', 0.88);
               } catch {
                 /* ignore layer incompatibility */
@@ -5579,28 +8244,27 @@ if (staticRoute) {
           });
 
           const buildingFill = style.layers.find((layer: any) =>
-            layer.type === "fill" && (layer["source-layer"] === "building" || String(layer.id).includes("building")));
-          if (buildingFill && !maplibreMap.getLayer("its-building-extrusion")) {
-            const firstSymbol = style.layers.find((layer: any) => layer.type === "symbol")?.id;
+            (layer.type === "fill" || layer.type === "fill-extrusion")
+            && (layer["source-layer"] === "building" || String(layer.id).includes("building")));
+          if (buildingFill && !maplibreMap.getLayer("its-building-footprints")) {
+            const beforeBuilding = style.layers.find((layer: any) =>
+              layer.type === "fill-extrusion"
+              && (layer["source-layer"] === "building" || String(layer.id).includes("building")))?.id;
             maplibreMap.addLayer({
-              id: "its-building-extrusion",
-              type: "fill-extrusion",
+              id: "its-building-footprints",
+              type: "fill",
               source: buildingFill.source,
               "source-layer": buildingFill["source-layer"],
-              minzoom: 14.2,
+              minzoom: 14,
               ...(Array.isArray(buildingFill.filter) ? { filter: buildingFill.filter } : {}),
               paint: {
-                "fill-extrusion-color": "#d8dee8",
-                "fill-extrusion-height": [
-                  "interpolate", ["linear"], ["zoom"],
-                  14.2, 0,
-                  17.2, ["to-number", ["coalesce", ["get", "render_height"], ["get", "height"], ["*", ["to-number", ["coalesce", ["get", "building:levels"], 2]], 3], 6]],
-                ],
-                "fill-extrusion-base": ["to-number", ["coalesce", ["get", "render_min_height"], ["get", "min_height"], 0]],
-                "fill-extrusion-opacity": 0.88,
+                "fill-color": "#eadfce",
+                "fill-outline-color": "#c9b79f",
+                "fill-opacity": ["interpolate", ["linear"], ["zoom"], 14, 0.7, 17, 0.88],
               },
-            }, firstSymbol);
+            }, beforeBuilding);
           }
+          applyMapLibreDimensionMode(maplibreMap);
           updateMapLibrePoiLayer(Array.from(state.poiData.values()));
         }
       });
@@ -5612,11 +8276,13 @@ if (staticRoute) {
   }
 
   async function removeMapLibreMap(): Promise<void> {
-    if (!state.maplibreMap) return;
-    try {
-      state.maplibreMap.remove();
-    } catch {
-      /* ignore */
+    mapRoot.classList.remove("maplibre-pois-active");
+    if (state.maplibreMap) {
+      try {
+        state.maplibreMap.remove();
+      } catch {
+        /* ignore */
+      }
     }
     state.maplibreMap = null;
     if (state.maplibreContainer) {
@@ -5625,9 +8291,26 @@ if (staticRoute) {
     }
   }
 
+  function restoreLeafletPoiSurface(): void {
+    if (state.overpassLayer) {
+      state.overpassLayer.getLayers().forEach((layer: any) => {
+        const element = typeof layer.getElement === "function"
+          ? layer.getElement()
+          : layer._icon || layer._path;
+        if (element instanceof HTMLElement || element instanceof SVGElement) {
+          element.style.display = "";
+        }
+      });
+    }
+    for (const marker of state.poiMarkers.values()) {
+      const element = marker.getElement() as HTMLElement | null;
+      if (element) element.style.display = "";
+    }
+  }
+
   function syncMapLibreView(force = false): void {
     const maplibreMap = state.maplibreMap;
-    if (!maplibreMap) return;
+    if (!maplibreMap || state.baseMode === "satellite") return;
     if (!force) {
       if (state.maplibreSyncFrame) return;
       state.maplibreSyncFrame = window.requestAnimationFrame(() => {
@@ -5641,7 +8324,7 @@ if (staticRoute) {
     const center = map.getCenter();
     const zoom = map.getZoom();
     const bearing = map.getBearing?.() ?? 0;
-    const pitch = mapLibrePitchByZoom(zoom);
+    const pitch = state.baseMode === "3d" ? mapLibrePitchByZoom(zoom) : 0;
 
     const currentCenter = maplibreMap.getCenter();
     const currentZoom = maplibreMap.getZoom();
@@ -5682,52 +8365,79 @@ if (staticRoute) {
   }
 
   async function setBaseMap(mode: BaseMapMode): Promise<void> {
-    if (state.baseMode === mode && (mode === "satellite" || state.maplibreMap)) return;
-
+    const isCurrentSurface = mode === "street"
+      ? !state.maplibreMap && map.hasLayer(streetLayer) && !map.hasLayer(satelliteLayer)
+      : mode === "3d"
+        ? Boolean(state.maplibreMap) && !map.hasLayer(satelliteLayer)
+        : !state.maplibreMap && map.hasLayer(satelliteLayer) && !map.hasLayer(streetLayer);
+    if (state.baseMode === mode && isCurrentSurface) {
+      updateModeControlButtons();
+      syncMapStateToUrl();
+      return;
+    }
     const mapEl = mapRoot as HTMLElement;
     mapEl.style.transform = "";
     mapEl.style.transformOrigin = "";
     mapEl.style.perspective = "";
     (mapEl.parentElement as HTMLElement | null)?.style.setProperty("perspective", "");
-    mapEl.classList.remove("map-mode-3d");
     state.baseMode = mode;
+    mapEl.classList.toggle("map-mode-3d", mode === "3d");
 
-    if (mode === "satellite") {
+    if (mode === "street") {
       await removeMapLibreMap();
-      if (map.hasLayer(streetLayer)) map.removeLayer(streetLayer);
-      if (!map.hasLayer(satelliteLayer)) satelliteLayer.addTo(map);
-    } else {
+      if (state.baseMode !== mode) return;
+      restoreLeafletPoiSurface();
       if (map.hasLayer(satelliteLayer)) map.removeLayer(satelliteLayer);
+      if (!map.hasLayer(streetLayer)) streetLayer.addTo(map);
+      renderCurrentPoiDataset();
+      void refreshOverpassLayer();
+      void refreshRoadGuideLayer(true);
+      void refreshVisionLayer(true);
+    } else if (mode === "3d") {
+      if (map.hasLayer(satelliteLayer)) map.removeLayer(satelliteLayer);
+      // Keep CARTO underneath until MapLibre has a complete
+      // rendered frame. This avoids a blank map on slow or WebGL-limited clients.
       if (!mapLibreSurfaceReady() && !map.hasLayer(streetLayer)) streetLayer.addTo(map);
-      const gl = await ensureMapLibreMap();
-      if (!gl) {
-        if (!map.hasLayer(streetLayer)) streetLayer.addTo(map);
+      const maplibreMap = await ensureMapLibreMap();
+      if (state.baseMode !== mode) return;
+      if (!maplibreMap) {
         state.baseMode = "street";
-      } else {
-        if (mapLibreSurfaceReady() && map.hasLayer(streetLayer)) map.removeLayer(streetLayer);
-        mapEl.classList.toggle("map-mode-3d", mode === "3d");
+        mapEl.classList.remove("map-mode-3d");
+        mapEl.classList.remove("maplibre-pois-active");
+        if (!map.hasLayer(streetLayer)) streetLayer.addTo(map);
+        restoreLeafletPoiSurface();
+      } else if (state.maplibreMap === maplibreMap) {
         const center = map.getCenter();
-        gl.easeTo({
-          center: [center.lng, center.lat],
+        maplibreMap.resize();
+        applyMapLibreDimensionMode(maplibreMap);
+        maplibreMap.easeTo({
+          center,
           zoom: map.getZoom(),
           bearing: map.getBearing?.() ?? 0,
           pitch: mapLibrePitchByZoom(map.getZoom()),
-          duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 520,
-          essential: true,
+          duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 420,
         });
-        updateMapLibrePoiLayer(Array.from(state.poiData.values()));
+        state.roadGuideLayer?.clearLayers();
+        state.visionLayer?.clearLayers();
+        renderCurrentPoiDataset();
       }
+    } else {
+      await removeMapLibreMap();
+      restoreLeafletPoiSurface();
+      if (map.hasLayer(streetLayer)) map.removeLayer(streetLayer);
+      if (!map.hasLayer(satelliteLayer)) satelliteLayer.addTo(map);
+      // The viewport has not changed merely because the base map changed.
+      // Reuse POIs immediately and let the buffered-bounds check decide
+      // whether a network refresh is actually necessary.
+      renderCurrentPoiDataset();
+      void refreshOverpassLayer();
+      void refreshRoadGuideLayer(true);
+      void refreshVisionLayer(true);
     }
 
     updateModeControlButtons();
-    if (!state.maplibreMap && state.baseMode === "street") {
-      void refreshRoadGuideLayer(true);
-      void refreshVisionLayer(true);
-    } else {
-      state.roadGuideLayer?.clearLayers();
-      state.visionLayer?.clearLayers();
-    }
     map.invalidateSize();
+    syncMapStateToUrl();
   }
 
   // ─── Camera tile ────────────────────────────────────────────────
@@ -6778,16 +9488,50 @@ if (staticRoute) {
 
   // ─── Map actions ────────────────────────────────────────────────
 
-  // FIX: goHome sekarang fly ke posisi device pertama yang diketahui,
-  // bukan ke DEFAULT_CENTER yang hardcoded.
-  function goHome(): void {
-    const primary = state.devices[0] ?? state.device;
-    if (primary) {
-      map.setView([primary.position.lat, primary.position.lng], DEFAULT_ZOOM, { animate: true });
-    } else {
-      map.setView(DEFAULT_CENTER, DEFAULT_ZOOM, { animate: true });
+  function beginExplicitMapNavigation(): number {
+    state.mapNavigationSeq += 1;
+    window.clearTimeout(state.pendingDeviceFocusTimer);
+    state.pendingDeviceFocusTimer = 0;
+    window.clearTimeout(state.homeNorthTimer);
+    state.homeNorthTimer = 0;
+    if (state.homeNorthMoveHandler) {
+      map.off("moveend", state.homeNorthMoveHandler);
+      state.homeNorthMoveHandler = null;
     }
+    return state.mapNavigationSeq;
+  }
+
+  // Home follows the actively selected controller and is an explicit
+  // north-up navigation action, independent from an earlier GPS request.
+  function goHome(): void {
+    const navigationSeq = beginExplicitMapNavigation();
+    const primary = state.device ?? state.devices[0];
+    const target = primary
+      ? L.latLng(primary.position.lat, primary.position.lng)
+      : L.latLng((DEFAULT_CENTER as [number, number])[0], (DEFAULT_CENTER as [number, number])[1]);
+    const enforceNorth = () => {
+      if (navigationSeq !== state.mapNavigationSeq) return;
+      if (Math.abs(normBearing(map.getBearing?.() ?? 0)) > 0.01) map.setBearing(0);
+      updateCompass();
+    };
+
+    const finishHome = () => {
+      if (navigationSeq !== state.mapNavigationSeq) return;
+      enforceNorth();
+      map.off("moveend", finishHome);
+      if (state.homeNorthMoveHandler === finishHome) state.homeNorthMoveHandler = null;
+      window.clearTimeout(state.homeNorthTimer);
+      state.homeNorthTimer = 0;
+    };
+
+    map.stop();
+    state.homeNorthMoveHandler = finishHome;
+    map.once("moveend", finishHome);
     map.setBearing(0);
+    map.setView(target, DEFAULT_ZOOM, { animate: true });
+    window.requestAnimationFrame(enforceNorth);
+    state.homeNorthTimer = window.setTimeout(finishHome, 700);
+    map.closePopup();
   }
 
   function applyLocatedUser(lat: number, lng: number, accuracy?: number, center = true, source = "gps"): void {
@@ -6856,11 +9600,20 @@ if (staticRoute) {
   }
 
   async function locateUser(): Promise<void> {
+    const navigationSeq = beginExplicitMapNavigation();
+    const applyLocationWithoutStealingNewerNavigation = (
+      lat: number,
+      lng: number,
+      accuracy: number | undefined,
+      source: string,
+    ) => {
+      applyLocatedUser(lat, lng, accuracy, state.mapNavigationSeq === navigationSeq, source);
+    };
     showGlobalNotice("warning", "Mencari lokasi", "Mengambil lokasi terkini dari Windows atau browser...");
     const preferNative = Boolean(desktopBridge?.isElectron && desktopBridge.platform === "win32");
     const native = preferNative ? await requestNativeDesktopPosition() : null;
     if (native?.ok && typeof native.lat === "number" && typeof native.lng === "number") {
-      applyLocatedUser(native.lat, native.lng, native.accuracy, true, native.source || "windows-location");
+      applyLocationWithoutStealingNewerNavigation(native.lat, native.lng, native.accuracy, native.source || "windows-location");
       startDesktopLocationPolling();
       showGlobalNotice("success", "Lokasi aktif", "GPS Windows tersambung dan akan diperbarui berkala.");
       return;
@@ -6868,14 +9621,14 @@ if (staticRoute) {
 
     try {
       const pos = await requestBrowserPosition();
-      applyLocatedUser(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, true, "browser-gps");
+      applyLocationWithoutStealingNewerNavigation(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, "browser-gps");
       startBrowserLocationWatch();
       showGlobalNotice("success", "Lokasi aktif", "Lokasi browser tersambung dan bergerak realtime.");
       return;
     } catch {
       const fallbackNative = preferNative ? null : await requestNativeDesktopPosition();
       if (fallbackNative?.ok && typeof fallbackNative.lat === "number" && typeof fallbackNative.lng === "number") {
-        applyLocatedUser(fallbackNative.lat, fallbackNative.lng, fallbackNative.accuracy, true, fallbackNative.source || "windows-location");
+        applyLocationWithoutStealingNewerNavigation(fallbackNative.lat, fallbackNative.lng, fallbackNative.accuracy, fallbackNative.source || "windows-location");
         startDesktopLocationPolling();
         return;
       }
@@ -6904,6 +9657,9 @@ if (staticRoute) {
       ${cameraSurface}
       <canvas class="camera-rf-detr-canvas" data-video-rf-detr-canvas data-detector-fit="contain" aria-hidden="true"></canvas>
       <div class="camera-popup-controls">
+        <button type="button" data-popup-pip aria-label="Picture-in-picture" title="Picture-in-picture">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM12 12h6v5h-6z"/></svg>
+        </button>
         <button type="button" data-popup-fullscreen aria-label="Fullscreen">${fullscreenSvg()}</button>
       </div>
     </div>`
@@ -6928,6 +9684,18 @@ if (staticRoute) {
         event.stopPropagation();
         openVideoFullscreen(device);
       });
+    popupEl?.querySelector<HTMLButtonElement>("[data-popup-pip]")
+      ?.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        void openItsVideoPictureInPicture(popupEl, device).then((opened) => {
+          if (!opened) showGlobalNotice("warning", "PiP belum tersedia", "Putar video lebih dahulu atau gunakan Chrome/Edge terbaru di desktop.");
+        });
+      });
+    if (popupEl) {
+      window.setTimeout(() => registerVideoAutoPictureInPicture(popupEl, device), 320);
+      map.once("popupclose", () => unregisterVideoAutoPictureInPicture(popupEl));
+    }
     syncCustomVideoButtons(document);
   }
 
@@ -6938,6 +9706,235 @@ if (staticRoute) {
     key: string;
     staticImage?: boolean;
   };
+
+  type ItsDocumentPictureInPictureApi = {
+    window: Window | null;
+    requestWindow: (options?: { width?: number; height?: number }) => Promise<Window>;
+  };
+
+  type ItsPictureInPictureMediaSession = MediaSession & {
+    setActionHandler: (
+      action: "enterpictureinpicture",
+      handler: (() => void) | null,
+    ) => void;
+  };
+
+  let itsVideoPipWindow: Window | null = null;
+  let itsVideoPipUpdateTimer = 0;
+  let itsAutoPipRoot: HTMLElement | null = null;
+
+  function documentPictureInPictureApi(): ItsDocumentPictureInPictureApi | null {
+    return (window as Window & { documentPictureInPicture?: ItsDocumentPictureInPictureApi }).documentPictureInPicture || null;
+  }
+
+  function videoPipSnapshot(device: DeviceRecord | null): string {
+    if (!device) return WELCOME_SEGMENT;
+    return preferredCameraDatasetSnapshot(device.cameraDataset)
+      || device.cameraThumbnailUrl?.trim()
+      || WELCOME_SEGMENT;
+  }
+
+  function videoPipDetectionState(device: DeviceRecord | null): {
+    frameWidth: number;
+    frameHeight: number;
+    detections: RfDetrDetection[];
+  } {
+    if (state.videoRfDetrCanvasWidth > 0 && state.videoRfDetrCanvasHeight > 0) {
+      return {
+        frameWidth: state.videoRfDetrCanvasWidth,
+        frameHeight: state.videoRfDetrCanvasHeight,
+        detections: state.videoRfDetrCanvasDetections,
+      };
+    }
+    return {
+      frameWidth: device?.detectorFrameWidth || 0,
+      frameHeight: device?.detectorFrameHeight || 0,
+      detections: (device?.detections || []).filter((detection) => shouldDisplayDetectionLabel(detection.label)),
+    };
+  }
+
+  function videoPipDetectionHtml(device: DeviceRecord | null): string {
+    const { frameWidth, frameHeight, detections } = videoPipDetectionState(device);
+    if (frameWidth <= 0 || frameHeight <= 0 || !detections.length) {
+      return state.videoRfDetrCanvasScanning ? '<span class="its-pip-scanner" aria-hidden="true"></span>' : "";
+    }
+    return detections.slice(0, 12).map((detection) => {
+      const left = clamp((detection.x / frameWidth) * 100, 0, 100);
+      const top = clamp((detection.y / frameHeight) * 100, 0, 100);
+      const width = clamp((detection.width / frameWidth) * 100, 1, 100 - left);
+      const height = clamp((detection.height / frameHeight) * 100, 1, 100 - top);
+      const label = `${detectionLabel(detection.label)} ${(detection.confidence * 100).toFixed(0)}%`;
+      return `<span class="its-pip-box" style="left:${left}%;top:${top}%;width:${width}%;height:${height}%"><b>${escapeHtml(label)}</b></span>`;
+    }).join("");
+  }
+
+  function videoPipStatsHtml(device: DeviceRecord | null): string {
+    const traffic = device ? trafficStateForDevice(device) : null;
+    const stats = vehicleStatsForDevice(device, traffic);
+    const items = [
+      ["Mobil", stats.car],
+      ["Motor", stats.motorcycle],
+      ["Sepeda", stats.bicycle],
+      ["Bus", stats.bus],
+      ["Truk", stats.truck],
+      ["Total", stats.total],
+    ];
+    return items.map(([label, value]) => `<div><span>${label}</span><strong>${Number(value)}</strong></div>`).join("");
+  }
+
+  function videoPipCss(): string {
+    return `
+      *{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;background:#080d18;color:#f8fafc;font:12px/1.35 system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden}
+      button{font:inherit}.its-pip{height:100%;display:grid;grid-template-rows:auto minmax(0,1fr);background:#080d18}.its-pip-head{height:42px;display:flex;align-items:center;gap:8px;padding:0 10px;border-bottom:1px solid rgba(148,163,184,.18);background:rgba(8,13,24,.94)}
+      .its-pip-head i{width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.18)}.its-pip-head strong{min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.its-pip-head small{color:#67e8f9;font-weight:800;white-space:nowrap}
+      .its-pip-head button,.its-pip-data-toggle{min-width:40px;min-height:32px;border:1px solid rgba(255,255,255,.18);border-radius:7px;background:#fff;color:#0f172a;font-weight:850;cursor:pointer}.its-pip-head .its-pip-close{width:34px;min-width:34px;padding:0;font-size:19px}
+      .its-pip-main{position:relative;min-height:0;display:grid;place-items:center;overflow:hidden}.its-pip-media{position:relative;width:100%;height:100%;min-height:0;background:#020617;overflow:hidden}.its-pip-media video,.its-pip-media img{width:100%;height:100%;display:block;object-fit:fill}.its-pip-media video[hidden],.its-pip-media img[hidden]{display:none}
+      .its-pip-overlay{position:absolute;inset:0;pointer-events:none}.its-pip-box{position:absolute;border:2px solid #22d3ee;border-radius:3px;box-shadow:0 0 0 1px rgba(2,6,23,.72)}.its-pip-box b{position:absolute;left:-2px;top:-20px;max-width:170px;padding:3px 5px;border-radius:3px;background:#22d3ee;color:#042f2e;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .its-pip-scanner{position:absolute;left:36%;top:31%;width:28%;height:34%;border:1px solid rgba(34,211,238,.85);border-radius:4px;animation:pipScan 1.45s ease-in-out infinite}.its-pip-scanner:after{content:"";position:absolute;left:8%;right:8%;height:2px;top:12%;background:#67e8f9;box-shadow:0 0 10px #22d3ee;animation:pipLine 1.45s ease-in-out infinite}
+      .its-pip-data-toggle{position:absolute;right:10px;bottom:10px;z-index:4;padding:0 12px}.its-pip-stats{position:absolute;left:10px;right:10px;bottom:52px;z-index:3;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;padding:8px;border:1px solid rgba(148,163,184,.24);border-radius:8px;background:rgba(2,6,23,.88);backdrop-filter:blur(10px);opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity .18s ease,transform .18s ease}.its-pip.show-data .its-pip-stats{opacity:1;transform:none}
+      .its-pip-stats div{min-width:0;padding:5px 7px;border-radius:5px;background:rgba(30,41,59,.88)}.its-pip-stats span,.its-pip-stats strong{display:block}.its-pip-stats span{color:#94a3b8;font-size:9px;font-weight:800}.its-pip-stats strong{margin-top:2px;font-size:14px}.its-pip-empty{position:absolute;left:10px;bottom:10px;padding:5px 7px;border-radius:5px;background:rgba(2,6,23,.74);color:#cbd5e1;font-size:10px;font-weight:750}
+      @keyframes pipScan{0%,100%{opacity:.45;transform:scale(.94)}50%{opacity:1;transform:scale(1)}}@keyframes pipLine{0%{top:12%}50%{top:84%}100%{top:12%}}@media(prefers-reduced-motion:reduce){.its-pip-scanner,.its-pip-scanner:after{animation:none}}
+    `;
+  }
+
+  function updateItsVideoPip(pipWindow: Window, fallbackDevice: DeviceRecord | null): void {
+    if (pipWindow.closed) return;
+    const device = deviceForVideoRfDetr() || state.device || fallbackDevice;
+    const root = pipWindow.document.querySelector<HTMLElement>(".its-pip");
+    const status = pipWindow.document.querySelector<HTMLElement>("[data-pip-ai-status]");
+    const live = pipWindow.document.querySelector<HTMLElement>("[data-pip-live]");
+    const overlay = pipWindow.document.querySelector<HTMLElement>("[data-pip-detections]");
+    const stats = pipWindow.document.querySelector<HTMLElement>("[data-pip-stats]");
+    const image = pipWindow.document.querySelector<HTMLImageElement>("[data-pip-image]");
+    const detectionState = videoPipDetectionState(device);
+    const detected = detectionState.detections.length;
+    if (root) root.dataset.detections = String(detected);
+    if (status) status.textContent = detected > 0 ? `${detected} objek` : videoAiStatusText(device);
+    if (live) live.textContent = deviceCameraIsLive(device) ? "LIVE" : "OFFLINE";
+    if (overlay) overlay.innerHTML = videoPipDetectionHtml(device);
+    if (stats) stats.innerHTML = videoPipStatsHtml(device);
+    if (image && !image.hidden) {
+      const nextSource = videoPipSnapshot(device);
+      if (image.dataset.source !== nextSource) {
+        image.dataset.source = nextSource;
+        image.src = nextSource;
+      }
+    }
+  }
+
+  function clearItsVideoPip(pipWindow: Window): void {
+    if (itsVideoPipWindow !== pipWindow) return;
+    window.clearInterval(itsVideoPipUpdateTimer);
+    itsVideoPipUpdateTimer = 0;
+    itsVideoPipWindow = null;
+  }
+
+  async function openItsVideoPictureInPicture(sourceRoot: HTMLElement, fallbackDevice: DeviceRecord | null): Promise<boolean> {
+    if (itsVideoPipWindow && !itsVideoPipWindow.closed) {
+      itsVideoPipWindow.focus();
+      return true;
+    }
+    const sourceVideo = activeVideoElement(sourceRoot);
+    const api = documentPictureInPictureApi();
+    if (api) {
+      try {
+        const pipWindow = await api.requestWindow({ width: 440, height: 310 });
+        itsVideoPipWindow = pipWindow;
+        const style = pipWindow.document.createElement("style");
+        style.textContent = videoPipCss();
+        pipWindow.document.head.appendChild(style);
+        pipWindow.document.body.innerHTML = `
+          <main class="its-pip">
+            <header class="its-pip-head"><i aria-hidden="true"></i><strong>ITS Maps - Kamera AI</strong><small data-pip-live>OFFLINE</small><small data-pip-ai-status>AI siap</small><button class="its-pip-close" type="button" aria-label="Tutup">&times;</button></header>
+            <section class="its-pip-main">
+              <div class="its-pip-media"><video data-pip-video autoplay muted playsinline hidden></video><img data-pip-image alt="Snapshot kamera AI ITS Maps"><div class="its-pip-overlay" data-pip-detections></div></div>
+              <div class="its-pip-stats" data-pip-stats></div>
+              <button class="its-pip-data-toggle" type="button" aria-expanded="false">Lihat data</button>
+            </section>
+          </main>`;
+        const root = pipWindow.document.querySelector<HTMLElement>(".its-pip");
+        const pipVideo = pipWindow.document.querySelector<HTMLVideoElement>("[data-pip-video]");
+        const pipImage = pipWindow.document.querySelector<HTMLImageElement>("[data-pip-image]");
+        let attachedVideo = false;
+        if (sourceVideo && pipVideo) {
+          try {
+            const capture = sourceVideo as HTMLVideoElement & { captureStream?: () => MediaStream };
+            const stream = capture.captureStream?.();
+            if (stream?.getTracks().length) {
+              pipVideo.srcObject = stream;
+              pipVideo.hidden = false;
+              if (pipImage) pipImage.hidden = true;
+              await pipVideo.play().catch(() => undefined);
+              attachedVideo = true;
+            }
+          } catch {
+            attachedVideo = false;
+          }
+        }
+        if (!attachedVideo && pipImage) {
+          pipImage.hidden = false;
+          const source = videoPipSnapshot(fallbackDevice);
+          pipImage.src = source;
+          pipImage.dataset.source = source;
+        }
+        pipWindow.document.querySelector<HTMLButtonElement>(".its-pip-close")?.addEventListener("click", () => pipWindow.close());
+        pipWindow.document.querySelector<HTMLButtonElement>(".its-pip-data-toggle")?.addEventListener("click", (event) => {
+          const button = event.currentTarget as HTMLButtonElement;
+          const expanded = button.getAttribute("aria-expanded") === "true";
+          button.setAttribute("aria-expanded", String(!expanded));
+          button.textContent = expanded ? "Lihat data" : "Tutup data";
+          root?.classList.toggle("show-data", !expanded);
+        });
+        pipWindow.addEventListener("pagehide", () => clearItsVideoPip(pipWindow), { once: true });
+        updateItsVideoPip(pipWindow, fallbackDevice);
+        itsVideoPipUpdateTimer = window.setInterval(() => updateItsVideoPip(pipWindow, fallbackDevice), 600);
+        return true;
+      } catch {
+        // A standard video PiP remains available when Document PiP is blocked.
+      }
+    }
+    if (sourceVideo && document.pictureInPictureEnabled && sourceVideo.requestPictureInPicture) {
+      try {
+        await sourceVideo.requestPictureInPicture();
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  function registerVideoAutoPictureInPicture(sourceRoot: HTMLElement, device: DeviceRecord | null): void {
+    itsAutoPipRoot = sourceRoot;
+    const video = activeVideoElement(sourceRoot);
+    video?.setAttribute("autopictureinpicture", "");
+    if (!navigator.mediaSession) return;
+    try {
+      if (typeof MediaMetadata !== "undefined") {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: "Kamera AI ITS Maps",
+          artist: device?.label || "Raspberry Pi",
+          album: "ITS Maps realtime",
+          artwork: [{ src: ITS_APP_ICON, sizes: "512x512", type: "image/png" }],
+        });
+      }
+      (navigator.mediaSession as ItsPictureInPictureMediaSession).setActionHandler("enterpictureinpicture", () => {
+        if (itsAutoPipRoot?.isConnected) void openItsVideoPictureInPicture(itsAutoPipRoot, device);
+      });
+    } catch {
+      // Auto PiP is progressive enhancement controlled by browser permission.
+    }
+  }
+
+  function unregisterVideoAutoPictureInPicture(sourceRoot: HTMLElement): void {
+    if (itsAutoPipRoot !== sourceRoot) return;
+    itsAutoPipRoot = null;
+    try {
+      (navigator.mediaSession as ItsPictureInPictureMediaSession | undefined)?.setActionHandler("enterpictureinpicture", null);
+    } catch {
+      // Older browsers do not expose the automatic PiP media action.
+    }
+  }
 
   function formatVideoOffset(seconds: number): string {
     const safe = Math.max(0, Math.floor(Number.isFinite(seconds) ? seconds : 0));
@@ -7248,6 +10245,9 @@ if (staticRoute) {
       <div class="video-fullscreen-controls">
         <button type="button" class="video-sync-live" data-video-sync-live hidden>Sinkronkan live</button>
         <button type="button" class="video-fullscreen-ai" data-video-ai>AI</button>
+        <button type="button" class="video-fullscreen-pip" data-video-pip aria-label="Picture-in-picture" title="Picture-in-picture">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM12 12h6v5h-6z"/></svg>
+        </button>
         <button type="button" class="video-fullscreen-close" data-video-close aria-label="Keluar fullscreen">${fullscreenExitSvg()}</button>
       </div>
     </section>
@@ -7478,6 +10478,7 @@ if (staticRoute) {
       overlay.classList.remove("open", "ai-open", "title-open", "segments-open", "detail-open");
       window.clearInterval(ambientTimer);
       window.clearInterval(liveSyncTimer);
+      unregisterVideoAutoPictureInPicture(overlay);
       stopVideoBrowserRfDetr();
       state.videoAiSegments = [];
       if (!reusableSurface) stopHlsVideos(overlay);
@@ -7645,6 +10646,11 @@ if (staticRoute) {
       }
     });
     overlay.querySelector<HTMLButtonElement>("[data-video-ai]")?.addEventListener("click", openAi);
+    overlay.querySelector<HTMLButtonElement>("[data-video-pip]")?.addEventListener("click", () => {
+      void openItsVideoPictureInPicture(overlay, activeDevice).then((opened) => {
+        if (!opened) showGlobalNotice("warning", "PiP belum tersedia", "Putar video lebih dahulu atau gunakan Chrome/Edge terbaru di desktop.");
+      });
+    });
     overlay.querySelector<HTMLButtonElement>("[data-video-ai-close]")?.addEventListener("click", closeAi);
     overlay.querySelectorAll<HTMLButtonElement>("[data-video-title-close]").forEach((button) => button.addEventListener("click", closeTitle));
     overlay.querySelector<HTMLButtonElement>("[data-video-detail-close]")?.addEventListener("click", closeDetail);
@@ -7734,6 +10740,7 @@ if (staticRoute) {
     ambientTimer = window.setInterval(() => applyVideoAmbientFromSnapshot(overlay, activeDevice), 2200);
     liveSyncTimer = window.setInterval(refreshLiveSyncButton, 1000);
     syncCustomVideoButtons(overlay);
+    window.setTimeout(() => registerVideoAutoPictureInPicture(overlay, activeDevice), 320);
     window.setTimeout(() => overlay.classList.add("open"), 20);
     drawExistingVideoDetections(overlay, activeDevice);
     drawVideoScannerIfNeeded(overlay);
@@ -8468,6 +11475,16 @@ if (staticRoute) {
       address: poi.address,
     })),
     getUserLocation: () => state.lastUserLocation,
+    getMapCenter: () => {
+      const center = map.getCenter();
+      return { lat: center.lat, lng: center.lng, source: "leaflet-map-center" };
+    },
+    getSystemLocation: () => {
+      const primary = state.devices[0] ?? state.device;
+      return primary
+        ? { lat: primary.position.lat, lng: primary.position.lng, deviceId: primary.id }
+        : null;
+    },
     applyUserLocation: (lat: number, lng: number, accuracy?: number, center = true, source = "ai-chat-gps") => {
       applyLocatedUser(lat, lng, accuracy, center, source);
     },
@@ -8716,9 +11733,14 @@ if (staticRoute) {
     options: { position: 'topright' },
     onAdd(): HTMLElement {
       const container = L.DomUtil.create('div', 'mode-control');
+      container.setAttribute("role", "group");
+      container.setAttribute("aria-label", "Tampilan peta");
       container.innerHTML = `
-    <button class="mode-btn" data-mode="street" title="Street">2D</button>
+    <button class="mode-btn" data-mode="street" type="button" title="Peta 2D" aria-label="Tampilkan peta 2D" aria-pressed="false">2D</button>
     <button class="mode-btn mode-legend-btn" data-map-symbol-legend type="button" title="Legenda simbol peta" aria-label="Legenda simbol peta" aria-expanded="false">?</button>
+    <button class="mode-btn" data-mode="3d" type="button" title="Peta 3D" aria-label="Tampilkan peta 3D" aria-pressed="false">3D</button>
+    <button class="mode-btn" data-mode="satellite" type="button" title="Peta satelit" aria-label="Tampilkan peta satelit" aria-pressed="false">Sat</button>
+    <button class="mode-btn mode-dynamics-btn" data-dynamics-panel type="button" title="Filter detail dinamis" aria-label="Buka filter transportasi, jalan, POI, dan CCTV">Dyn</button>
     <div class="map-symbol-legend" data-map-symbol-panel hidden>
       <strong>Legenda 2D</strong>
       <span><i class="legend-road"></i> Jalan utama / avenue</span>
@@ -8728,14 +11750,16 @@ if (staticRoute) {
       <span><i class="legend-rail"></i> Rel dan palang perlintasan</span>
       <span><i class="legend-ai"></i> Petunjuk AI dari satelit</span>
     </div>
-    <button class="mode-btn" data-mode="3d" title="3D">3D</button>
-    <button class="mode-btn" data-mode="satellite" title="Satellite">Sat</button>
   `;
       L.DomEvent.disableClickPropagation(container);
       L.DomEvent.disableScrollPropagation(container);
       container.querySelectorAll<HTMLButtonElement>('.mode-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
           if (btn.dataset.mapSymbolLegend !== undefined) return;
+          if (btn.dataset.dynamicsPanel !== undefined) {
+            openLayerModal();
+            return;
+          }
           const m = (btn.dataset.mode as BaseMapMode) || 'street';
           void setBaseMap(m);
         });
@@ -8753,11 +11777,20 @@ if (staticRoute) {
 
   function updateModeControlButtons(): void {
     document.querySelectorAll<HTMLButtonElement>(".mode-control [data-mode]").forEach((button) => {
-      button.classList.toggle("active", button.dataset.mode === state.baseMode);
+      const active = button.dataset.mode === state.baseMode;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", String(active));
     });
   }
 
+  let isMapTearingDown = false;
+
   function syncModeControlVisibility(): void {
+    if (isMapTearingDown) return;
+    const mapInternals = map as typeof map & { _controlCorners?: Record<string, HTMLElement> };
+    const mapContainer = map.getContainer();
+    const topRightCorner = mapInternals._controlCorners?.topright;
+    if (!mapContainer.isConnected || !topRightCorner?.isConnected) return;
     const shouldShowModeControl = !isMobile() && !isTablet();
     if (shouldShowModeControl) {
       if (!state.modeControl) {
@@ -8779,6 +11812,13 @@ if (staticRoute) {
   map.on("rotate", updateCompass);
   map.on("move zoom", updateCompass);
   map.on("zoomend", rescaleMarkers);
+  map.on("zoomend", () => {
+    // A zoom transition changes semantic visibility and label collision cells.
+    // Re-render cached records immediately, then fetch only when the visible
+    // map moved outside the existing buffered viewport.
+    renderCurrentPoiDataset();
+    void refreshOverpassLayer();
+  });
   map.on("move zoom rotate", () => syncMapLibreView());
   map.on("resize", () => {
     state.maplibreMap?.resize();
@@ -8815,18 +11855,25 @@ if (staticRoute) {
 
   async function hydrateFirebaseTelemetry(devices: DeviceRecord[]): Promise<DeviceRecord[]> {
     const snapshotHistory = await firebaseGetPath<unknown>("snapshotHistory").catch(() => null);
-    const activeDevice = devices[0] ?? state.device;
-    const appended = document.body.classList.contains("ai-history-sheet-open")
-      ? appendSnapshotHistoryFromRaw(snapshotHistory, activeDevice)
-      : false;
-    if (appended) renderAiHistorySheetContent();
-    return Promise.all(devices.map(async (device) => {
+    const hydrated = devices.map((device) => {
       try {
         return mergeDeviceTelemetry(device, snapshotHistory);
       } catch {
         return device;
       }
-    }));
+    });
+    const activeDevice = hydrated[0] ?? state.device;
+    let appended = false;
+    if (document.body.classList.contains("ai-history-sheet-open")) {
+      let hasDeviceDataset = false;
+      hydrated.forEach((device) => {
+        if (hasDeviceCameraHistory(device)) hasDeviceDataset = true;
+        if (appendDeviceCameraHistory(device)) appended = true;
+      });
+      if (!hasDeviceDataset && appendSnapshotHistoryFromRaw(snapshotHistory, activeDevice)) appended = true;
+    }
+    if (appended) renderAiHistorySheetContent();
+    return hydrated;
   }
 
   function mergeDeviceTelemetry(device: DeviceRecord, snapshotRaw: unknown): DeviceRecord {
@@ -8847,6 +11894,8 @@ if (staticRoute) {
     const activeIds = new Set(devices.map((d) => d.id));
     removeMissingMarkers(activeIds);
     devices.forEach((d) => ensureMarker(d));
+    updateMapLibreDeviceLayer();
+    mapRoot.dataset.raspberryMarkerCount = String(state.markers.size);
     const selected = state.device && activeIds.has(state.device.id)
       ? devices.find((d) => d.id === state.device!.id) ?? devices[0]
       : devices[0];
@@ -8927,14 +11976,20 @@ if (staticRoute) {
       showGlobalNotice("warning", "Notifikasi browser tidak didukung", "Browser ini belum mendukung notifikasi sistem");
       return;
     }
-    void Notification.requestPermission().then((permission) => {
-      if (permission === "granted") {
-        showGlobalNotice("success", "Notifikasi aktif", "Update Raspberry Pi akan muncul sebagai notifikasi browser");
-        maybeShowBrowserNotification("Notifikasi ITS aktif", "Dashboard akan memberi kabar saat update controller berjalan");
-      } else {
-        showGlobalNotice("warning", "Notifikasi belum aktif", "Izin notifikasi browser belum diberikan");
+    void (async () => {
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        const push = await enablePublicPush(registration);
+        if (push.subscribed) {
+          showGlobalNotice("success", "Notifikasi publik aktif", push.message);
+          maybeShowBrowserNotification("Notifikasi ITS aktif", "Update publik dapat diterima melalui service worker saat tab ditutup");
+        } else {
+          showGlobalNotice("warning", "Notifikasi belum aktif", push.message);
+        }
+      } catch (error) {
+        showGlobalNotice("warning", "Notifikasi belum aktif", error instanceof Error ? error.message : "Registrasi push gagal");
       }
-    });
+    })();
   }
 
   function maybePromptNotificationPermission(): void {
@@ -8943,8 +11998,8 @@ if (staticRoute) {
     state.notificationPromptShown = true;
     showGlobalNotice(
       "info",
-      "Aktifkan notifikasi update",
-      "Tekan Aktifkan agar status download, restart, dan update Raspberry muncul di browser",
+      "Aktifkan notifikasi publik",
+      "Tekan Aktifkan agar release dan status penting dapat diterima meski tab ITS Maps ditutup",
       { actionLabel: "Aktifkan", onAction: requestBrowserNotificationPermission },
     );
   }
@@ -9092,11 +12147,36 @@ if (staticRoute) {
     }
   }
 
-  window.addEventListener("beforeunload", () => {
+  const teardownMapForNavigation = (): void => {
+    if (isMapTearingDown) return;
+    isMapTearingDown = true;
+    window.removeEventListener("resize", syncModeControlVisibility);
     window.clearTimeout(state.refreshTimer);
+    window.clearTimeout(state.trafficRefreshTimer);
+    window.clearTimeout(state.nativeLocationPollTimer);
+    if (state.maplibreSyncFrame) window.cancelAnimationFrame(state.maplibreSyncFrame);
+    if (state.snapshotHistoryAnimationFrame) window.cancelAnimationFrame(state.snapshotHistoryAnimationFrame);
+    if (state.videoRfDetrAnimationFrame) window.cancelAnimationFrame(state.videoRfDetrAnimationFrame);
     stopWebRtcSession(true);
-    map.remove();
+    mapDynamicsRenderer.dispose();
+    map.stop();
+    map.off();
+
+    const internals = map as typeof map & {
+      _initEvents?: (remove?: boolean) => void;
+      _resizeRequest?: number | null;
+    };
+    internals._initEvents?.(true);
+    if (internals._resizeRequest) {
+      window.cancelAnimationFrame(internals._resizeRequest);
+      internals._resizeRequest = null;
+    }
+  };
+
+  window.addEventListener("pagehide", (event) => {
+    if (!event.persisted) teardownMapForNavigation();
   });
+  window.addEventListener("beforeunload", teardownMapForNavigation, { once: true });
 
   // ═══════════════════════════════════════════════════════════════════════════
   // MOBILE UI PATCH — VERSI FIXED (semua error TS6133 sudah diperbaiki)
@@ -9204,9 +12284,9 @@ if (staticRoute) {
     {
       id: "history-swipe",
       title: "Panel riwayat AI",
-      body: "Tarik garis kecil di atas navbar ke atas. Panel ini menyimpan snapshot Raspberry dan hasil analisis AI.",
-      selector: "#m-ai-history-sheet [data-swipe-handle]",
-      action: "swipe",
+      body: "Buka panel Riwayat AI untuk melihat snapshot Raspberry dan hasil analisis.",
+      selector: '#m-ai-history-sheet [data-ai-history-tab="history"]',
+      action: "click",
       onEnter: () => {
         closeITSSheet();
         openAiHistorySheet("dock");
@@ -9295,7 +12375,7 @@ if (staticRoute) {
       <div class="its-tutorial-kicker">${escapeHtml(progress)}</div>
       <strong>${escapeHtml(step.title)}</strong>
       <p>${escapeHtml(step.body)}</p>
-      ${needsAction ? `<div class="its-tutorial-action">${step.action === "swipe" ? "Tarik bagian yang disorot untuk lanjut" : "Tekan bagian yang disorot untuk lanjut"}</div>` : ""}
+      ${needsAction ? `<div class="its-tutorial-action">Tekan bagian yang disorot untuk lanjut</div>` : ""}
       <div class="its-tutorial-controls">
         <button type="button" class="its-tutorial-skip" data-tutorial-skip>Lewati</button>
         ${needsAction ? "" : `<button type="button" class="its-tutorial-next" data-tutorial-next>${escapeHtml(step.cta || "Lanjut")}</button>`}
@@ -9471,6 +12551,7 @@ if (staticRoute) {
 
   type AiHistorySnap = "closed" | "dock" | "peek" | "full";
   let aiHistoryActiveTab: "history" | "about" = "history";
+  let snapshotHistoryWarmupTimer = 0;
 
   const AI_HISTORY_SNAP = {
     dock: () => 56,
@@ -9542,6 +12623,8 @@ if (staticRoute) {
       document.getElementById("app")?.appendChild(sheet);
     }
     document.body.classList.add("ai-history-sheet-open");
+    appendDeviceCameraHistory(state.device);
+    scheduleSnapshotHistoryWarmup(120);
     document.body.classList.toggle("ai-history-sheet-desktop", !isMobile());
     if (usesDesktopSidePanel()) document.body.classList.add("map-modal-panel-open");
     if (isMobile()) {
@@ -9774,7 +12857,9 @@ if (staticRoute) {
   async function refreshAiHistorySnapshot(): Promise<void> {
     if (!document.getElementById("m-ai-history-sheet")) return;
     const raw = await firebaseGetPath<unknown>("snapshotHistory").catch(() => null);
-    if (appendSnapshotHistoryFromRaw(raw, state.device)) renderAiHistorySheetContent();
+    let changed = appendDeviceCameraHistory(state.device);
+    if (!hasDeviceCameraHistory(state.device) && appendSnapshotHistoryFromRaw(raw, state.device)) changed = true;
+    if (changed) renderAiHistorySheetContent();
   }
 
   function renderAiHistorySheetContent(): void {
@@ -10240,13 +13325,82 @@ if (staticRoute) {
     }), timeoutMs, "timeout memuat snapshot riwayat");
   }
 
+  function snapshotHistoryRfDetrOptions() {
+    return {
+      captureMaxEdge: 640,
+      detailCrops: false,
+      modelId: RF_DETR_ANDROID_MODEL_ID,
+      worker: true,
+      workerFallbackToMainThread: false,
+      includeThumbnails: false,
+      confidenceThreshold: 0.28,
+      minLabelConfidenceScale: 1,
+    } as const;
+  }
+
+  async function analyzeSnapshotHistoryItem(
+    next: SnapshotHistoryItem,
+    image: HTMLImageElement,
+  ): Promise<void> {
+    await waitForAiHistoryImage(image);
+    if (!image.naturalWidth || !image.naturalHeight) throw new Error("Snapshot tidak dapat dibaca");
+    const result = await aiHistoryTimeout(
+      runBrowserRfDetr(image, snapshotHistoryRfDetrOptions()),
+      45_000,
+      "timeout analisis RF-DETR riwayat",
+    );
+    const confirmedAt = Date.now();
+    state.snapshotHistoryItems = state.snapshotHistoryItems.map((item) => item.id === next.id
+      ? {
+        ...item,
+        analyzed: true,
+        frameWidth: result.frameWidth || image.naturalWidth,
+        frameHeight: result.frameHeight || image.naturalHeight,
+        detections: result.detections.map(toWebRfDetrDetection),
+        revealedAt: result.detections.length ? confirmedAt + 260 : confirmedAt,
+        analysisNote: result.note,
+      }
+      : item);
+
+    const device = state.devices.find((candidate) => candidate.id === next.deviceId)
+      || (state.device?.id === next.deviceId ? state.device : null);
+    if (device && result.status === "online") {
+      applyVideoRfDetrResult(device, result);
+      publishVideoRfDetrIfNeeded(device, result);
+    }
+    saveSnapshotHistoryItems();
+    if (document.getElementById("m-ai-history-sheet")) renderAiHistorySheetContent();
+  }
+
+  function scheduleSnapshotHistoryWarmup(delayMs = 180): void {
+    window.clearTimeout(snapshotHistoryWarmupTimer);
+    snapshotHistoryWarmupTimer = window.setTimeout(() => {
+      if (document.hidden || document.body.classList.contains("video-focus-mode") || state.snapshotHistoryRfDetrBusy) {
+        scheduleSnapshotHistoryWarmup(1_200);
+        return;
+      }
+      const next = nextPendingSnapshotHistoryItem();
+      if (!next) return;
+      state.snapshotHistoryRfDetrBusy = true;
+      void (async () => {
+        const image = await loadImageSource(next.imageUrl);
+        if (!image) throw new Error("Snapshot RTDB tidak dapat dimuat");
+        await analyzeSnapshotHistoryItem(next, image);
+      })().catch((error) => {
+        console.warn("[ITS] snapshot history RF-DETR warmup failed:", error);
+      }).finally(() => {
+        state.snapshotHistoryRfDetrBusy = false;
+        if (state.snapshotHistoryItems.some((item) => !item.analyzed)) scheduleSnapshotHistoryWarmup(180);
+      });
+    }, delayMs);
+  }
+
   async function analyzeVisibleHistorySnapshots(root: ParentNode): Promise<void> {
     if (document.body.classList.contains("video-focus-mode")) return;
     if (state.snapshotHistoryRfDetrBusy) return;
-    if (aiHistoryIsMobileDocked()) return;
     const rootElement = root instanceof HTMLElement ? root : null;
     const rootRect = rootElement?.getBoundingClientRect();
-    const next = state.snapshotHistoryItems.find((item) => {
+    const next = [...state.snapshotHistoryItems].sort(compareSnapshotHistoryItems).find((item) => {
       if (item.analyzed) return false;
       const candidate = root.querySelector<HTMLElement>(`.m-ai-history-card[data-history-id="${cssSelectorValue(item.id)}"]`);
       if (!candidate || !rootRect) return false;
@@ -10260,25 +13414,7 @@ if (staticRoute) {
     if (!image) return;
     state.snapshotHistoryRfDetrBusy = true;
     try {
-      await waitForAiHistoryImage(image);
-      if (!image.naturalWidth || !image.naturalHeight) return;
-      const result = await aiHistoryTimeout(runBrowserRfDetr(image, isAndroidApkRuntime()
-        ? { captureMaxEdge: 640, detailCrops: false, modelId: RF_DETR_ANDROID_MODEL_ID, worker: true }
-        : {}), isAndroidApkRuntime() ? 60_000 : 45_000, "timeout analisis RF-DETR riwayat");
-      const confirmedAt = Date.now();
-      state.snapshotHistoryItems = state.snapshotHistoryItems.map((item) => item.id === next.id
-        ? {
-          ...item,
-          analyzed: true,
-          frameWidth: result.frameWidth || image.naturalWidth,
-          frameHeight: result.frameHeight || image.naturalHeight,
-          detections: result.detections.map(toWebRfDetrDetection),
-          revealedAt: result.detections.length ? confirmedAt + 260 : confirmedAt,
-          analysisNote: result.note,
-        }
-        : item);
-      saveSnapshotHistoryItems();
-      renderAiHistorySheetContent();
+      await analyzeSnapshotHistoryItem(next, image);
     } catch (err) {
       console.warn("[ITS] snapshot history RF-DETR failed:", err);
       state.snapshotHistoryItems = state.snapshotHistoryItems.map((item) => item.id === next.id ? {
@@ -10293,7 +13429,7 @@ if (staticRoute) {
       state.snapshotHistoryRfDetrBusy = false;
       window.setTimeout(() => {
         if (document.body.classList.contains("video-focus-mode")) return;
-        if (state.snapshotHistoryRfDetrBusy || aiHistoryIsMobileDocked()) return;
+        if (state.snapshotHistoryRfDetrBusy) return;
         if (!state.snapshotHistoryItems.some((item) => !item.analyzed)) return;
         const host = document.querySelector<HTMLElement>("#m-ai-history-sheet [data-ai-history-content]");
         if (host && aiHistoryActiveTab === "history") void analyzeVisibleHistorySnapshots(host);
@@ -10430,15 +13566,68 @@ if (staticRoute) {
 
     const overlay = document.createElement("div");
     overlay.id = "m-layer-modal";
+    const guide = visibleRoadGuideBundle;
+    const transitLegend = guide?.transit
+      .filter((item) => state.transitModeFilter.has(item.mode))
+      .filter((item, index, rows) => rows.findIndex((candidate) => (
+        candidate.mode === item.mode
+        && candidate.label === item.label
+        && candidate.from === item.from
+        && candidate.to === item.to
+      )) === index)
+      .slice(0, 28) || [];
+    const roadLegend = guide?.roads
+      .filter((item) => state.roadClassFilter.has(roadRenderClass(item)))
+      .filter((item, index, rows) => rows.findIndex((candidate) => (
+        candidate.name === item.name && candidate.highway === item.highway
+      )) === index)
+      .slice(0, 24) || [];
+    const ornamentLegend = (guide?.ornaments
+      .reduce<Array<{ kind: MapOrnamentKind; count: number }>>((rows, item) => {
+        const found = rows.find((row) => row.kind === item.kind);
+        if (found) found.count += 1;
+        else rows.push({ kind: item.kind, count: 1 });
+        return rows;
+      }, [])
+      .sort((a, b) => ornamentPriority(a.kind) - ornamentPriority(b.kind))) || [];
+    const namedNature = [
+      ...(guide?.waterways || []).filter((item) => item.name).map((item) => ({ icon: "💧", name: item.name })),
+      ...(guide?.greens || []).filter((item) => item.name).map((item) => ({ icon: "🌳", name: item.name })),
+    ].filter((item, index, rows) => rows.findIndex((candidate) => candidate.name === item.name) === index).slice(0, 16);
+    const ornamentNames: Partial<Record<MapOrnamentKind, string>> = {
+      surveillance: "CCTV", speed_camera: "Kamera kecepatan / ETLE", street_lamp: "Lampu jalan",
+      traffic_calming: "Penenang lalu lintas", toll_gate: "Gerbang tol", gate: "Gerbang",
+      barrier: "Pembatas", guardrail: "Pagar pengaman", bollard: "Bollard", hydrant: "Hidran",
+      bench: "Bangku", waste_basket: "Tempat sampah", drinking_water: "Air minum",
+      toilets: "Toilet", entrance: "Pintu masuk", elevator: "Lift", escalator: "Eskalator",
+      manhole: "Manhole", drain_grate: "Drainase", retaining_wall: "Dinding penahan",
+      seawall: "Tanggul", taxi: "Taksi", bicycle_parking: "Parkir sepeda",
+      charging_station: "Pengisian kendaraan", park_and_ride: "Park and ride",
+    };
+    const transitModeNames: Record<TransitGuideMode, string> = {
+      busway: "Busway", bus: "Bus / angkot", mrt: "MRT", lrt: "LRT", tram: "Tram",
+      monorail: "Monorel", commuter: "KRL komuter", high_speed: "Kereta cepat", train: "Kereta",
+    };
+    const transitDetailsHtml = transitLegend.length ? transitLegend.map((item) => {
+      const endpoints = item.from && item.to ? `${item.from} → ${item.to}` : item.from || item.to || item.network || item.operator;
+      return `<li tabindex="0" data-legend-kind="transit" data-legend-index="${transitLegend.indexOf(item)}"><i style="--legend-color:${escapeHtml(item.color)}"></i><span><b>${escapeHtml(item.ref || item.name || item.label || transitModeNames[item.mode])}</b>${endpoints ? `<small>${escapeHtml(endpoints)}</small>` : ""}</span></li>`;
+    }).join("") : `<li class="m-legend-empty">Perbesar peta untuk membaca rute di area ini.</li>`;
+    const roadDetailsHtml = roadLegend.length ? roadLegend.map((item) => (
+      `<li tabindex="0" data-legend-kind="road" data-legend-index="${roadLegend.indexOf(item)}"><i class="road-${roadRenderClass(item)}"></i><span><b>${escapeHtml(item.name || item.ref || "Jalan tanpa nama")}</b><small>${escapeHtml(item.highway)}${item.lanes ? ` · ${item.lanes} lajur` : ""}${item.detail.bridge ? " · jembatan" : ""}</small></span></li>`
+    )).join("") : `<li class="m-legend-empty">Perbesar peta untuk membaca jenis jalan di area ini.</li>`;
+    const objectDetailsHtml = [
+      ...ornamentLegend.map((item) => `<li tabindex="0" data-legend-kind="ornament" data-legend-ornament="${escapeHtml(item.kind)}"><span class="m-legend-symbol">${ornamentSymbolMarkup(item.kind).markup}</span><span><b>${escapeHtml(ornamentNames[item.kind] || item.kind)}</b><small>${item.count.toLocaleString("id-ID")} titik pada area termuat</small></span></li>`),
+      ...namedNature.map((item) => `<li><span class="m-legend-symbol">${item.icon}</span><span><b>${escapeHtml(item.name)}</b><small>Nama resmi dari data peta</small></span></li>`),
+    ].join("") || `<li class="m-legend-empty">Belum ada objek bernama pada area termuat.</li>`;
     overlay.innerHTML = `
   <div class="m-layer-backdrop"></div>
   <div class="m-layer-sheet">
     <div class="m-sheet-handle-bar"></div>
-    <div class="m-layer-title">Pilih Tampilan Peta</div>
+    <div class="m-layer-title">Lapisan dinamis ITS Maps</div>
     <div class="m-layer-options">
       <button class="m-layer-opt ${state.baseMode === 'street' ? 'active' : ''}" data-mode="street">
         <div class="m-layer-icon">🗺️</div>
-        <span>Carto 2D</span>
+        <span>Peta 2D</span>
       </button>
       <button class="m-layer-opt ${state.baseMode === 'satellite' ? 'active' : ''}" data-mode="satellite">
         <div class="m-layer-icon">🛰️</div>
@@ -10449,10 +13638,99 @@ if (staticRoute) {
         <span>3D</span>
       </button>
     </div>
+    <div class="m-dynamics-sections">
+      <details class="m-dynamics-group" open>
+        <summary>Moda transportasi <span>${transitLegend.length} jalur</span></summary>
+        <div class="m-dynamics-grid">
+        ${([
+          ["busway", "Busway"], ["bus", "Bus / angkot"], ["mrt", "MRT"],
+          ["lrt", "LRT"], ["tram", "Tram"], ["monorail", "Monorel"],
+          ["commuter", "KRL komuter"], ["high_speed", "Kereta cepat"], ["train", "Kereta"],
+        ] as Array<[TransitGuideMode, string]>).map(([value, label]) => `
+          <label><input type="checkbox" data-transit-mode="${value}" ${state.transitModeFilter.has(value) ? "checked" : ""}><span>${label}</span></label>
+        `).join("")}
+        </div>
+        <ul class="m-dynamics-legend">${transitDetailsHtml}</ul>
+      </details>
+      <details class="m-dynamics-group">
+        <summary>Jenis jalan <span>${roadLegend.length} jenis/nama</span></summary>
+        <div class="m-dynamics-grid">
+        ${([
+          ["major", "Jalan utama/tol"], ["street", "Jalan kota"], ["foot", "Trotoar & sepeda"], ["service", "Jalan layanan"],
+        ] as Array<["major" | "street" | "foot" | "service", string]>).map(([value, label]) => `
+          <label><input type="checkbox" data-road-class="${value}" ${state.roadClassFilter.has(value) ? "checked" : ""}><span>${label}</span></label>
+        `).join("")}
+        </div>
+        <ul class="m-dynamics-legend">${roadDetailsHtml}</ul>
+      </details>
+      <details class="m-dynamics-group">
+        <summary>POI, alam & ornamen <span>${ornamentLegend.reduce((sum, item) => sum + item.count, 0)} objek</span></summary>
+        <div class="m-dynamics-grid">
+        <label><input type="checkbox" data-map-detail-toggle="green" ${state.greenVisible ? "checked" : ""}><span>🌳 Taman & area hijau</span></label>
+        <label><input type="checkbox" data-map-detail-toggle="water" ${state.waterVisible ? "checked" : ""}><span>💧 Air, sungai & drainase</span></label>
+        <label><input type="checkbox" data-map-detail-toggle="poi" ${state.poiVisible ? "checked" : ""}><span>📍 POI</span></label>
+        <label><input type="checkbox" data-map-detail-toggle="cctv" ${state.cctvVisible ? "checked" : ""}><span>📹 CCTV & kamera kecepatan</span></label>
+        </div>
+        <p class="m-video-note"><i class="m-video-dot"></i> Video hanya ditampilkan jika feed publik dan koordinat titiknya terverifikasi.</p>
+        <ul class="m-dynamics-legend">${objectDetailsHtml}</ul>
+      </details>
+    </div>
   </div>
 `;
 
-    overlay.querySelector(".m-layer-backdrop")!.addEventListener("click", closeLayerModal);
+    let legendHighlight: L.Layer | null = null;
+    const clearLegendHighlight = (): void => {
+      if (legendHighlight && map.hasLayer(legendHighlight)) map.removeLayer(legendHighlight);
+      legendHighlight = null;
+      overlay.querySelectorAll(".m-dynamics-legend li.is-highlighted").forEach((item) => item.classList.remove("is-highlighted"));
+    };
+    const showLegendHighlight = (item: HTMLElement): void => {
+      clearLegendHighlight();
+      item.classList.add("is-highlighted");
+      const kind = item.dataset.legendKind;
+      const index = Number(item.dataset.legendIndex);
+      if (kind === "transit" && transitLegend[index]?.points.length) {
+        const record = transitLegend[index];
+        legendHighlight = L.polyline(record.points, {
+          pane: ROAD_ORNAMENT_PANE, color: record.color, weight: 9, opacity: 0.96,
+          lineCap: "round", interactive: false, className: "legend-map-highlight",
+        }).addTo(map);
+      } else if (kind === "road" && roadLegend[index]?.points.length) {
+        const record = roadLegend[index];
+        legendHighlight = L.polyline(record.points, {
+          pane: ROAD_ORNAMENT_PANE, color: "#1677ff", weight: 9, opacity: 0.92,
+          lineCap: "round", interactive: false, className: "legend-map-highlight",
+        }).addTo(map);
+      } else if (kind === "ornament") {
+        const ornament = guide?.ornaments.find((record) => record.kind === item.dataset.legendOrnament && record.points[0]);
+        if (ornament) {
+          legendHighlight = L.circleMarker(ornament.points[0], {
+            pane: ROAD_ORNAMENT_PANE, radius: 18, color: "#fff", weight: 4,
+            fillColor: ornamentColor(ornament.kind), fillOpacity: 0.9, interactive: false,
+            className: "legend-map-highlight",
+          }).addTo(map);
+        }
+      }
+    };
+    overlay.querySelectorAll<HTMLElement>(".m-dynamics-legend li[data-legend-kind]").forEach((item) => {
+      item.addEventListener("mouseenter", () => showLegendHighlight(item));
+      item.addEventListener("mouseleave", clearLegendHighlight);
+      item.addEventListener("focus", () => showLegendHighlight(item));
+      item.addEventListener("blur", clearLegendHighlight);
+      item.addEventListener("click", () => {
+        showLegendHighlight(item);
+        const kind = item.dataset.legendKind;
+        const index = Number(item.dataset.legendIndex);
+        const points = kind === "transit" ? transitLegend[index]?.points : kind === "road" ? roadLegend[index]?.points : null;
+        if (points?.length) map.fitBounds(L.latLngBounds(points), { padding: [56, 56], maxZoom: 18, animate: true });
+      });
+    });
+    const closeInteractiveLayerModal = (): void => {
+      clearLegendHighlight();
+      closeLayerModal();
+    };
+
+    overlay.querySelector(".m-layer-backdrop")!.addEventListener("click", closeInteractiveLayerModal);
 
     overlay.querySelectorAll<HTMLButtonElement>(".m-layer-opt").forEach(btn => {
       btn.addEventListener("click", async () => {
@@ -10460,17 +13738,54 @@ if (staticRoute) {
         overlay.querySelectorAll(".m-layer-opt").forEach(b => b.classList.remove("active"));
         btn.classList.add("active");
         await setBaseMap(mode);
-        setTimeout(closeLayerModal, 280);
+        setTimeout(closeInteractiveLayerModal, 280);
+      });
+    });
+
+    const rerenderDetails = (): void => {
+      lastRoadGuideFetchBounds = null;
+      void refreshRoadGuideLayer(true);
+    };
+    overlay.querySelectorAll<HTMLInputElement>("[data-transit-mode]").forEach((input) => {
+      input.addEventListener("change", () => {
+        const mode = input.dataset.transitMode as TransitGuideMode;
+        if (input.checked) state.transitModeFilter.add(mode);
+        else state.transitModeFilter.delete(mode);
+        rerenderDetails();
+      });
+    });
+    overlay.querySelectorAll<HTMLInputElement>("[data-road-class]").forEach((input) => {
+      input.addEventListener("change", () => {
+        const roadClass = input.dataset.roadClass as "major" | "street" | "foot" | "service";
+        if (input.checked) state.roadClassFilter.add(roadClass);
+        else state.roadClassFilter.delete(roadClass);
+        rerenderDetails();
+      });
+    });
+    overlay.querySelectorAll<HTMLInputElement>("[data-map-detail-toggle]").forEach((input) => {
+      input.addEventListener("change", () => {
+        const detail = input.dataset.mapDetailToggle;
+        if (detail === "green") state.greenVisible = input.checked;
+        if (detail === "water") state.waterVisible = input.checked;
+        if (detail === "cctv") state.cctvVisible = input.checked;
+        if (detail === "poi") setPoiVisibility(input.checked);
+        if (detail !== "poi") rerenderDetails();
       });
     });
 
     setupSheetSwipe(
       overlay.querySelector<HTMLElement>(".m-layer-sheet")!,
-      closeLayerModal
+      closeInteractiveLayerModal
     );
 
     document.body.appendChild(overlay);
-    requestAnimationFrame(() => overlay.classList.add("open"));
+    requestAnimationFrame(() => {
+      overlay.classList.add("open");
+      if (usesDesktopSidePanel()) {
+        document.body.classList.add("map-modal-panel-open");
+        setSidePanelWidthFromSheet(overlay.querySelector<HTMLElement>(".m-layer-sheet"));
+      }
+    });
   }
 
   function closeLayerModal(): void {
@@ -10479,6 +13794,8 @@ if (staticRoute) {
     modal.classList.remove("open");
     modal.classList.add("closing");
     setTimeout(() => modal.remove(), 320);
+    document.body.classList.remove("map-modal-panel-open");
+    clearSidePanelWidth();
     mobileState.layerModalOpen = false;
   }
 
@@ -10892,8 +14209,14 @@ if (staticRoute) {
         const id = row.dataset.id;
         const d = state.devices.find(x => x.id === id);
         if (!d) return;
+        const navigationSeq = beginExplicitMapNavigation();
+        state.device = d;
+        renderCameraTile();
         snapITSSheet("peek");
-        setTimeout(() => {
+        state.pendingDeviceFocusTimer = window.setTimeout(() => {
+          state.pendingDeviceFocusTimer = 0;
+          if (navigationSeq !== state.mapNavigationSeq) return;
+          map.stop();
           map.setView([d.position.lat, d.position.lng], 17, { animate: true });
         }, 200);
       });
@@ -11124,38 +14447,46 @@ if (staticRoute) {
   }
   initMobileUI();
   void refreshSnapshot();
-  // Start the CARTO vector renderer immediately. Leaflet remains the control and
-  // marker plane, so existing app interactions keep working without two visible bases.
-  void ensureMapLibreMap().then((gl) => {
-    if (gl && state.baseMode !== "satellite" && mapLibreSurfaceReady()) {
-      if (map.hasLayer(streetLayer)) map.removeLayer(streetLayer);
-      state.roadGuideLayer?.clearLayers();
-      state.visionLayer?.clearLayers();
-    }
-    lastOverpassFetchBounds = null;
-    void refreshOverpassLayer();
-    if (!gl) {
-      void refreshRoadGuideLayer(true);
-      void refreshVisionLayer(true);
-    }
-  });
+  // CARTO paints the normal 2D/street surface immediately. MapLibre is reserved
+  // for an explicit 3D request while Leaflet keeps interaction and overlays.
+  lastOverpassFetchBounds = null;
+  void refreshOverpassLayer();
+  void refreshRoadGuideLayer(true);
 }
 
 // ─── PWA: Service Worker registration and install prompt handler ─────
 async function requestPublicNotificationPermission(): Promise<void> {
-  if (!("Notification" in window)) return;
-  const permission = Notification.permission === "granted"
-    ? "granted"
-    : await Notification.requestPermission();
-  if (permission !== "granted") return;
-  const registration = await navigator.serviceWorker?.ready.catch(() => null);
-  await registration?.showNotification("Notifikasi ITS Maps aktif", {
-    body: "Update aplikasi dan status publik akan muncul di sini.",
-    icon: "./icons/icon-192.png",
-    badge: "./icons/icon-96.png",
-    tag: "its-public-notification-ready",
-    data: { url: "/new" },
-  });
+  const buttons = [...document.querySelectorAll<HTMLButtonElement>("[data-enable-notifications]")];
+  const disabling = publicPushOptedIn();
+  buttons.forEach((button) => { button.disabled = true; button.textContent = disabling ? "Menonaktifkan..." : "Mengaktifkan..."; });
+  try {
+    if (disabling) {
+      const state = await disablePublicPush();
+      buttons.forEach((button) => { button.textContent = "Aktifkan notifikasi"; button.title = state.message; });
+      return;
+    }
+    const registration = await navigator.serviceWorker?.ready;
+    if (!registration) throw new Error("Service worker belum siap.");
+    const state = await enablePublicPush(registration);
+    buttons.forEach((button) => {
+      button.textContent = state.subscribed ? "Nonaktifkan notifikasi" : "Aktifkan notifikasi";
+      button.title = state.message;
+    });
+    if (!state.subscribed) return;
+    await registration.showNotification("Notifikasi ITS Maps aktif", {
+      body: state.message,
+      icon: "./icons/icon-192.png",
+      badge: "./icons/icon-96.png",
+      tag: "its-public-notification-ready",
+      data: { url: "/new" },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Notifikasi belum dapat diaktifkan.";
+    console.warn("[PWA] Public push subscription failed", error);
+    buttons.forEach((button) => { button.textContent = "Coba lagi"; button.title = message; });
+  } finally {
+    buttons.forEach((button) => { button.disabled = false; });
+  }
 }
 
 async function notifyLatestPublicUpdate(registration: ServiceWorkerRegistration): Promise<void> {
@@ -11181,11 +14512,23 @@ async function notifyLatestPublicUpdate(registration: ServiceWorkerRegistration)
 }
 
 if ('serviceWorker' in navigator && !isAndroidApkRuntime()) {
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    const reloadKey = "its-sw-controller-reload:v31";
+    if (sessionStorage.getItem(reloadKey) === "1") return;
+    sessionStorage.setItem(reloadKey, "1");
+    window.location.reload();
+  });
   window.addEventListener('load', async () => {
     try {
-      const registration = await navigator.serviceWorker.register(new URL("./sw.js", window.location.href).toString());
+      const registered = await navigator.serviceWorker.register("/sw.js", {
+        scope: "/",
+        updateViaCache: "none",
+      });
+      await registered.update();
+      const registration = await navigator.serviceWorker.ready;
       console.log('[PWA] Service Worker registered');
       void notifyLatestPublicUpdate(registration);
+      void restorePublicPush(registration);
     } catch (err) {
       console.warn('[PWA] Service Worker registration failed', err);
     }
@@ -11567,7 +14910,10 @@ function itsShowAiLicenseModal(): void {
 const ITS_WINDOWS_VERSION = "1.0.21";
 const ITS_ANDROID_VERSION = "1.0.36";
 const ITS_IOS_VERSION = "PWA";
-const ITS_WINDOWS_INSTALL_URL = "https://github.com/galihru/its/releases/download/its-maps-v1.0.21/ITS-Maps-Windows-Custom-Setup-1.0.21-x64.exe";
+const ITS_MICROSOFT_STORE_URL = "https://apps.microsoft.com/detail/9MWFGGW3FD2C";
+const ITS_MICROSOFT_STORE_DEEP_LINK = "ms-windows-store://pdp/?productid=9MWFGGW3FD2C";
+const ITS_MICROSOFT_STORE_REVIEW_LINK = "ms-windows-store://review/?ProductId=9MWFGGW3FD2C";
+const ITS_WINDOWS_INSTALL_URL = "https://github.com/hanifasepthi/its/releases/download/its-maps-v1.0.21/ITS-Maps-Windows-Custom-Setup-1.0.21-x64.exe";
 const ITS_WINDOWS_INSTALL_NAME = "ITS-Maps-Windows-Custom-Setup-1.0.21-x64.exe";
 const ITS_ANDROID_INSTALL_URL = "https://itstelkom.web.app/artifacts/apps/ITS-Maps-Android-1.0.36.apk.b64";
 const ITS_ANDROID_INSTALL_NAME = "ITS-Maps-Android-1.0.36.apk";
@@ -11607,6 +14953,105 @@ type AppFeaturePreview = {
   image: string;
   description: string;
 };
+
+function compactStoreCount(value: number | null): string {
+  if (value === null) return "-";
+  return new Intl.NumberFormat("id-ID", { notation: "compact", maximumFractionDigits: 1 }).format(value);
+}
+
+function windowsStoreIntegrationHtml(): string {
+  return `
+    <section class="windows-store-integration" data-windows-store-integration aria-labelledby="windows-store-integration-title">
+      <header>
+        <span class="windows-store-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M4 6.5 10.5 5v6H4zm7.5-1.7L20 3v8h-8.5zM4 12h6.5v6L4 16.5zm7.5 0H20v8l-8.5-1.8z"/></svg>
+        </span>
+        <span>
+          <strong id="windows-store-integration-title">Microsoft Store</strong>
+          <small>Data paket dan ulasan terverifikasi</small>
+        </span>
+      </header>
+      <div class="windows-store-metrics">
+        <div><span>Apps on device</span><strong data-store-installed>Belum diperiksa</strong></div>
+        <div><span>Rating</span><strong data-store-rating>-</strong></div>
+        <div><span>Unduhan</span><strong data-store-downloads>-</strong></div>
+      </div>
+      <p class="windows-store-device-note">Izin browser hanya memeriksa paket ITS Maps terkait; situs tidak membaca daftar aplikasi lain.</p>
+      <p class="windows-store-note" data-store-note>Rating, ulasan, dan akuisisi hanya ditampilkan jika snapshot Partner Center telah diverifikasi.</p>
+      <div class="windows-store-reviews" data-store-reviews hidden></div>
+      <div class="windows-store-actions">
+        <button type="button" data-store-check-app>Periksa aplikasi</button>
+        <a href="${ITS_MICROSOFT_STORE_REVIEW_LINK}" data-store-review-link>Beri ulasan</a>
+      </div>
+    </section>
+  `;
+}
+
+function renderMicrosoftStoreSnapshot(root: HTMLElement, snapshot: MicrosoftStorePublicSnapshot): void {
+  const rating = root.querySelector<HTMLElement>("[data-store-rating]");
+  const downloads = root.querySelector<HTMLElement>("[data-store-downloads]");
+  const note = root.querySelector<HTMLElement>("[data-store-note]");
+  const reviews = root.querySelector<HTMLElement>("[data-store-reviews]");
+  if (!snapshot.available) {
+    if (note) note.textContent = "Statistik publik belum diterbitkan oleh akun Partner Center. Tidak ada angka perkiraan yang ditampilkan.";
+    return;
+  }
+  if (rating) {
+    rating.textContent = snapshot.averageRating === null
+      ? "-"
+      : `${snapshot.averageRating.toLocaleString("id-ID", { maximumFractionDigits: 1 })} / 5${snapshot.ratingCount === null ? "" : ` (${compactStoreCount(snapshot.ratingCount)})`}`;
+  }
+  if (downloads) downloads.textContent = compactStoreCount(snapshot.acquisitionCount);
+  if (note) {
+    const date = snapshot.updatedAt ? new Date(snapshot.updatedAt) : null;
+    note.textContent = date && Number.isFinite(date.getTime())
+      ? `Snapshot Partner Center diperbarui ${date.toLocaleString("id-ID")}.`
+      : "Snapshot statistik berasal dari publikasi Partner Center terverifikasi.";
+  }
+  if (reviews && snapshot.reviews.length) {
+    reviews.hidden = false;
+    reviews.innerHTML = snapshot.reviews.map((review) => `
+      <article>
+        <span><strong>${escapeStaticHtml(review.author)}</strong><b>${"★".repeat(Math.round(review.rating))}</b></span>
+        ${review.title ? `<h4>${escapeStaticHtml(review.title)}</h4>` : ""}
+        <p>${escapeStaticHtml(review.body)}</p>
+      </article>
+    `).join("");
+  }
+}
+
+async function hydrateWindowsStoreIntegration(modal: HTMLElement): Promise<void> {
+  const root = modal.querySelector<HTMLElement>("[data-windows-store-integration]");
+  if (!root) return;
+  const installed = root.querySelector<HTMLElement>("[data-store-installed]");
+  const checkButton = root.querySelector<HTMLButtonElement>("[data-store-check-app]");
+  const checkInstallation = async () => {
+    if (!checkButton || !installed) return;
+    checkButton.disabled = true;
+    checkButton.textContent = "Memeriksa...";
+    const status = await queryItsWindowsAppInstallation(true);
+    installed.textContent = status.error
+      ? "Izin ditolak"
+      : status.supported
+        ? status.installed ? "Terpasang" : "Tidak terdeteksi"
+        : "Tidak didukung";
+    installed.dataset.state = status.installed ? "installed" : "missing";
+    checkButton.textContent = status.installed ? "Periksa lagi" : "Periksa aplikasi";
+    checkButton.disabled = false;
+  };
+  checkButton?.addEventListener("click", () => void checkInstallation());
+  // Opening the app/download panel is itself an explicit user gesture. Check
+  // the verified related Store package immediately so Chromium can show its
+  // native "Apps on your device" permission prompt when the API is supported.
+  if (/Windows/i.test(navigator.userAgent)) void checkInstallation();
+  root.querySelector<HTMLAnchorElement>("[data-store-review-link]")?.addEventListener("click", (event) => {
+    if (!/Windows/i.test(navigator.userAgent)) {
+      event.preventDefault();
+      window.open(ITS_MICROSOFT_STORE_URL, "_blank", "noopener");
+    }
+  });
+  renderMicrosoftStoreSnapshot(root, await fetchMicrosoftStorePublicSnapshot(FIREBASE_ROOT_URL));
+}
 const ITS_ANDROID_FEATURE_PREVIEWS: AppFeaturePreview[] = [
   {
     title: "AI Layar Kunci",
@@ -11770,7 +15215,7 @@ function getAppDownloadInfo(): AppDownloadInfo {
     fileName: ITS_WINDOWS_INSTALL_NAME,
     url: itsDynamicAppLinks.windows || ITS_WINDOWS_INSTALL_URL,
     previewFolder: "windows",
-    shortDescription: "Installer Windows ITS Maps dengan peta Carto, data OSM, kamera realtime, notifikasi desktop, dan pembaruan aplikasi.",
+    shortDescription: "Installer Windows ITS Maps dengan peta dan POI realtime, kamera AI, notifikasi desktop, serta pembaruan aplikasi.",
     longDescription: "ITS Maps Windows adalah aplikasi desktop Electron untuk memantau Raspberry Pi, peta realtime, kamera, grafik lalu lintas, history, update otomatis, dokumentasi, dan panel What's New. EXE Windows tidak memuat widget Android atau Lock Screen AI; fiturnya disesuaikan dengan perangkat desktop.",
     releaseNotes: ITS_PLATFORM_RELEASE_NOTES.windows,
     accessItems: ITS_APP_ACCESS_ITEMS.windows,
@@ -11843,7 +15288,7 @@ function appDataSafetySummaryHtml(info: AppDownloadInfo): string {
 function appPermissionDetailHtml(info: AppDownloadInfo): string {
   return `
     <section class="windows-data-detail-app">
-      <img src="${ITS_APP_ICON}" alt="">
+      <img src="${ITS_APP_ICON_SMALL}" alt="" width="64" height="96">
       <span>
         <strong>ITS Maps ${escapeStaticHtml(info.platformName)}</strong>
         <small>Versi ${escapeStaticHtml(info.versionName)} · pemantauan lalu lintas Raspberry Pi</small>
@@ -11926,7 +15371,7 @@ function itsCreateSplash(): void {
         </svg>
       </span>
       <strong>ITS Maps</strong>
-      <span>Menyiapkan peta OSM...</span>
+      <span>Menyiapkan peta...</span>
       <i aria-hidden="true"></i>
     </div>
   `;
@@ -12052,12 +15497,12 @@ function itsCreateWindowsDownloadButton(): void {
   host.className = "windows-download-app";
   host.innerHTML = `
     <button type="button" class="windows-download-trigger" aria-label="Download ITS Maps ${info.platformName}" title="Download ITS Maps ${info.platformName}" data-tooltip="Download ITS Maps ${info.platformName}">
-      <img src="${ITS_APP_ICON}" alt="">
+      <img src="${ITS_APP_ICON_SMALL}" alt="" width="64" height="96">
       <span class="windows-download-badge" aria-hidden="true"></span>
     </button>
     <div class="windows-download-hover-card" aria-hidden="true">
       <div class="windows-download-hover-head">
-        <img src="${ITS_APP_ICON}" alt="">
+        <img src="${ITS_APP_ICON_SMALL}" alt="" width="64" height="96">
         <div>
           <strong>ITS Maps ${info.platformName}</strong>
           <span>Versi ${info.versionName}</span>
@@ -12088,7 +15533,7 @@ async function itsShowWindowsDownloadModal(): Promise<void> {
       <div class="windows-download-grip" data-swipe-handle aria-hidden="true"></div>
       <div class="windows-download-view windows-download-summary active" data-download-view="summary">
         <div class="windows-download-head">
-          <img class="windows-download-icon" src="${ITS_APP_ICON}" alt="">
+          <img class="windows-download-icon" src="${ITS_APP_ICON_SMALL}" alt="" width="64" height="96">
           <div>
             <h2 id="windows-download-title">ITS Maps ${info.platformName}</h2>
             <p>Versi ${info.versionName}</p>
@@ -12099,6 +15544,7 @@ async function itsShowWindowsDownloadModal(): Promise<void> {
         </div>
         <div class="windows-download-modal-actions">
           <button type="button" class="windows-download-primary" data-windows-download>Unduh ${info.extension.toUpperCase()}</button>
+          ${info.platform === "windows" ? `<a class="windows-download-secondary windows-download-store" href="${ITS_MICROSOFT_STORE_URL}" data-windows-store-link target="_blank" rel="noopener">Microsoft Store</a>` : ""}
         </div>
         <div class="windows-download-section-title">Gambar pratinjau</div>
         <div class="windows-download-modal-carousel" aria-label="Preview aplikasi ${info.platformName}">
@@ -12109,6 +15555,7 @@ async function itsShowWindowsDownloadModal(): Promise<void> {
         </div>
         <div class="windows-download-section-title">Deskripsi</div>
         <p class="windows-download-description">${info.shortDescription}</p>
+        ${info.platform === "windows" ? windowsStoreIntegrationHtml() : ""}
         ${featurePreviews.length ? `
           <div class="windows-download-section-title">Gambaran fitur</div>
           <button type="button" class="windows-feature-showcase-card" data-feature-gallery aria-label="Buka semua gambaran fitur Android">
@@ -12127,7 +15574,7 @@ async function itsShowWindowsDownloadModal(): Promise<void> {
           <button type="button" class="windows-download-back" data-download-back aria-label="Kembali" title="Kembali">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
           </button>
-          <img class="windows-download-icon" src="${ITS_APP_ICON}" alt="">
+          <img class="windows-download-icon" src="${ITS_APP_ICON_SMALL}" alt="" width="64" height="96">
           <div>
             <h2 data-download-detail-title>Data dan izin aplikasi</h2>
             <p data-download-detail-subtitle>ITS Maps ${info.platformName} ${info.versionName}</p>
@@ -12142,6 +15589,7 @@ async function itsShowWindowsDownloadModal(): Promise<void> {
   `;
   document.body.appendChild(modal);
   document.body.classList.add("app-download-panel-open");
+  if (info.platform === "windows") void hydrateWindowsStoreIntegration(modal);
 
   let carouselIndex = 0;
   let carouselTimer = 0;
@@ -12175,6 +15623,17 @@ async function itsShowWindowsDownloadModal(): Promise<void> {
     button.addEventListener("click", closeDownloadModal);
   });
   modal.querySelector<HTMLButtonElement>("[data-windows-download]")?.addEventListener("click", () => itsDownloadApp(info));
+  modal.querySelector<HTMLAnchorElement>("[data-windows-store-link]")?.addEventListener("click", (event) => {
+    // Prefer the native Store picker on Windows while retaining the web Store
+    // page as a safe fallback in browsers and embedded web views.
+    if (/Windows/i.test(navigator.userAgent)) {
+      event.preventDefault();
+      window.location.href = ITS_MICROSOFT_STORE_DEEP_LINK;
+      window.setTimeout(() => {
+        if (document.visibilityState === "visible") window.open(ITS_MICROSOFT_STORE_URL, "_blank", "noopener");
+      }, 900);
+    }
+  });
   const detailTitle = modal.querySelector<HTMLElement>("[data-download-detail-title]");
   const detailSubtitle = modal.querySelector<HTMLElement>("[data-download-detail-subtitle]");
   const detailBody = modal.querySelector<HTMLElement>("[data-download-detail-body]");
@@ -12341,6 +15800,8 @@ type ItsRuntimePoiSnapshot = {
 type ItsMapsRuntimeBridge = {
   getPoiSnapshot?: () => ItsRuntimePoiSnapshot[];
   getUserLocation?: () => { lat: number; lng: number; accuracy?: number; source?: string; updatedAt?: number } | null;
+  getMapCenter?: () => { lat: number; lng: number; source?: string } | null;
+  getSystemLocation?: () => { lat: number; lng: number; deviceId?: string } | null;
   applyUserLocation?: (lat: number, lng: number, accuracy?: number, center?: boolean, source?: string) => void;
   focusPoi?: (poiId: string, lat: number, lng: number) => void;
   focusLatLng?: (lat: number, lng: number, label?: string) => void;
@@ -12757,709 +16218,12 @@ async function itsSearchTrafficLocation(location: string): Promise<Record<string
   };
 }
 
-window.addEventListener("pagehide", () => {
-  disposeBrowserTextWorker();
-}, { once: true });
-
 function itsNormalizeResearchText(value: string): string {
   return value
     .replace(/\u0000/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
-
-type ItsResearchMode = "journal" | "profile" | "website" | "image";
-
-type ItsResearchFact = {
-  label: string;
-  value: string;
-};
-
-type ItsResearchEvidence = {
-  id: string;
-  taskId: string;
-  kind: ItsResearchMode;
-  provider: string;
-  title: string;
-  url: string;
-  excerpt: string;
-  authors: string[];
-  publisher: string;
-  year: string;
-  doi: string;
-  pdfUrl: string;
-  imageUrl: string;
-  imageSourceUrl: string;
-  license: string;
-  sourceType: string;
-  citedByCount: number;
-  facts: ItsResearchFact[];
-  retrievedAt: number;
-};
-
-type ItsResearchTask = {
-  id: string;
-  question: string;
-  mode: ItsResearchMode;
-  queries: string[];
-  sourceIds: string[];
-  createdAt: number;
-};
-
-type ItsResearchResult = {
-  taskId: string;
-  text: string;
-  html: string;
-  bibliography: string[];
-  sources: ItsResearchEvidence[];
-};
-
-const ITS_RESEARCH_TASK_STORAGE = "its-webmcp-research-tasks:v2";
-const ITS_RESEARCH_EVIDENCE_STORAGE = "its-webmcp-research-evidence:v2";
-const ITS_RESEARCH_CACHE_TTL = 15 * 60 * 1000;
-const itsResearchSearchCache = new Map<string, { at: number; sources: ItsResearchEvidence[] }>();
-
-function itsLoadStoredArray<T>(key: string): T[] {
-  try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(key) || "[]");
-    return Array.isArray(parsed) ? parsed as T[] : [];
-  } catch {
-    return [];
-  }
-}
-
-let itsResearchTasks = itsLoadStoredArray<ItsResearchTask>(ITS_RESEARCH_TASK_STORAGE);
-let itsResearchEvidence = itsLoadStoredArray<ItsResearchEvidence>(ITS_RESEARCH_EVIDENCE_STORAGE);
-
-function itsSaveResearchState(): void {
-  try {
-    localStorage.setItem(ITS_RESEARCH_TASK_STORAGE, JSON.stringify(itsResearchTasks.slice(-30)));
-    localStorage.setItem(ITS_RESEARCH_EVIDENCE_STORAGE, JSON.stringify(itsResearchEvidence.slice(-180)));
-  } catch (error) {
-    console.warn("[ITS] Research state could not be saved", error);
-  }
-}
-
-function itsResearchId(prefix: string): string {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function itsPlainResearchMarkup(value: unknown): string {
-  const raw = typeof value === "string" ? value : "";
-  if (!raw) return "";
-  const parsed = new DOMParser().parseFromString(raw, "text/html");
-  return itsNormalizeResearchText(parsed.body.textContent || raw).slice(0, 8000);
-}
-
-function itsResearchStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 30);
-}
-
-function itsResearchFacts(value: unknown): ItsResearchFact[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((item) => {
-      const record = objectRecord(item);
-      return { label: String(record.label || "").trim(), value: String(record.value || "").trim() };
-    })
-    .filter((item) => item.label && item.value)
-    .slice(0, 30);
-}
-
-function itsIsPrivateOrLocalHost(hostname: string): boolean {
-  const host = hostname.toLowerCase();
-  return host === "localhost" || host === "127.0.0.1" || host === "::1" ||
-    /^10\./.test(host) || /^192\.168\./.test(host) || /^172\.(1[6-9]|2\d|3[01])\./.test(host);
-}
-
-function itsSafeResearchUrl(value: unknown, optional = false): string {
-  const text = typeof value === "string" ? value.trim() : "";
-  if (!text && optional) return "";
-  if (!text) throw new Error("URL sumber wajib diisi.");
-  const url = new URL(text, window.location.href);
-  if (!/^https?:$/.test(url.protocol) || itsIsPrivateOrLocalHost(url.hostname)) {
-    throw new Error("URL sumber publik tidak valid.");
-  }
-  return url.href;
-}
-
-async function itsFetchResearchJson<T>(url: string, timeout = 16000): Promise<T> {
-  const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), timeout);
-  try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-      mode: "cors",
-      credentials: "omit",
-      cache: "no-store",
-      headers: { Accept: "application/json" },
-    });
-    if (!response.ok) throw new Error(`${new URL(url).hostname}: HTTP ${response.status}`);
-    return await response.json() as T;
-  } finally {
-    window.clearTimeout(timer);
-  }
-}
-
-function itsResearchYear(value: unknown): string {
-  if (typeof value === "number" && value > 1000 && value < 3000) return String(value);
-  if (Array.isArray(value)) {
-    const first = value.flat(3).find((item) => Number(item) > 1000 && Number(item) < 3000);
-    return first ? String(first) : "";
-  }
-  const match = String(value || "").match(/\b(19|20)\d{2}\b/);
-  return match?.[0] || "";
-}
-
-function itsNormalizeDoi(value: unknown): string {
-  return String(value || "")
-    .trim()
-    .replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "")
-    .replace(/^doi:\s*/i, "");
-}
-
-function itsResearchEvidenceBase(
-  provider: string,
-  mode: ItsResearchMode,
-  values: Partial<ItsResearchEvidence>,
-): ItsResearchEvidence | null {
-  const title = itsNormalizeResearchText(String(values.title || ""));
-  const url = String(values.url || "").trim();
-  if (!title || !url) return null;
-  try {
-    return {
-      id: values.id || itsResearchId("source"),
-      taskId: values.taskId || "",
-      kind: mode,
-      provider,
-      title,
-      url: itsSafeResearchUrl(url),
-      excerpt: itsPlainResearchMarkup(values.excerpt).slice(0, 2400),
-      authors: itsResearchStringArray(values.authors),
-      publisher: String(values.publisher || "").trim(),
-      year: itsResearchYear(values.year),
-      doi: itsNormalizeDoi(values.doi),
-      pdfUrl: itsSafeResearchUrl(values.pdfUrl, true),
-      imageUrl: itsSafeResearchUrl(values.imageUrl, true),
-      imageSourceUrl: itsSafeResearchUrl(values.imageSourceUrl, true),
-      license: itsPlainResearchMarkup(values.license).slice(0, 200),
-      sourceType: String(values.sourceType || "").trim(),
-      citedByCount: Math.max(0, Math.round(Number(values.citedByCount) || 0)),
-      facts: itsResearchFacts(values.facts),
-      retrievedAt: values.retrievedAt || Date.now(),
-    };
-  } catch (error) {
-    console.warn(`[ITS] Ignoring invalid ${provider} source`, error);
-    return null;
-  }
-}
-
-async function itsSearchCrossref(query: string): Promise<ItsResearchEvidence[]> {
-  const url = new URL("https://api.crossref.org/works");
-  url.searchParams.set("query.bibliographic", query);
-  url.searchParams.set("rows", "8");
-  const payload = await itsFetchResearchJson<{ message?: { items?: Array<Record<string, any>> } }>(url.href);
-  return (payload.message?.items || []).map((item) => {
-    const doi = itsNormalizeDoi(item.DOI);
-    const links = Array.isArray(item.link) ? item.link : [];
-    const pdf = links.find((link: Record<string, unknown>) => String(link["content-type"] || "").includes("pdf"));
-    const authors = (Array.isArray(item.author) ? item.author : []).map((author: Record<string, unknown>) =>
-      [author.given, author.family].filter(Boolean).join(" "));
-    return itsResearchEvidenceBase("Crossref", "journal", {
-      title: Array.isArray(item.title) ? item.title[0] : item.title,
-      url: doi ? `https://doi.org/${doi}` : item.URL,
-      excerpt: item.abstract || "",
-      authors,
-      publisher: item.publisher || (Array.isArray(item["container-title"]) ? item["container-title"][0] : ""),
-      year: item.published?.["date-parts"] || item.issued?.["date-parts"],
-      doi,
-      pdfUrl: pdf?.URL || "",
-      sourceType: item.type,
-      citedByCount: item["is-referenced-by-count"],
-    });
-  }).filter((item): item is ItsResearchEvidence => Boolean(item));
-}
-
-function itsOpenAlexAbstract(value: unknown): string {
-  const index = objectRecord(value);
-  const words: Array<[number, string]> = [];
-  Object.entries(index).forEach(([word, positions]) => {
-    if (!Array.isArray(positions)) return;
-    positions.forEach((position) => {
-      const numeric = Number(position);
-      if (Number.isFinite(numeric)) words.push([numeric, word]);
-    });
-  });
-  return words.sort((left, right) => left[0] - right[0]).map((item) => item[1]).join(" ");
-}
-
-async function itsSearchOpenAlex(query: string): Promise<ItsResearchEvidence[]> {
-  const url = new URL("https://api.openalex.org/works");
-  url.searchParams.set("search", query);
-  url.searchParams.set("per-page", "8");
-  url.searchParams.set("sort", "relevance_score:desc");
-  const payload = await itsFetchResearchJson<{ results?: Array<Record<string, any>> }>(url.href);
-  return (payload.results || []).map((item) => {
-    const best = objectRecord(item.best_oa_location);
-    const primary = objectRecord(item.primary_location);
-    const source = objectRecord(best.source || primary.source);
-    const openAccess = objectRecord(item.open_access);
-    const doi = itsNormalizeDoi(item.doi);
-    const authors = (Array.isArray(item.authorships) ? item.authorships : [])
-      .map((authorship: Record<string, unknown>) => String(objectRecord(authorship.author).display_name || ""));
-    return itsResearchEvidenceBase("OpenAlex", "journal", {
-      title: item.display_name,
-      url: best.landing_page_url || primary.landing_page_url || (doi ? `https://doi.org/${doi}` : item.id),
-      excerpt: itsOpenAlexAbstract(item.abstract_inverted_index),
-      authors,
-      publisher: String(source.display_name || ""),
-      year: item.publication_year,
-      doi,
-      pdfUrl: String(best.pdf_url || primary.pdf_url || ""),
-      license: String(best.license || openAccess.oa_status || ""),
-      sourceType: item.type,
-      citedByCount: item.cited_by_count,
-    });
-  }).filter((item): item is ItsResearchEvidence => Boolean(item));
-}
-
-async function itsSearchEuropePmc(query: string): Promise<ItsResearchEvidence[]> {
-  const url = new URL("https://www.ebi.ac.uk/europepmc/webservices/rest/search");
-  url.searchParams.set("query", query);
-  url.searchParams.set("format", "json");
-  url.searchParams.set("resultType", "core");
-  url.searchParams.set("pageSize", "8");
-  const payload = await itsFetchResearchJson<{ resultList?: { result?: Array<Record<string, any>> } }>(url.href);
-  return (payload.resultList?.result || []).map((item) => {
-    const doi = itsNormalizeDoi(item.doi);
-    const authors = (item.authorList?.author || []).map((author: Record<string, unknown>) =>
-      String(author.fullName || [author.firstName, author.lastName].filter(Boolean).join(" ")));
-    const fullText = item.isOpenAccess === "Y" && Array.isArray(item.fullTextUrlList?.fullTextUrl)
-      ? item.fullTextUrlList.fullTextUrl.find((entry: Record<string, unknown>) =>
-        String(entry.documentStyle || "").toLowerCase() === "pdf")
-      : null;
-    const recordUrl = doi
-      ? `https://doi.org/${doi}`
-      : item.pmcid
-        ? `https://europepmc.org/articles/${item.pmcid}`
-        : `https://europepmc.org/article/${encodeURIComponent(String(item.source || "MED"))}/${encodeURIComponent(String(item.id || ""))}`;
-    return itsResearchEvidenceBase("Europe PMC", "journal", {
-      title: item.title,
-      url: recordUrl,
-      excerpt: item.abstractText || item.bookOrReportDetails?.abstractText || "",
-      authors,
-      publisher: item.journalInfo?.journal?.title || item.journalTitle || "",
-      year: item.pubYear || item.firstPublicationDate,
-      doi,
-      pdfUrl: fullText?.url || "",
-      license: item.isOpenAccess === "Y" ? "Open access" : "",
-      sourceType: item.pubTypeList?.pubType?.[0] || "journal article",
-      citedByCount: item.citedByCount,
-    });
-  }).filter((item): item is ItsResearchEvidence => Boolean(item));
-}
-
-async function itsSearchWikipedia(query: string, language: "id" | "en"): Promise<ItsResearchEvidence[]> {
-  const url = new URL(`https://${language}.wikipedia.org/w/api.php`);
-  Object.entries({
-    action: "query",
-    generator: "search",
-    gsrsearch: query,
-    gsrlimit: "6",
-    prop: "extracts|pageimages|info",
-    exintro: "1",
-    explaintext: "1",
-    inprop: "url",
-    piprop: "thumbnail|name",
-    pithumbsize: "900",
-    format: "json",
-    origin: "*",
-  }).forEach(([key, value]) => url.searchParams.set(key, value));
-  const payload = await itsFetchResearchJson<{ query?: { pages?: Record<string, Record<string, any>> } }>(url.href);
-  return Object.values(payload.query?.pages || {}).map((page) => itsResearchEvidenceBase(
-    `Wikipedia (${language})`,
-    "website",
-    {
-      title: page.title,
-      url: page.fullurl,
-      excerpt: page.extract,
-      publisher: "Wikipedia",
-      imageUrl: page.thumbnail?.source || "",
-      imageSourceUrl: page.fullurl,
-      license: "CC BY-SA",
-      sourceType: "encyclopedia",
-    },
-  )).filter((item): item is ItsResearchEvidence => Boolean(item));
-}
-
-async function itsSearchWikimediaImages(query: string): Promise<ItsResearchEvidence[]> {
-  const url = new URL("https://commons.wikimedia.org/w/api.php");
-  Object.entries({
-    action: "query",
-    generator: "search",
-    gsrsearch: query,
-    gsrnamespace: "6",
-    gsrlimit: "6",
-    prop: "imageinfo",
-    iiprop: "url|extmetadata",
-    iiurlwidth: "1200",
-    format: "json",
-    origin: "*",
-  }).forEach(([key, value]) => url.searchParams.set(key, value));
-  const payload = await itsFetchResearchJson<{ query?: { pages?: Record<string, Record<string, any>> } }>(url.href);
-  return Object.values(payload.query?.pages || {}).map((page) => {
-    const info = Array.isArray(page.imageinfo) ? page.imageinfo[0] : {};
-    const metadata = objectRecord(info?.extmetadata);
-    const metaValue = (name: string) => String(objectRecord(metadata[name]).value || "");
-    return itsResearchEvidenceBase("Wikimedia Commons", "image", {
-      title: metaValue("ObjectName") || page.title,
-      url: info?.descriptionurl || `https://commons.wikimedia.org/wiki/${encodeURIComponent(page.title)}`,
-      excerpt: metaValue("ImageDescription") || metaValue("Categories"),
-      authors: [itsPlainResearchMarkup(metaValue("Artist"))].filter(Boolean),
-      publisher: "Wikimedia Commons",
-      imageUrl: info?.thumburl || info?.url || "",
-      imageSourceUrl: info?.descriptionurl || "",
-      license: metaValue("LicenseShortName") || metaValue("UsageTerms"),
-      sourceType: "image",
-    });
-  }).filter((item): item is ItsResearchEvidence => Boolean(item));
-}
-
-function itsResearchTokens(value: string): string[] {
-  return itsNormalizeResearchText(value.toLowerCase())
-    .replace(/[^\p{L}\p{N}\s-]+/gu, " ")
-    .split(/\s+/)
-    .filter((word) => word.length >= 3);
-}
-
-function itsResearchRelevance(query: string, source: ItsResearchEvidence): number {
-  const tokens = new Set(itsResearchTokens(query));
-  if (!tokens.size) return 0;
-  const title = source.title.toLowerCase();
-  const body = `${source.excerpt} ${source.authors.join(" ")} ${source.publisher}`.toLowerCase();
-  let score = 0;
-  tokens.forEach((token) => {
-    if (title.includes(token)) score += 5;
-    else if (body.includes(token)) score += 1;
-  });
-  return score / tokens.size + Math.log10(source.citedByCount + 1) * 0.15 + (source.excerpt ? 0.35 : 0);
-}
-
-function itsDedupeResearchSources(query: string, sources: ItsResearchEvidence[]): ItsResearchEvidence[] {
-  const deduped = new Map<string, ItsResearchEvidence>();
-  sources.forEach((source) => {
-    const key = source.doi
-      ? `doi:${source.doi.toLowerCase()}`
-      : `title:${source.title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()}`;
-    const current = deduped.get(key);
-    if (!current || source.excerpt.length + Number(Boolean(source.pdfUrl)) * 400 > current.excerpt.length + Number(Boolean(current.pdfUrl)) * 400) {
-      deduped.set(key, current
-        ? { ...source, provider: Array.from(new Set(`${current.provider}|${source.provider}`.split("|"))).join(" | ") }
-        : source);
-    }
-  });
-  return Array.from(deduped.values())
-    .sort((left, right) => itsResearchRelevance(query, right) - itsResearchRelevance(query, left))
-    .slice(0, 10);
-}
-
-function itsFallbackResearchQueries(question: string, mode: ItsResearchMode): string[] {
-  const clean = question.trim();
-  if (mode === "journal") return [clean, `${clean} mathematical formulation`, `${clean} object detection`];
-  if (mode === "profile") return [clean, `${clean} official profile`, `${clean} university`];
-  if (mode === "image") return [clean, `${clean} Wikimedia Commons`];
-  return [clean, `${clean} official documentation`];
-}
-
-async function itsSearchResearchSources(
-  question: string,
-  mode: ItsResearchMode,
-  forceRefresh = false,
-): Promise<ItsResearchEvidence[]> {
-  const query = question.trim();
-  if (!query) throw new Error("Pertanyaan pencarian tidak boleh kosong.");
-  const cacheKey = `${mode}:${query.toLowerCase()}`;
-  const cached = itsResearchSearchCache.get(cacheKey);
-  if (!forceRefresh && cached && Date.now() - cached.at < ITS_RESEARCH_CACHE_TTL) {
-    return cached.sources.map((source) => ({ ...source }));
-  }
-
-  const tasks: Array<Promise<ItsResearchEvidence[]>> = mode === "journal"
-    ? [itsSearchCrossref(query), itsSearchOpenAlex(query), itsSearchEuropePmc(query)]
-    : mode === "image"
-      ? [itsSearchWikimediaImages(query), itsSearchWikipedia(query, "id"), itsSearchWikipedia(query, "en")]
-      : [itsSearchWikipedia(query, "id"), itsSearchWikipedia(query, "en"), itsSearchWikimediaImages(query)];
-  const settled = await Promise.allSettled(tasks);
-  settled.forEach((result) => {
-    if (result.status === "rejected") console.warn("[ITS] Research provider unavailable", result.reason);
-  });
-  const sources = itsDedupeResearchSources(
-    query,
-    settled.flatMap((result) => result.status === "fulfilled" ? result.value : []),
-  );
-  if (!sources.length) throw new Error("Sumber daring belum dapat dijangkau. Coba lagi atau gunakan browser agent WebMCP.");
-  itsResearchSearchCache.set(cacheKey, { at: Date.now(), sources });
-  return sources.map((source) => ({ ...source }));
-}
-
-async function itsReadPublicUrlClientSide(rawUrl: string): Promise<ItsReadableWebPage> {
-  const url = new URL(rawUrl, window.location.href);
-  if (!/^https?:$/.test(url.protocol) || (url.origin !== window.location.origin && itsIsPrivateOrLocalHost(url.hostname))) {
-    throw new Error("URL publik tidak valid.");
-  }
-  let response: Response;
-  try {
-    response = await fetch(url.href, {
-      mode: "cors",
-      credentials: "omit",
-      redirect: "follow",
-      cache: "no-store",
-      headers: { Accept: "text/html,application/xhtml+xml,text/plain,application/json" },
-    });
-  } catch {
-    throw new Error("Situs memblokir pembacaan browser lintas domain.");
-  }
-  if (!response.ok) throw new Error(`Situs mengembalikan HTTP ${response.status}.`);
-  const contentType = response.headers.get("content-type") || "";
-  if (contentType.includes("application/pdf")) {
-    throw new Error("PDF lintas situs tidak diproses oleh browser. Gunakan tautan sumber atau full text open-access yang disediakan penerbit.");
-  }
-  const html = await response.text();
-  const parsed = new DOMParser().parseFromString(html, "text/html");
-  parsed.querySelectorAll("script, style, noscript, svg, canvas, nav, footer, form, iframe").forEach((element) => element.remove());
-  const title = parsed.querySelector("title")?.textContent?.trim() || parsed.querySelector("h1")?.textContent?.trim() || url.hostname;
-  const description = parsed.querySelector<HTMLMetaElement>('meta[name="description"]')?.content?.trim() || "";
-  const imageValue = parsed.querySelector<HTMLMetaElement>('meta[property="og:image"]')?.content?.trim() || "";
-  const imageUrl = imageValue ? new URL(imageValue, url.href).href : null;
-  const article = parsed.querySelector("article, main, [role='main']") || parsed.body;
-  return {
-    url: url.href,
-    title,
-    description,
-    imageUrl,
-    text: itsNormalizeResearchText(article?.textContent || "").slice(0, 60000),
-    contentType,
-  };
-}
-
-function itsResearchTaskById(taskId: string): ItsResearchTask {
-  const task = itsResearchTasks.find((item) => item.id === taskId);
-  if (!task) throw new Error(`Misi penelitian "${taskId}" tidak ditemukan.`);
-  return task;
-}
-
-function itsEvidenceForTask(taskId: string): ItsResearchEvidence[] {
-  return itsResearchEvidence.filter((item) => item.taskId === taskId).slice(-12);
-}
-
-async function itsCreateResearchTask(
-  question: string,
-  mode: ItsResearchMode,
-  autoSearch = true,
-): Promise<ItsResearchTask> {
-  const clean = question.trim();
-  if (!clean) throw new Error("Pertanyaan penelitian tidak boleh kosong.");
-  const task: ItsResearchTask = {
-    id: itsResearchId("research"),
-    question: clean,
-    mode,
-    queries: itsFallbackResearchQueries(clean, mode),
-    sourceIds: [],
-    createdAt: Date.now(),
-  };
-  itsResearchTasks.push(task);
-  if (autoSearch) {
-    const sources = await itsSearchResearchSources(clean, mode);
-    sources.forEach((source) => {
-      source.taskId = task.id;
-      itsResearchEvidence.push(source);
-      task.sourceIds.push(source.id);
-    });
-  }
-  itsSaveResearchState();
-  return task;
-}
-
-function itsAddResearchEvidence(input: Record<string, unknown>): ItsResearchEvidence {
-  const taskId = String(input.taskId || "").trim();
-  const task = itsResearchTaskById(taskId);
-  const evidence = itsResearchEvidenceBase(String(input.provider || "Browser agent"), task.mode, {
-    taskId,
-    title: String(input.title || ""),
-    url: String(input.url || ""),
-    excerpt: String(input.excerpt || ""),
-    authors: itsResearchStringArray(input.authors),
-    publisher: String(input.publisher || ""),
-    year: String(input.year || ""),
-    doi: String(input.doi || ""),
-    pdfUrl: String(input.pdfUrl || ""),
-    imageUrl: String(input.imageUrl || ""),
-    imageSourceUrl: String(input.imageSourceUrl || ""),
-    license: String(input.license || ""),
-    facts: itsResearchFacts(input.facts),
-    sourceType: String(input.sourceType || "web evidence"),
-  });
-  if (!evidence || !evidence.excerpt) throw new Error("Judul, URL, dan kutipan sumber wajib diisi.");
-  const index = itsResearchEvidence.findIndex((item) => item.taskId === taskId && item.url === evidence.url);
-  if (index >= 0) itsResearchEvidence[index] = { ...evidence, id: itsResearchEvidence[index].id };
-  else itsResearchEvidence.push(evidence);
-  if (!task.sourceIds.includes(evidence.id)) task.sourceIds.push(evidence.id);
-  itsSaveResearchState();
-  return evidence;
-}
-
-function itsBibliographyEntry(source: ItsResearchEvidence, index: number): string {
-  const authors = source.authors.length ? source.authors.join(", ") : source.publisher || "Unknown author";
-  const year = source.year || "n.d.";
-  const venue = source.publisher ? `, ${source.publisher}` : "";
-  const doi = source.doi ? `, doi: ${source.doi}` : "";
-  return `[${index + 1}] ${authors}, "${source.title}"${venue}, ${year}${doi}. [Online]. Available: ${source.url}`;
-}
-
-function itsResearchContext(sources: ItsResearchEvidence[]): string {
-  return sources.map((source, index) => [
-    `[${index + 1}] ${source.title}`,
-    `Authors: ${source.authors.join(", ") || "-"}`,
-    `Publisher: ${source.publisher || "-"}; Year: ${source.year || "-"}; DOI: ${source.doi || "-"}`,
-    `Evidence: ${source.excerpt || "Metadata only; no abstract supplied by provider."}`,
-  ].join("\n")).join("\n\n");
-}
-
-function itsDeterministicResearchAnswer(question: string, sources: ItsResearchEvidence[]): string {
-  const withEvidence = sources.filter((source) => source.excerpt).slice(0, 4);
-  if (!withEvidence.length) {
-    return `Saya menemukan ${sources.length} sumber untuk "${question}", tetapi penyedia metadata tidak mengirim abstrak. Buka halaman sumber untuk membaca isi lengkap sebelum menarik kesimpulan.`;
-  }
-  return [
-    `Saya menemukan ${sources.length} sumber daring yang relevan. Ringkasan berikut hanya memakai metadata dan abstrak yang tersedia:`,
-    ...withEvidence.map((source, index) => `${source.title}: ${source.excerpt.slice(0, 420)}${source.excerpt.length > 420 ? "..." : ""} [${index + 1}]`),
-  ].join("\n\n");
-}
-
-function itsResearchCitationsValid(answer: string, sourceCount: number): boolean {
-  const citations = Array.from(answer.matchAll(/\[(\d+)\]/g)).map((match) => Number(match[1]));
-  return citations.length > 0 && citations.every((value) => value >= 1 && value <= sourceCount);
-}
-
-function itsResearchCardHtml(answer: string, sources: ItsResearchEvidence[]): string {
-  const bibliography = sources.map(itsBibliographyEntry);
-  const images = sources.filter((source) => source.imageUrl).slice(0, 3).map((source) => `
-    <figure class="its-ai-research-image">
-      <img src="${escapeHtml(source.imageUrl)}" alt="${escapeHtml(source.title)}" loading="lazy" referrerpolicy="no-referrer">
-      <figcaption>${escapeHtml(source.title)}${source.license ? ` - ${escapeHtml(source.license)}` : ""} <a href="${escapeHtml(source.imageSourceUrl || source.url)}" target="_blank" rel="noopener">Sumber gambar</a></figcaption>
-    </figure>`).join("");
-  const sourceItems = sources.map((source, index) => `
-    <li class="its-ai-reference-item">
-      <p>${escapeHtml(bibliography[index])}</p>
-      <div class="its-ai-source-meta"><span>${escapeHtml(source.provider)}</span>${source.citedByCount ? `<span>${source.citedByCount} sitasi</span>` : ""}</div>
-      <div class="its-ai-actions"><a href="${escapeHtml(source.url)}" target="_blank" rel="noopener">Buka sumber</a>${source.pdfUrl ? `<a href="${escapeHtml(source.pdfUrl)}" target="_blank" rel="noopener">PDF legal</a>` : ""}</div>
-    </li>`).join("");
-  return `<section class="its-ai-card its-ai-research-card">
-    <div class="its-ai-card-head"><span>Riset daring</span><strong>${sources.length} SUMBER</strong></div>
-    ${images}
-    <div class="its-ai-research-answer">${escapeHtml(answer).replace(/\n/g, "<br>")}</div>
-    <h4>Daftar pustaka</h4>
-    <ol class="its-ai-reference-list">${sourceItems}</ol>
-    <p class="its-ai-card-note">Metadata dicari saat pertanyaan dikirim. ITS Maps tidak mengunggah PDF ke Firebase dan tidak menembus paywall.</p>
-  </section>`;
-}
-
-async function itsAnswerResearchTask(
-  taskId: string,
-  onStage?: (stage: string) => void,
-): Promise<ItsResearchResult> {
-  const task = itsResearchTaskById(taskId);
-  const sources = itsEvidenceForTask(taskId);
-  if (!sources.length) throw new Error("Belum ada bukti sumber untuk misi ini.");
-  let answer = itsDeterministicResearchAnswer(task.question, sources);
-
-  try {
-    onStage?.("Skill Sintesis ilmiah: menyusun jawaban dari sumber terverifikasi");
-    const generated = await generateBrowserText(
-      "research",
-      [
-        {
-          role: "system",
-          content: [
-            "Anda adalah asisten riset ITS Maps berbahasa Indonesia.",
-            "Jawab hanya dari bukti yang diberikan dan jangan menciptakan fakta, rumus, DOI, angka, penulis, atau URL.",
-            "Setiap klaim faktual wajib memakai sitasi [1], [2], dan seterusnya.",
-            "Jika bukti tidak cukup untuk menurunkan rumus atau menjawab bagian tertentu, katakan secara eksplisit.",
-            "Bedakan temuan sumber dari inferensi dan jawab langsung sesuai pertanyaan pengguna.",
-          ].join("\n"),
-        },
-        { role: "user", content: `Pertanyaan: ${task.question}\n\nBUKTI:\n${itsResearchContext(sources.slice(0, 8))}` },
-      ],
-      { max_new_tokens: 360, temperature: 0.1, do_sample: false, repetition_penalty: 1.08 },
-      (message) => onStage?.(message),
-      150_000,
-    );
-    if (itsGeneratedAnswerLooksUseful(generated, task.question) && itsResearchCitationsValid(generated, sources.length)) {
-      answer = generated;
-    }
-  } catch (error) {
-    console.warn("[ITS] Research synthesis fallback", error);
-    onStage?.("Model lokal belum siap; menampilkan ringkasan sumber deterministik");
-  }
-
-  const bibliography = sources.map(itsBibliographyEntry);
-  return {
-    taskId,
-    text: answer,
-    html: itsResearchCardHtml(answer, sources),
-    bibliography,
-    sources,
-  };
-}
-
-type ItsReadableWebPage = {
-  url: string;
-  title: string;
-  description: string;
-  imageUrl: string | null;
-  text: string;
-  contentType: string;
-};
-
-type ItsPublicSearchLinks = {
-  query: string;
-  google: string;
-  bing: string;
-  github: string;
-  linkedIn: string;
-  googleScholar: string;
-  arxiv: string;
-  pdfSearch: string;
-};
-
-function itsBuildPublicSearchLinks(
-  queryValue: string,
-): ItsPublicSearchLinks {
-  const query = queryValue.trim();
-  const encoded = encodeURIComponent(query);
-
-  return {
-    query,
-    google:
-      `https://www.google.com/search?q=${encoded}`,
-    bing:
-      `https://www.bing.com/search?q=${encoded}`,
-    github:
-      `https://github.com/search?q=${encoded}`,
-    linkedIn:
-      `https://www.linkedin.com/search/results/all/?keywords=${encoded}`,
-    googleScholar:
-      `https://scholar.google.com/scholar?q=${encoded}`,
-    arxiv:
-      `https://arxiv.org/search/?query=${encoded}&searchtype=all`,
-    pdfSearch:
-      `https://www.google.com/search?q=${encodeURIComponent(
-        `filetype:pdf ${query}`,
-      )}`,
-  };
-}
-
 
 function itsValueText(value: unknown, fallback = "-"): string {
   if (value === null || value === undefined || value === "") return fallback;
@@ -13474,17 +16238,6 @@ function itsTrafficColorText(value: unknown): string {
   return itsValueText(value, "belum tersedia");
 }
 
-function itsVehicleLines(vehicles: Record<string, unknown>): string {
-  return [
-    `mobil ${vehicles.car ?? 0}`,
-    `motor ${vehicles.motorcycle ?? 0}`,
-    `bus ${vehicles.bus ?? 0}`,
-    `truk ${vehicles.truck ?? 0}`,
-    `sepeda ${vehicles.bicycle ?? 0}`,
-    `total ${vehicles.total ?? 0}`,
-  ].join(", ");
-}
-
 function itsDevicesFromStatus(status: Record<string, unknown>): Record<string, unknown>[] {
   return Array.isArray(status.devices)
     ? status.devices as Record<string, unknown>[]
@@ -13493,144 +16246,6 @@ function itsDevicesFromStatus(status: Record<string, unknown>): Record<string, u
 
 function itsPrimaryDevice(status: Record<string, unknown>): Record<string, unknown> | null {
   return itsDevicesFromStatus(status)[0] || null;
-}
-
-function itsNormalizeQuestion(question: string): string {
-  return question.toLowerCase().replace(/[^\p{L}\p{N}\s-]+/gu, " ").replace(/\s+/g, " ").trim();
-}
-
-function itsIsPlainGreeting(question: string): boolean {
-  const q = itsNormalizeQuestion(question);
-  return /^(halo|hallo|hai|hi|hello|assalamualaikum|selamat pagi|selamat siang|selamat sore|selamat malam)$/.test(q);
-}
-
-function itsIncludesAny(q: string, words: string[]): boolean {
-  return words.some((word) => q.includes(word));
-}
-
-function itsGeneratedAnswerLooksUseful(answer: string, question: string): boolean {
-  const clean = answer.replace(/\s+/g, " ").trim();
-  if (clean.length < 28 || clean.length > 1400) return false;
-  if (/(["']?\d+\.){3,}|(?:^|\s)\d+(?:\.\d+){2,}/.test(clean)) return false;
-  if (/^(undefined|null|nan|error)\b/i.test(clean)) return false;
-  const normalizedAnswer = itsNormalizeQuestion(clean);
-  const normalizedQuestion = itsNormalizeQuestion(question);
-  if (normalizedQuestion.length > 18 && normalizedAnswer.startsWith(normalizedQuestion)) return false;
-  const words = normalizedAnswer.split(" ").filter(Boolean);
-  if (words.length < 5) return false;
-  return new Set(words).size / words.length >= 0.38;
-}
-
-function itsCompactAssistantContext(status: Record<string, unknown>): Record<string, unknown> {
-  const device = itsPrimaryDevice(status);
-  if (!device) return { generatedAt: status.generatedAt, devices: [] };
-  const detection = objectRecord(device.objectDetection);
-  const camera = objectRecord(device.cameraStatus);
-  return {
-    generatedAt: status.generatedAt,
-    device: {
-      id: device.id,
-      label: device.label,
-      status: device.status,
-      lastSeenText: device.lastSeenText,
-      roadName: device.roadName,
-      trafficColor: device.trafficColor,
-      trafficDurationSec: device.trafficDurationSec,
-      vehicleBreakdown: device.vehicleBreakdown,
-      location: device.location,
-      objectDetection: {
-        total: detection.total,
-        fps: detection.fps,
-        modelUrl: detection.modelUrl,
-      },
-      cameraStatus: {
-        localOk: camera.localOk,
-        publicOk: camera.publicOk,
-        note: camera.note,
-      },
-    },
-  };
-}
-
-function itsResolveConversationalQuestion(question: string, history: ItsChatTurn[]): string {
-  const q = itsNormalizeQuestion(question);
-  const recent = history.slice(-8).map((turn) => turn.content.toLowerCase()).join(" ");
-  const profileContext = /hanifa|developer|pembuat|pencipta|author|profil/.test(recent);
-  const contextualFollowUp = /(^|\s)(dia|beliau|orangnya|fotonya|foto nya|kuliahnya|kuliah nya|profilnya|profil nya|sekolahnya|kampusnya|akun nya|akunnya)(\s|$)/.test(q)
-    || /^(foto|kuliah|kampus|instagram|linkedin|github|facebook)(\s|$)/.test(q);
-  if (profileContext && contextualFollowUp) {
-    return `${question} (konteks percakapan: profil Hanifa Septhi Larasati, developer ITS Maps)`;
-  }
-  return question;
-}
-
-function itsIntentFlags(question: string): Record<string, boolean> {
-  const q = itsNormalizeQuestion(question);
-  const plainGreeting = itsIsPlainGreeting(question);
-  const history = !plainGreeting && itsIncludesAny(q, ["riwayat ai", "riwayat", "history", "snapshot history"]);
-  const userLocation = !plainGreeting && /(lokasi saya|posisi saya|lokasi terkini|di sekitar saya|dekat saya|macet di sini|macet disini|tempat saya sekarang)/.test(q);
-  const identity = !plainGreeting && itsIncludesAny(q, ["siapa", "pencipta", "developer", "hanifa", "hanifa septhi", "pembuat", "author", "dibuat oleh", "profil", "instagram", "linkedin", "github", "facebook", "kuliah", "kampusnya", "fotonya", "foto nya"]);
-  const webSearch = !plainGreeting && itsIncludesAny(q, ["cari", "carikan", "search", "temukan", "sumber luar", "sumber eksternal", "google", "bing"]);
-  const research =
-    !plainGreeting &&
-    itsIncludesAny(q, [
-      "jurnal",
-      "paper",
-      "artikel ilmiah",
-      "penelitian",
-      "sitasi",
-      "citation",
-      "daftar pustaka",
-      "referensi",
-      "pdf jurnal",
-      "turunkan rumus",
-      "penurunan rumus",
-    ]);
-  return {
-    greeting: /(^|\s)(halo|hallo|hai|hi|hello|selamat|assalam|pagi|siang|sore|malam)(\s|$)/.test(q),
-    plainGreeting,
-    history,
-    image: !plainGreeting && !history && !identity && itsIncludesAny(q, ["gambar", "snapshot", "foto", "deteksi", "object", "objek", "kamera", "scan", "bbox", "akurasi"]),
-    analyzeOpenPanel: !plainGreeting && itsIncludesAny(q, ["analisis panel", "apa isi", "baca modal", "baca panel", "isi riwayat", "cek riwayat", "scroll modal", "lihat isi panel"]),
-    video: !plainGreeting && itsIncludesAny(q, ["video", "live", "stream", "kamera live", "cctv", "rekaman"]),
-    chart: !plainGreeting && !history && itsIncludesAny(q, ["grafik", "chart", "tren", "trend", "statistik", "histori", "history", "plot", "visualisasi"]),
-    map: !plainGreeting && itsIncludesAny(q, ["peta", "map", "lokasi", "koordinat", "jalan", "gang", "google maps", "bing maps"]),
-    poi: !plainGreeting && itsIncludesAny(q, ["poi", "tempat", "gedung", "kampus", "fakultas", "masjid", "mall", "terminal", "stasiun", "sekitar", "terdekat"]),
-    formula:
-      !plainGreeting &&
-      (itsIncludesAny(q, [
-        "rumus",
-        "formula",
-        "latex",
-        "matematika",
-        "persamaan",
-        "turunan",
-        "derivasi",
-        "rf-detr",
-        "rf detr",
-        "detr",
-        "iou",
-        "confidence",
-        "loss",
-        "hungarian",
-        "bipartite",
-        "giou",
-        "precision",
-        "recall",
-        "mean average precision",
-        "map score",
-        "map metric",
-      ])),
-    status: !plainGreeting && itsIncludesAny(q, ["status", "raspberry", "online", "offline", "lampu", "traffic", "lalu lintas", "kendaraan", "mobil", "motor", "bus", "truk", "sepeda", "sistem"]),
-    identity,
-    webSearch,
-    research,
-    about: !plainGreeting && itsIncludesAny(q, ["apa itu", "tentang its maps", "fitur", "aplikasi ini", "its maps itu"]),
-    license: !plainGreeting && itsIncludesAny(q, ["lisensi", "licence", "license", "privasi", "privacy", "data pribadi"]),
-    roadmap: !plainGreeting && itsIncludesAny(q, ["roadmap", "story", "rencana", "pengembangan"]),
-    agent: !plainGreeting && itsIncludesAny(q, ["agent", "agen", "lihat layar", "screen", "klik", "buka", "scroll", "navigasi", "kontrol", "periksa halaman", "cek tampilan"]),
-    userLocation,
-  };
 }
 
 function itsVehicleMetricItems(vehicles: Record<string, unknown>): Array<{ key: string; label: string; value: unknown; color: string; icon: string }> {
@@ -13657,95 +16272,6 @@ function itsVehicleMetricGridHtml(vehicles: Record<string, unknown>): string {
         <strong style="color:${item.color}">${escapeHtml(String(item.value ?? 0))}</strong>
       </div>`).join("")}
   </div>`;
-}
-
-function itsAssistantText(question: string, status: Record<string, unknown>, extra = ""): string {
-  const flags = itsIntentFlags(question);
-  const normalizedQuestion = itsNormalizeQuestion(question);
-  const devices = Array.isArray(status.devices)
-    ? status.devices as Record<string, unknown>[]
-    : status.device ? [status.device as Record<string, unknown>] : [];
-  const device = devices[0];
-  if (flags.plainGreeting) {
-    return "Halo. Saya di sini, siap bantu membaca ITS Maps. Mau cek status Raspberry, peta, snapshot AI, grafik, video, rumus RF-DETR, lisensi, atau dokumentasi?";
-  }
-  if (flags.identity) {
-    if (/foto|gambar|wajah/.test(normalizedQuestion)) {
-      return "Saya belum menemukan foto personal yang terverifikasi di metadata ITS Maps. Saya tampilkan tautan pencarian sumber, tetapi tidak akan menebak bahwa sebuah wajah adalah Hanifa tanpa profil pemilik yang jelas.";
-    }
-    if (/kuliah|kampus|universitas|pendidikan|mahasiswa/.test(normalizedQuestion)) {
-      return "Metadata paket ITS Maps mencantumkan Hanifa Septhi Larasati - Telkom University. Itu adalah atribusi proyek, bukan bukti status kuliah terkini; tautan verifikasi sumber saya tampilkan di bawah.";
-    }
-    return "ITS Maps dikembangkan oleh Hanifa Septhi Larasati bersama Hanifa Teams. Saya tampilkan data internal proyek dan tautan sumber publik yang bisa diperiksa, tanpa menebak profil pribadi.";
-  }
-  if (flags.about) {
-    return "ITS Maps adalah dashboard realtime untuk peta ITS, Raspberry Pi controller, kamera lalu lintas, AI RF-DETR, Firebase RTDB, Android APK, Microsoft Store Windows app, dan Windows Widgets.";
-  }
-  if (flags.license) {
-    return "Lisensi aplikasi, privasi, lisensi peta, dan lisensi AI tersedia di menu bawah. Saya bisa membuka panel terkait atau memberi ringkasannya berdasarkan halaman publik ITS Maps.";
-  }
-  if (flags.roadmap) {
-    return "Roadmap ITS Maps mencakup WebApp/PWA, Android APK, Microsoft Store app, Windows Widgets, AI RF-DETR, dokumentasi publik, dan integrasi realtime berbasis Firebase RTDB.";
-  }
-  if (flags.webSearch) {
-    return "Saya siapkan tautan pencarian langsung untuk topik yang Anda minta. Periksa sumber hasilnya sebelum menganggap profil, foto, atau data eksternal sebagai fakta.";
-  }
-  if (!device) return "Saya belum menerima node device dari RTDB. Cek koneksi Firebase atau node devices terlebih dahulu.";
-  const vehicles = (device.vehicleBreakdown as Record<string, unknown> | undefined) || {};
-  const camera = (device.cameraStatus as Record<string, unknown> | undefined) || {};
-  const detection = (device.objectDetection as Record<string, unknown> | undefined) || {};
-  const location = (device.location as Record<string, unknown> | undefined) || {};
-  const update = (device.update as Record<string, unknown> | undefined) || {};
-  const detections = Array.isArray(detection.detections) ? detection.detections as Record<string, unknown>[] : [];
-  const topDetection = detections
-    .slice()
-    .sort((a, b) => Number(b.confidencePercent || 0) - Number(a.confidencePercent || 0))[0];
-  const q = normalizedQuestion;
-  const statusLine = `Sistem ${device.id || "raspberry-its"} sedang ${device.status || "offline"}; update ${device.lastSeenText || "belum tersedia"}.`;
-  const trafficLine = `Lampu ${itsTrafficColorText(device.trafficColor)}${device.trafficDurationSec ? ` (${device.trafficDurationSec}s)` : ""}.`;
-  const vehicleLine = `Kendaraan: ${itsVehicleLines(vehicles)}.`;
-  const cameraLine = `Kamera ${camera.publicOk === true ? "publik online" : camera.localOk === true ? "lokal online" : "belum sehat/publik offline"}${camera.note || camera.streamState ? `; ${camera.note || camera.streamState}` : ""}.`;
-  const aiLine = `Deteksi objek ${detection.total ?? 0}${topDetection ? `; tertinggi ${topDetection.label} ${topDetection.confidencePercent}%` : ""}${detection.fps ? `; ${detection.fps} FPS` : ""}.`;
-  const locationLine = `Lokasi ${location.label || device.roadName || "belum tersedia"}.`;
-  const updateLine = update.status || update.stage || update.message
-    ? `Update controller: ${[update.status, update.stage, update.message].filter(Boolean).join(" - ")}.`
-    : "";
-
-  if (q.includes("riwayat")) {
-    return "Saya buka panel Riwayat AI. Panel itu menampilkan snapshot Raspberry, animasi pemindaian, hasil RF-DETR, dan rincian objek jika model mengonfirmasi deteksi.";
-  }
-  if (flags.greeting) {
-    return `Halo. Saya bisa bantu membaca data ITS Maps. Ringkasnya: ${statusLine} ${trafficLine}`;
-  }
-  if (flags.userLocation) {
-    return "Saya perlu izin lokasi dari browser dulu. Setelah diizinkan, saya tampilkan dua peta: posisi Anda dan Raspberry terdekat, lalu saya hitung jaraknya untuk melihat apakah titik ITS Maps cukup dekat dengan lokasi Anda.";
-  }
-  if (flags.poi) {
-    return "Saya baca POI yang sedang termuat di peta ITS Maps, urutkan dari yang terdekat, lalu setiap item bisa diklik untuk membuka detail dan arah rute di peta.";
-  }
-  if (q.includes("kamera") || q.includes("snapshot") || q.includes("gambar")) {
-    return `Saya ambil snapshot terbaru dari RTDB, lalu jalankan RF-DETR di browser untuk memeriksa objeknya. Data awal: ${cameraLine} ${aiLine} ${vehicleLine} ${extra}`.trim();
-  }
-  if (q.includes("lampu") || q.includes("traffic") || q.includes("lalu lintas") || q.includes("jalan")) {
-    return `${trafficLine} ${vehicleLine} ${locationLine}`;
-  }
-  if (q.includes("mobil") || q.includes("motor") || q.includes("bus") || q.includes("truk") || q.includes("sepeda") || q.includes("kendaraan")) {
-    return `${vehicleLine} ${trafficLine}`;
-  }
-  if (q.includes("lokasi") || q.includes("peta") || q.includes("map")) {
-    return `${locationLine} ${trafficLine} Koordinat ${itsValueText(location.lat)}, ${itsValueText(location.lng)}.`;
-  }
-  if (q.includes("model") || q.includes("ai") || q.includes("akurasi") || q.includes("deteksi")) {
-    return `${aiLine} Model ${detection.modelUrl || "RF-DETR/ONNX dari controller"}. ${vehicleLine}`;
-  }
-  if (q.includes("update") || q.includes("controller") || q.includes("raspberry") || q.includes("status")) {
-    return [statusLine, updateLine, cameraLine, trafficLine].filter(Boolean).join(" ");
-  }
-  return `Saya memahami pertanyaannya, tetapi belum memiliki sumber yang cukup untuk menjawabnya dengan pasti. Coba sebutkan apakah Anda ingin memakai data RTDB ITS Maps, dokumentasi aplikasi, atau pencarian sumber eksternal.${extra ? ` ${extra}` : ""}`;
-}
-
-function itsFallbackAssistantAnswer(question: string, status: Record<string, unknown>): string {
-  return itsAssistantText(question, status);
 }
 
 function itsChartCardHtml(device: Record<string, unknown>): string {
@@ -14153,11 +16679,20 @@ function itsUserMarkerHtml(): string {
   return `<span class="its-ai-map-marker its-ai-user-marker" aria-label="Marker lokasi user">Anda</span>`;
 }
 
+function itsSystemPoint(device: Record<string, unknown>): { lat: number; lng: number } {
+  return itsLatLng(device)
+    || itsRuntimeBridge().getSystemLocation?.()
+    || (() => {
+      const [lat, lng] = initialMapCenter() as [number, number];
+      return { lat, lng };
+    })();
+}
+
 function itsMapCardHtml(device: Record<string, unknown>): string {
-  const point = itsLatLng(device) || { lat: -6.977254, lng: 107.631817 };
+  const point = itsSystemPoint(device);
   const gmaps = `https://www.google.com/maps/search/?api=1&query=${point.lat},${point.lng}`;
   const bing = `https://www.bing.com/maps?cp=${point.lat}~${point.lng}&lvl=18`;
-  const its = `https://itstelkom.web.app/?lat=${point.lat}&lng=${point.lng}&zoom=18`;
+  const its = `https://itstelkom.web.app/?lat=${point.lat}&lng=${point.lng}&z=18&mode=street`;
   return `<section class="its-ai-card">
     <div class="its-ai-card-head">
       <span>${itsMiniIcon("M12 21s7-5.4 7-11a7 7 0 0 0-14 0c0 5.6 7 11 7 11Zm0-8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z", "#2563eb")} Peta lokasi</span>
@@ -14174,7 +16709,7 @@ function itsMapCardHtml(device: Record<string, unknown>): string {
 }
 
 function itsUserLocationCardHtml(device: Record<string, unknown>): string {
-  const point = itsLatLng(device) || { lat: -6.977254, lng: 107.631817 };
+  const point = itsSystemPoint(device);
   return `<section class="its-ai-card" data-ai-user-location-card data-system-lat="${point.lat}" data-system-lng="${point.lng}" data-system-color="${escapeHtml(String(device.trafficColor || ""))}">
     <div class="its-ai-card-head">
       <span>${itsMiniIcon("M12 21s7-5.4 7-11a7 7 0 0 0-14 0c0 5.6 7 11 7 11Zm0-8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z", "#0d9488")} Lokasi saya</span>
@@ -14188,7 +16723,7 @@ function itsUserLocationCardHtml(device: Record<string, unknown>): string {
 }
 
 function itsPoiCardHtml(device: Record<string, unknown>): string {
-  const origin = itsRuntimeBridge().getUserLocation?.() || itsLatLng(device) || { lat: -6.977254, lng: 107.631817 };
+  const origin = itsRuntimeBridge().getUserLocation?.() || itsSystemPoint(device);
   const runtimePois = itsRuntimeBridge().getPoiSnapshot?.() || [];
   const pois = runtimePois
     .map((poi) => ({
@@ -14212,172 +16747,6 @@ function itsPoiCardHtml(device: Record<string, unknown>): string {
   </section>`;
 }
 
-function itsVideoCardHtml(device: Record<string, unknown>, cameraHealth: Record<string, unknown>): string {
-  const publicUrl = itsStringField(cameraHealth.publicUrl);
-  const publicOk = cameraHealth.publicOk === true;
-  const video = publicUrl && publicOk
-    ? `<video src="${escapeHtml(publicUrl)}" controls playsinline muted preload="metadata"></video>`
-    : `<img src="/bwits.png" alt="Ilustrasi video live ITS belum tersedia">`;
-  return `<section class="its-ai-card">
-    <div class="its-ai-card-head">
-      <span>${itsMiniIcon("M15 10l4.5-2.5v9L15 14M4 6h11v12H4V6Z", "#7c3aed")} Video live</span>
-      <strong>${publicOk ? "ONLINE" : "FALLBACK"}</strong>
-    </div>
-    <div class="its-ai-video-frame">${video}</div>
-    <p class="its-ai-card-note">${publicOk ? "Stream publik sehat dan dapat diputar." : `Stream publik belum sehat; ${escapeHtml(String(cameraHealth.note || device.status || "kamera belum live"))}.`}</p>
-  </section>`;
-}
-
-function itsDeveloperProfileCardHtml(
-  question = "",
-): string {
-  const profile = ITS_CREATOR_PROFILE;
-  const q = itsNormalizeQuestion(question);
-
-  const asksPhoto = itsIncludesAny(q, [
-    "foto",
-    "gambar",
-    "wajah",
-  ]);
-
-  const asksEducation = itsIncludesAny(q, [
-    "pendidikan",
-    "kuliah",
-    "kampus",
-    "universitas",
-    "program studi",
-    "prodi",
-  ]);
-
-  const educationHtml = profile.education.length
-    ? `
-      <div class="its-ai-profile-section">
-        <strong>Pendidikan</strong>
-        <ul>
-          ${profile.education
-      .map(
-        (education) => `
-                <li>
-                  <b>${escapeHtml(education.institution)}</b>
-                  — ${escapeHtml(education.program)}
-                  ${education.period
-            ? ` (${escapeHtml(education.period)})`
-            : ""
-          }
-                  ${education.sourceUrl
-            ? `<a href="${escapeHtml(education.sourceUrl)}"
-                            target="_blank"
-                            rel="noopener">Sumber</a>`
-            : ""
-          }
-                </li>
-              `,
-      )
-      .join("")}
-        </ul>
-      </div>
-    `
-    : `
-      <p class="its-ai-card-note">
-        Informasi pendidikan belum dimasukkan ke profil terverifikasi.
-      </p>
-    `;
-
-  const sourceQuery =
-    `${profile.name} ${profile.publisher} ITS Maps`;
-
-  const search = itsBuildPublicSearchLinks(sourceQuery);
-
-  return `
-    <section class="its-ai-card its-ai-profile-card">
-      <div class="its-ai-card-head">
-        <span>Profil pencipta</span>
-        <strong>TERVERIFIKASI LOKAL</strong>
-      </div>
-
-      <figure class="its-ai-profile-media">
-        <img
-          src="${escapeHtml(profile.photoUrl)}"
-          alt="Foto profil ${escapeHtml(profile.name)}"
-          loading="lazy"
-        >
-      </figure>
-
-      <h3>${escapeHtml(profile.name)}</h3>
-      <p><b>${escapeHtml(profile.role)}</b></p>
-      <p>${escapeHtml(profile.summary)}</p>
-
-      ${asksEducation
-      ? educationHtml
-      : ""
-    }
-
-      <div class="its-ai-profile-section">
-        <strong>Keahlian</strong>
-        <p>${profile.skills.map(escapeHtml).join(", ")}</p>
-      </div>
-
-      <div class="its-ai-actions">
-        ${profile.sources
-      .map(
-        (source) => `
-              <a href="${escapeHtml(source.url)}"
-                 target="_blank"
-                 rel="noopener">
-                ${escapeHtml(source.label)}
-              </a>
-            `,
-      )
-      .join("")}
-
-        <a href="${escapeHtml(search.google)}"
-           target="_blank"
-           rel="noopener">Cari Google</a>
-
-        <a href="${escapeHtml(search.linkedIn)}"
-           target="_blank"
-           rel="noopener">Cari LinkedIn</a>
-
-        ${asksPhoto
-      ? `<a href="${escapeHtml(
-        `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(
-          sourceQuery,
-        )}`,
-      )}"
-                 target="_blank"
-                 rel="noopener">Cari gambar</a>`
-      : ""
-    }
-      </div>
-
-      <p class="its-ai-card-note">
-        Foto utama berasal dari aset profil ITS Maps. Hasil pencarian eksternal hanya berupa tautan dan tidak otomatis dianggap sebagai fakta.
-      </p>
-    </section>
-  `;
-}
-
-function itsAgentCardHtml(status: Record<string, unknown>): string {
-  const openPanels = Array.from(document.querySelectorAll<HTMLElement>(".open[id], .side-panel-open"))
-    .map((el) => el.id || el.className)
-    .filter(Boolean)
-    .slice(0, 6);
-  const mapEl = document.querySelector<HTMLElement>("#map, .leaflet-container, .map-root, main");
-  const device = itsPrimaryDevice(status);
-  return `<section class="its-ai-card">
-    <div class="its-ai-card-head">
-      <span>${itsMiniIcon("M12 3l1.8 5.3L19 10l-5.2 1.7L12 17l-1.8-5.3L5 10l5.2-1.7L12 3Z", "#111827")} Agent in-page</span>
-      <strong>${itsAgentModeEnabled ? "AKTIF" : "IN-PAGE"}</strong>
-    </div>
-    <p class="its-ai-card-note">Agent membaca halaman ITS Maps yang sedang terbuka, RTDB, dan panel internal.</p>
-    <ul class="its-ai-agent-list">
-      <li>Viewport: ${window.innerWidth} x ${window.innerHeight}</li>
-      <li>Panel aktif: ${escapeHtml(openPanels.join(", ") || "tidak ada")}</li>
-      <li>Area peta: ${escapeHtml(mapEl ? `${Math.round(mapEl.getBoundingClientRect().width)} x ${Math.round(mapEl.getBoundingClientRect().height)}` : "tidak ditemukan")}</li>
-      <li>RTDB utama: ${escapeHtml(String(device?.id || "raspberry-its"))} ${escapeHtml(String(device?.status || "unknown"))}</li>
-    </ul>
-  </section>`;
-}
 
 function itsDelay(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -14651,14 +17020,6 @@ function itsDockAgentPanelStack(target: HTMLElement): void {
     else clearPromptSidePanelWidth(0);
   };
 }
-
-type ItsAgentPanelAction = {
-  status: string;
-  triggerSelector: string;
-  targetSelector?: string;
-  fallback: () => void;
-  result: string;
-};
 
 type ItsModalScrollMode =
   | "none"
@@ -15067,281 +17428,433 @@ async function itsAnalyzeOpenModalContent(
   };
 }
 
-function itsAgentPanelAction(question: string): ItsAgentPanelAction | null {
-  const q = itsNormalizeQuestion(question);
-  const wantsAction = itsIncludesAny(q, ["buka", "bukakan", "tunjukkan", "tampilkan", "lihat", "open", "show", "scroll", "navigasi", "zoom", "perbesar", "perkecil", "kembali ke", "fokus"]);
-  if (itsIncludesAny(q, ["tutup", "close", "keluar dari panel"]) && itsIncludesAny(q, ["modal", "panel", "jendela", "ini", "riwayat", "tab"])) {
-    const panel = itsFindTopmostOpenPanel();
-    const closeSelector = panel
-      ? `#${panel.id} [data-action='close'], #${panel.id} [data-license-close], #${panel.id} [data-windows-close], #${panel.id} [data-ai-history-close]`
-      : "[data-action='close']";
+let itsAgentRuntimeBindingsInstalled = false;
+
+function itsDistanceMeters(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const radius = 6_371_000;
+  const radians = (value: number) => value * Math.PI / 180;
+  const latitude = radians(b.lat - a.lat);
+  const longitude = radians(b.lng - a.lng);
+  const value = Math.sin(latitude / 2) ** 2
+    + Math.cos(radians(a.lat)) * Math.cos(radians(b.lat)) * Math.sin(longitude / 2) ** 2;
+  return 2 * radius * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
+}
+
+function itsAgentApplicationState(): Record<string, unknown> {
+  const panel = itsFindTopmostOpenPanel();
+  return {
+    application: {
+      name: "ITS Maps",
+      developer: ITS_CREATOR_PROFILE.name,
+      publisher: ITS_CREATOR_PROFILE.publisher,
+      description: ITS_CREATOR_PROFILE.summary,
+      publicSources: ITS_CREATOR_PROFILE.sources,
+      resources: Object.fromEntries(Object.entries(ITS_WEBMCP_RESOURCE_URLS).map(([name, pathname]) => [name, itsAbsoluteUrl(pathname)])),
+    },
+    map: {
+      userLocationAvailable: Boolean(itsRuntimeBridge().getUserLocation?.()),
+      visiblePlaces: (itsRuntimeBridge().getPoiSnapshot?.() || []).slice(0, 40),
+    },
+    interface: {
+      openPanel: panel?.id || null,
+      allowedActions: [
+        { type: "open_panel", targets: ["ai-history", "roadmap", "privacy", "ai-license", "app-license"] },
+        { type: "render_chart" },
+        { type: "render_snapshot" },
+        { type: "render_map" },
+        { type: "render_places" },
+        { type: "focus_map" },
+        { type: "open_place" },
+        { type: "create_route" },
+      ],
+    },
+  };
+}
+
+function itsEntityTokens(plan: DynamicAgentPlan): string[] {
+  return plan.entities.flatMap((entity) => entity.text.toLocaleLowerCase().split(/[^\p{L}\p{N}]+/u)).filter((token) => token.length > 1);
+}
+
+function itsRankRuntimePlaces(plan: DynamicAgentPlan): Array<ItsRuntimePoiSnapshot & { distanceMeters?: number }> {
+  const places = itsRuntimeBridge().getPoiSnapshot?.() || [];
+  const tokens = itsEntityTokens(plan);
+  const origin = itsRuntimeBridge().getUserLocation?.();
+  return places.map((place) => {
+    const searchable = `${place.title} ${place.kind} ${place.address || ""}`.toLocaleLowerCase();
+    const relevance = tokens.reduce((score, token) => score + (searchable.includes(token) ? 1 : 0), 0);
+    const distanceMeters = origin ? itsDistanceMeters(origin, place) : undefined;
+    return { ...place, relevance, distanceMeters };
+  }).sort((left, right) => {
+    if (right.relevance !== left.relevance) return right.relevance - left.relevance;
+    return (left.distanceMeters ?? Number.MAX_SAFE_INTEGER) - (right.distanceMeters ?? Number.MAX_SAFE_INTEGER);
+  }).map(({ relevance: _relevance, ...place }) => place).slice(0, 20);
+}
+
+function itsRequestBrowserLocation(signal: AbortSignal): Promise<{ lat: number; lng: number; accuracy: number; source: string; updatedAt: number }> {
+  const current = itsRuntimeBridge().getUserLocation?.();
+  if (current) return Promise.resolve({ ...current, accuracy: current.accuracy || 0, source: current.source || "runtime", updatedAt: current.updatedAt || Date.now() });
+  if (!navigator.geolocation) return Promise.reject(new Error("Browser tidak menyediakan Geolocation API."));
+  return new Promise((resolve, reject) => {
+    const abort = () => reject(signal.reason || new DOMException("Permintaan lokasi dibatalkan.", "AbortError"));
+    signal.addEventListener("abort", abort, { once: true });
+    navigator.geolocation.getCurrentPosition((position) => {
+      signal.removeEventListener("abort", abort);
+      const location = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+        accuracy: position.coords.accuracy,
+        source: "browser-geolocation",
+        updatedAt: Date.now(),
+      };
+      itsRuntimeBridge().applyUserLocation?.(location.lat, location.lng, location.accuracy, true, location.source);
+      resolve(location);
+    }, (error) => {
+      signal.removeEventListener("abort", abort);
+      reject(new Error(`Lokasi tidak tersedia: ${error.message}`));
+    }, { enableHighAccuracy: true, maximumAge: 15_000, timeout: 18_000 });
+  });
+}
+
+function itsPlanTargetPlace(plan: DynamicAgentPlan): ItsRuntimePoiSnapshot | undefined {
+  const ranked = itsRankRuntimePlaces(plan);
+  const requestedTarget = plan.requestedActions.map((action) => action.target?.trim()).find(Boolean)?.toLocaleLowerCase();
+  if (requestedTarget) {
+    const exact = ranked.find((place) => place.id.toLocaleLowerCase() === requestedTarget || place.title.toLocaleLowerCase() === requestedTarget);
+    if (exact) return exact;
+  }
+  return ranked[0];
+}
+
+function itsInstallAgentRuntimeBindings(): void {
+  if (itsAgentRuntimeBindingsInstalled) return;
+  itsAgentRuntimeBindingsInstalled = true;
+  agentOrchestrator.registerCapabilityAdapter("query_realtime_state", async (context) => {
+    context.emit({ type: "skill-start", title: "Membaca Firebase RTDB karena rencana memerlukannya", payload: { capability: "query_realtime_state" } });
+    const status = await itsGetRealtimeMapSummary();
+    context.blackboard.set("realtime-status", status);
+    return { status: "completed", output: status };
+  });
+  agentOrchestrator.registerCapabilityAdapter("resolve_location", async (context) => {
+    try {
+      const location = await itsRequestBrowserLocation(context.signal);
+      context.blackboard.set("user-location", location);
+      return { status: "completed", output: location };
+    } catch (error) {
+      return { status: "failed", limitations: [error instanceof Error ? error.message : String(error)] };
+    }
+  });
+  agentOrchestrator.registerCapabilityAdapter("resolve_entities", async (context) => {
+    const places = itsRankRuntimePlaces(context.plan);
     return {
-      status: "Menutup panel yang terbuka...",
-      triggerSelector: closeSelector,
-      fallback: () => { itsCloseTopmostModal(); },
-      result: panel ? "Panel sudah ditutup." : "Tidak ada panel yang sedang terbuka.",
+      status: "completed",
+      output: {
+        entities: context.plan.entities,
+        placeMatches: places.slice(0, Math.max(1, context.plan.entities.length || 5)),
+      },
+    };
+  });
+  agentOrchestrator.registerCapabilityAdapter("search_open_places", async (context) => {
+    const places = itsRankRuntimePlaces(context.plan);
+    context.blackboard.set("place-results", places);
+    return {
+      status: places.length ? "completed" : "skipped",
+      output: { places },
+      limitations: places.length ? [] : ["Belum ada POI terbuka yang termuat pada viewport peta."],
+    };
+  });
+  agentOrchestrator.registerCapabilityAdapter("query_map_geometry", async (context) => {
+    const geometry = {
+      userLocation: itsRuntimeBridge().getUserLocation?.() || null,
+      places: itsRankRuntimePlaces(context.plan),
+    };
+    context.blackboard.set("map-geometry", geometry);
+    return { status: "completed", output: geometry };
+  });
+  agentOrchestrator.registerCapabilityAdapter("analyse_image", async (context) => {
+    const research = context.blackboard.get<Record<string, unknown>>("research-result");
+    if (research && !context.plan.needsRealtimeData) return { status: "completed", output: research };
+    if (!context.plan.needsRealtimeData) return { status: "skipped", limitations: ["Tidak ada media terbuka yang berhasil dimuat untuk dianalisis."] };
+    const snapshot = await itsGetLatestSnapshotImage();
+    context.blackboard.set("camera-snapshot", snapshot);
+    return { status: "completed", output: snapshot };
+  });
+  agentOrchestrator.registerCapabilityAdapter("focus_map", async (context) => {
+    const location = context.blackboard.get<{ lat: number; lng: number }>("user-location");
+    const place = itsPlanTargetPlace(context.plan);
+    if (place) {
+      itsRuntimeBridge().focusLatLng?.(place.lat, place.lng, place.title);
+      return { status: "completed", output: place };
+    }
+    if (location) {
+      itsRuntimeBridge().focusLatLng?.(location.lat, location.lng, "Lokasi pengguna");
+      return { status: "completed", output: location };
+    }
+    return { status: "skipped", limitations: ["Tidak ada koordinat hasil resolusi yang dapat difokuskan."] };
+  });
+  agentOrchestrator.registerCapabilityAdapter("open_place", async (context) => {
+    const place = itsPlanTargetPlace(context.plan);
+    if (!place) return { status: "skipped", limitations: ["Entitas tempat belum terhubung ke POI yang termuat."] };
+    itsRuntimeBridge().focusPoi?.(place.id, place.lat, place.lng);
+    return { status: "completed", output: place };
+  });
+  agentOrchestrator.registerCapabilityAdapter("create_route", async (context) => {
+    const place = itsPlanTargetPlace(context.plan);
+    if (!place) return { status: "skipped", limitations: ["Tujuan rute belum dapat diresolusi."] };
+    itsRuntimeBridge().focusPoi?.(place.id, place.lat, place.lng);
+    return { status: "completed", output: { destination: place, routeRequested: true } };
+  });
+}
+
+async function itsExecutePlannedUiActions(plan: DynamicAgentPlan, onStage?: (stage: string) => void): Promise<void> {
+  const panelActions: Record<string, { trigger: string; panel: string; open: () => void }> = {
+    "ai-history": {
+      trigger: "[data-ai-history], [data-open-ai-history]",
+      panel: "#m-ai-history-sheet",
+      open: () => window.dispatchEvent(new CustomEvent("its:open-ai-history", { detail: { source: "its-agent" } })),
+    },
+    roadmap: {
+      trigger: "[data-roadmap-story]",
+      panel: "#roadmap-story-modal",
+      open: itsShowRoadmapStoryModal,
+    },
+    privacy: {
+      trigger: "[data-privacy-modal]",
+      panel: "#privacy-info-modal",
+      open: () => itsShowSiteInfoModal("privacy"),
+    },
+    "ai-license": {
+      trigger: "[data-ai-license]",
+      panel: "#ai-license-modal",
+      open: itsShowAiLicenseModal,
+    },
+    "app-license": {
+      trigger: "[data-app-license]",
+      panel: "#app-license-info-modal",
+      open: () => itsShowSiteInfoModal("app-license"),
+    },
+    licence: {
+      trigger: "[data-app-license]",
+      panel: "#app-license-info-modal",
+      open: () => itsShowSiteInfoModal("app-license"),
+    },
+  };
+  for (const action of plan.requestedActions) {
+    const type = action.type.trim().toLocaleLowerCase().replaceAll("-", "_");
+    if (type !== "open_panel") continue;
+    const target = (action.target || "").trim().toLocaleLowerCase().replaceAll("_", "-");
+    const panelAction = panelActions[target];
+    if (!panelAction) continue;
+    onStage?.(`Membuka panel ${target || "yang diminta"}`);
+    itsSetAgentWorking(true);
+    try {
+      await itsAgentClick(panelAction.trigger, panelAction.open);
+      const panel = await itsWaitForAgentTarget(panelAction.panel);
+      if (panel) itsDockAgentPanelStack(panel);
+    } finally {
+      itsSetAgentWorking(false);
+    }
+  }
+}
+
+function itsAgentCardsFromOutputs(plan: DynamicAgentPlan, outputs: Record<string, unknown>): string {
+  const cards: string[] = [];
+  const capabilities = new Set(plan.requiredCapabilities);
+  const actions = new Set(plan.requestedActions.map((action) => action.type.trim().toLocaleLowerCase().replaceAll("-", "_")));
+  const realtime = objectRecord(outputs["capability:query_realtime_state"]);
+  const snapshot = objectRecord(outputs["capability:analyse_image"]);
+  const device = itsPrimaryDevice(realtime) || objectRecord(snapshot.device);
+  if (device && (snapshot.imageUrl || snapshot.base64Data) && capabilities.has("analyse_image")) {
+    cards.push(itsSnapshotCardHtml(device, snapshot));
+  }
+  if (device && actions.has("render_chart")) cards.push(itsChartCardHtml(device));
+  if (device && (actions.has("render_map") || capabilities.has("focus_map") || capabilities.has("query_map_geometry"))) {
+    cards.push(itsMapCardHtml(device));
+  }
+  if (device && (actions.has("render_places") || capabilities.has("search_open_places") || capabilities.has("open_place"))) {
+    cards.push(itsPoiCardHtml(device));
+  }
+  if (device && plan.needsLocation) cards.push(itsUserLocationCardHtml(device));
+  return cards.length ? `<div class="its-ai-card-stack">${cards.join("")}</div>` : "";
+}
+
+function itsWeatherDescription(code: number): string {
+  if (code === 0) return "cerah";
+  if (code <= 3) return "berawan";
+  if (code === 45 || code === 48) return "berkabut";
+  if (code >= 51 && code <= 57) return "gerimis";
+  if (code >= 61 && code <= 67) return "hujan";
+  if (code >= 71 && code <= 77) return "salju";
+  if (code >= 80 && code <= 82) return "hujan lokal";
+  if (code >= 85 && code <= 86) return "salju lokal";
+  if (code >= 95) return "badai petir";
+  return "kondisi belum terklasifikasi";
+}
+
+function itsWeatherPlaceFromQuestion(question: string): string {
+  const match = question.match(/\b(?:di|untuk|sekitar|daerah)\s+([\p{L}\p{N} .'-]{2,60}?)(?:\s+(?:hari ini|sekarang|saat ini))?[?.!,]*$/iu);
+  return match?.[1]?.trim() || "";
+}
+
+async function itsWeatherAssistantResponse(question: string, signal?: AbortSignal): Promise<ItsAssistantResponse> {
+  const requestedPlace = itsWeatherPlaceFromQuestion(question);
+  let point = itsRuntimeBridge().getUserLocation?.() || itsRuntimeBridge().getSystemLocation?.() || null;
+  let placeLabel = point && itsRuntimeBridge().getUserLocation?.() ? "lokasi Anda" : "lokasi sistem ITS Maps";
+
+  if (requestedPlace) {
+    const geocodeUrl = new URL("https://geocoding-api.open-meteo.com/v1/search");
+    geocodeUrl.searchParams.set("name", requestedPlace);
+    geocodeUrl.searchParams.set("count", "1");
+    geocodeUrl.searchParams.set("language", "id");
+    geocodeUrl.searchParams.set("format", "json");
+    const geocodeResponse = await fetch(geocodeUrl, { signal, cache: "no-store" });
+    if (!geocodeResponse.ok) throw new Error(`Pencarian lokasi cuaca gagal (HTTP ${geocodeResponse.status}).`);
+    const geocode = objectRecord(await geocodeResponse.json());
+    const result = Array.isArray(geocode.results) ? objectRecord(geocode.results[0]) : {};
+    const lat = itsNumberField(result.latitude);
+    const lng = itsNumberField(result.longitude);
+    if (lat === null || lng === null) {
+      return { text: `Saya belum menemukan lokasi "${requestedPlace}". Tambahkan nama kota atau kabupaten agar pencarian cuaca lebih tepat.` };
+    }
+    point = { lat, lng };
+    placeLabel = [itsStringField(result.name), itsStringField(result.admin1), itsStringField(result.country)].filter(Boolean).join(", ");
+  }
+
+  if (!point) {
+    const [lat, lng] = initialMapCenter() as [number, number];
+    point = { lat, lng };
+    placeLabel = "titik awal ITS Maps";
+  }
+
+  const weatherUrl = new URL("https://api.open-meteo.com/v1/forecast");
+  weatherUrl.searchParams.set("latitude", String(point.lat));
+  weatherUrl.searchParams.set("longitude", String(point.lng));
+  weatherUrl.searchParams.set("current", "temperature_2m,apparent_temperature,precipitation,rain,weather_code,cloud_cover,wind_speed_10m");
+  weatherUrl.searchParams.set("timezone", "auto");
+  const response = await fetch(weatherUrl, { signal, cache: "no-store" });
+  if (!response.ok) throw new Error(`Data cuaca gagal dimuat (HTTP ${response.status}).`);
+  const payload = objectRecord(await response.json());
+  const current = objectRecord(payload.current);
+  const units = objectRecord(payload.current_units);
+  const temperature = itsNumberField(current.temperature_2m);
+  const apparent = itsNumberField(current.apparent_temperature);
+  const rain = itsNumberField(current.rain) ?? itsNumberField(current.precipitation) ?? 0;
+  const clouds = itsNumberField(current.cloud_cover);
+  const wind = itsNumberField(current.wind_speed_10m);
+  const description = itsWeatherDescription(itsNumberField(current.weather_code) ?? -1);
+  const temperatureText = temperature === null ? "-" : `${temperature.toFixed(1)}${itsStringField(units.temperature_2m) || " C"}`;
+  const sourceUrl = `https://open-meteo.com/en/docs#latitude=${point.lat}&longitude=${point.lng}`;
+  return {
+    text: `Cuaca saat ini di ${placeLabel} ${description}, dengan suhu ${temperatureText}${apparent === null ? "" : ` dan terasa seperti ${apparent.toFixed(1)} C`}. Data ini adalah pengamatan/prakiraan cuaca, bukan sensor Raspberry ITS Maps.`,
+    html: `<section class="its-ai-card its-ai-weather-card">
+      <div class="its-ai-card-head">
+        <span>${itsMiniIcon("M7 17h10a4 4 0 0 0 .5-8A6 6 0 0 0 6.2 10.2 3.5 3.5 0 0 0 7 17Z", "#0284c7")} Cuaca saat ini</span>
+        <strong>${escapeHtml(temperatureText)}</strong>
+      </div>
+      <div class="its-ai-weather-grid">
+        <span><b>Kondisi</b>${escapeHtml(description)}</span>
+        <span><b>Hujan</b>${escapeHtml(String(rain))} ${escapeHtml(itsStringField(units.rain) || "mm")}</span>
+        <span><b>Awan</b>${clouds === null ? "-" : `${clouds}%`}</span>
+        <span><b>Angin</b>${wind === null ? "-" : `${wind} ${escapeHtml(itsStringField(units.wind_speed_10m) || "km/h")}`}</span>
+      </div>
+      <p class="its-ai-card-note">${escapeHtml(placeLabel)} - pembaruan ${escapeHtml(itsStringField(current.time) || "terbaru tersedia")}.</p>
+      <div class="its-ai-actions"><a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener">Sumber Open-Meteo</a></div>
+    </section>`,
+  };
+}
+
+async function itsFastAssistantResponse(
+  question: string,
+  history: ItsChatTurn[],
+  signal?: AbortSignal,
+  onStage?: (stage: string) => void,
+): Promise<ItsAssistantResponse | null> {
+  const normalized = question.toLocaleLowerCase("id-ID").replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
+  signal?.throwIfAborted();
+  if (/^(halo|hallo|hai|hi|hello|selamat pagi|selamat siang|selamat sore|selamat malam)( semuanya| asisten| its maps)?$/.test(normalized)) {
+    const returning = history.some((turn) => turn.role === "assistant");
+    return { text: returning ? "Halo lagi. Ada bagian ITS Maps atau topik lain yang ingin Anda lanjutkan?" : "Halo. Saya siap membantu membaca ITS Maps atau menjawab pertanyaan Anda. Apa yang ingin diperiksa?" };
+  }
+  if (/^(terima kasih|makasih|thanks|thank you|oke terima kasih)$/.test(normalized)) {
+    return { text: "Sama-sama. Saya siap melanjutkan ketika Anda punya pertanyaan berikutnya." };
+  }
+  if (/\b(cuaca|weather|suhu|hujan|berawan|cerah)\b/.test(normalized)) {
+    onStage?.("Mengambil cuaca terbaru untuk lokasi yang diminta...");
+    return itsWeatherAssistantResponse(question, signal);
+  }
+  if (/\b(snapshot|kamera|gambar ai|deteksi (?:gambar|objek)|object detection)\b/.test(normalized)) {
+    onStage?.("Membaca snapshot terbaru dan menyiapkan RF-DETR...");
+    const snapshot = await itsGetLatestSnapshotImage();
+    const device = objectRecord(snapshot.device);
+    if (!snapshot.imageUrl && !snapshot.base64Data) return { text: itsStringField(snapshot.error) || "Snapshot kamera belum tersedia." };
+    return {
+      text: "Saya memuat snapshot terbaru yang tersedia. RF-DETR browser akan memindai gambar, menyaring confidence rendah, lalu menampilkan bbox dan rincian hanya untuk objek yang terkonfirmasi.",
+      html: itsSnapshotCardHtml(device, snapshot),
     };
   }
-  if (!wantsAction) return null;
-  if (itsIncludesAny(q, ["zoom in", "perbesar peta", "perbesar map"])) {
-    return { status: "Memperbesar peta...", triggerSelector: '[data-action="zoom-in"]', fallback: () => undefined, result: "Peta sudah diperbesar satu tingkat." };
+  if (/\b(grafik|chart|diagram)\b/.test(normalized) && /\b(lalu lintas|traffic|kendaraan|rtdb|its)\b/.test(normalized)) {
+    onStage?.("Membaca data grafik terbaru dari RTDB...");
+    const status = await itsGetRealtimeMapSummary();
+    const device = itsPrimaryDevice(status);
+    return device
+      ? { text: "Berikut grafik dari nilai RTDB terbaru. Sumbu X memisahkan status lampu dan kendaraan; sumbu Y menunjukkan detik atau jumlah sesuai legendanya.", html: itsChartCardHtml(device) }
+      : { text: "Belum ada perangkat RTDB yang dapat dibuatkan grafik." };
   }
-  if (itsIncludesAny(q, ["zoom out", "perkecil peta", "perkecil map"])) {
-    return { status: "Memperkecil peta...", triggerSelector: '[data-action="zoom-out"]', fallback: () => undefined, result: "Peta sudah diperkecil satu tingkat." };
-  }
-  if (itsIncludesAny(q, ["lokasi saya", "posisi saya", "lokasi terkini"])) {
-    return { status: "Membuka lokasi terkini...", triggerSelector: '[data-action="locate"]', fallback: () => undefined, result: "Kontrol lokasi terkini sudah dijalankan; browser dapat meminta izin lokasi." };
-  }
-  if (itsIncludesAny(q, ["lokasi raspberry", "posisi raspberry", "kembali ke device", "kembali ke sistem"])) {
-    return { status: "Memusatkan peta ke Raspberry...", triggerSelector: '[data-action="home"]', fallback: () => undefined, result: "Peta sudah dipusatkan kembali ke perangkat Raspberry." };
-  }
-  if (itsIncludesAny(q, ["riwayat ai", "riwayat", "history", "snapshot history"])) {
+  if (/\b(peta|maps|lokasi|poi|tempat|rute)\b/.test(normalized) && !/\b(rumus|jurnal|penelitian|arsitektur)\b/.test(normalized)) {
+    onStage?.("Membaca lokasi dan POI yang sedang termuat...");
+    const status = await itsGetRealtimeMapSummary();
+    const device = itsPrimaryDevice(status);
+    if (!device) return { text: "Belum ada lokasi perangkat yang tersedia di RTDB." };
+    const wantsPoi = /\b(poi|tempat|sekitar|restoran|sekolah|kampus|masjid|toko)\b/.test(normalized);
+    const wantsUser = /\b(lokasi saya|lokasi terkini|posisi saya)\b/.test(normalized);
     return {
-      status: "Membuka Riwayat AI...",
-      triggerSelector: "[data-camera-ai-history]",
-      targetSelector: "#m-ai-history-sheet",
-      fallback: () => window.dispatchEvent(new CustomEvent("its:open-ai-history", { detail: { source: "its-ai-chat" } })),
-      result: "Riwayat AI sudah dibuka di atas chat.",
+      text: wantsPoi ? "Saya menampilkan POI terdekat yang benar-benar sudah dimuat dari data peta." : "Berikut lokasi perangkat ITS Maps berdasarkan koordinat RTDB terbaru.",
+      html: [itsMapCardHtml(device), wantsPoi ? itsPoiCardHtml(device) : "", wantsUser ? itsUserLocationCardHtml(device) : ""].filter(Boolean).join(""),
     };
   }
-  if (itsIncludesAny(q, ["roadmap", "story", "rencana"])) {
-    return { status: "Membuka Roadmap...", triggerSelector: "[data-roadmap-story]", targetSelector: "#roadmap-story-modal", fallback: itsShowRoadmapStoryModal, result: "Roadmap sudah dibuka di atas chat." };
+  if (/\b(status|raspberry|perangkat|lampu|traffic|lalu lintas|kendaraan|online|offline)\b/.test(normalized)
+    && !/\b(rumus|jurnal|penelitian|paper|arsitektur|metode)\b/.test(normalized)) {
+    onStage?.("Membaca status perangkat terbaru dari RTDB...");
+    const status = await itsGetRealtimeMapSummary();
+    const device = itsPrimaryDevice(status);
+    if (!device) return { text: "Belum ada perangkat yang tercatat di RTDB." };
+    const vehicles = objectRecord(device.vehicleBreakdown);
+    return {
+      text: `Sistem ${String(device.id || "Raspberry")} saat ini ${String(device.status || "belum diketahui")}; pembaruan ${String(device.lastSeenText || "belum tersedia")}. Lampu ${itsTrafficColorText(device.trafficColor)} selama ${String(device.trafficDurationSec ?? "-")} detik, dengan ${String(device.totalVehicles ?? vehicles.total ?? 0)} kendaraan pada data terakhir.`,
+      html: `<section class="its-ai-card"><div class="its-ai-card-head"><span>Status realtime RTDB</span><strong>${escapeHtml(String(device.status || "-"))}</strong></div>${itsVehicleMetricGridHtml(vehicles)}<p class="its-ai-card-note">Nilai ditampilkan apa adanya dari pembaruan perangkat terakhir.</p></section>`,
+    };
   }
-  if (itsIncludesAny(q, ["privasi", "privacy"])) {
-    return { status: "Membuka Privasi...", triggerSelector: "[data-privacy-modal]", targetSelector: "#privacy-info-modal", fallback: () => itsShowSiteInfoModal("privacy"), result: "Panel Privasi sudah dibuka di atas chat." };
-  }
-  if (itsIncludesAny(q, ["lisensi ai", "license ai", "licence ai"])) {
-    return { status: "Membuka Lisensi AI...", triggerSelector: "[data-ai-license]", targetSelector: "#ai-license-modal", fallback: itsShowAiLicenseModal, result: "Lisensi AI sudah dibuka di atas chat." };
-  }
-  if (itsIncludesAny(q, ["licence", "license", "lisensi"])) {
-    return { status: "Membuka Licence Aplikasi...", triggerSelector: "[data-app-license]", targetSelector: "#app-license-info-modal", fallback: () => itsShowSiteInfoModal("app-license"), result: "Licence Aplikasi sudah dibuka di atas chat." };
+  if (/\b(siapa (?:yang )?(?:membuat|developer|pengembang|pencipta)|tentang (?:aplikasi )?its maps|apa itu its maps)\b/.test(normalized)) {
+    return {
+      text: `ITS Maps dikembangkan oleh ${ITS_CREATOR_PROFILE.name} dan dipublikasikan oleh ${ITS_CREATOR_PROFILE.publisher}. Aplikasi ini menghubungkan peta, Raspberry Pi, kamera, Firebase RTDB, RF-DETR, Android, Windows, dan Windows Widgets.`,
+      html: `<section class="its-ai-card"><div class="its-ai-card-head"><span>Developer terverifikasi di proyek</span><strong>${escapeHtml(ITS_CREATOR_PROFILE.publisher)}</strong></div><p class="its-ai-card-note">${escapeHtml(ITS_CREATOR_PROFILE.summary)}</p><div class="its-ai-actions"><a href="https://github.com/hanifasepthi/its" target="_blank" rel="noopener">GitHub ITS Maps</a><a href="/documentation">Dokumentasi</a></div></section>`,
+    };
   }
   return null;
 }
 
-async function itsPerformInPageAgentAction(question: string): Promise<string> {
-  const action = itsAgentPanelAction(question);
-  if (!action) return "";
-  itsSetChatStatus(action.status);
-  itsSetAgentWorking(true);
-  try {
-    await itsDelay(100);
-    await itsAgentClick(action.triggerSelector, action.fallback);
-  } catch (error) {
-    itsAgentPanelTransitionActive = false;
-    itsSetAgentWorking(false);
-    itsSetChatStatus("Aksi panel gagal dijalankan");
-    window.setTimeout(() => itsSetChatStatus(), 1600);
-    throw error;
-  }
-  if (!action.targetSelector) {
-    itsSetAgentWorking(false);
-    itsSetChatStatus(action.result);
-    window.setTimeout(() => itsSetChatStatus(), 1500);
-    return action.result;
-  }
-  const target = await itsWaitForAgentTarget(action.targetSelector);
-  if (!target) {
-    itsSetAgentWorking(false);
-    itsSetChatStatus("Panel tidak ditemukan");
-    window.setTimeout(() => itsSetChatStatus(), 1500);
-    return "Panel yang diminta belum dapat dibuka.";
-  }
-  await itsDelay(260);
-  itsDockAgentPanelStack(target);
-  itsSetAgentWorking(false);
-  itsSetChatStatus(action.result);
-  window.setTimeout(() => itsSetChatStatus(), 1500);
-  return action.result;
-}
-
-async function itsBuildAssistantResponse(
+async function askItsMapsAssistant(
   question: string,
-  status: Record<string, unknown>,
   onStage?: (stage: string) => void,
   history: ItsChatTurn[] = [],
+  signal?: AbortSignal,
 ): Promise<ItsAssistantResponse> {
-  const resolvedQuestion =
-    itsResolveConversationalQuestion(
-      question,
-      history,
-    );
-
-  const q = itsNormalizeQuestion(resolvedQuestion);
-  const flags = itsIntentFlags(resolvedQuestion);
-  const device = itsPrimaryDevice(status);
-  if (flags.analyzeOpenPanel) {
-    onStage?.("Menggulir dan membaca panel yang terbuka...");
-    const analysis = await itsAnalyzeOpenModalContent();
-    if (!analysis) {
-      return { text: "Tidak ada panel yang sedang terbuka untuk dianalisis. Buka dulu misalnya Riwayat AI, lalu tanya lagi." };
-    }
-    return { text: analysis.summary };
-  }
-  if (publicResearchAgent.shouldHandle(resolvedQuestion, history) || flags.research || flags.formula || flags.webSearch) {
-    const research = await publicResearchAgent.answer({
-      question: resolvedQuestion,
-      history,
-      onProgress: onStage,
-    });
-    return { text: research.text, html: research.html };
-  }
-  if (flags.plainGreeting || flags.identity || flags.about || flags.license || flags.roadmap) {
-    const cards: string[] = [];
-    if (flags.identity) {
-      cards.push(itsDeveloperProfileCardHtml(resolvedQuestion));
-    }
-    if (flags.license) {
-      cards.push(`<section class="its-ai-card">
-        <div class="its-ai-card-head"><span>${itsMiniIcon("M6 3h12v18H6V3Zm3 5h6M9 12h6M9 16h4", "#0f172a")} Tautan legal</span><strong>ITS Maps</strong></div>
-        <div class="its-ai-actions">
-          <button type="button" data-ai-open-panel="privacy">Privasi</button>
-          <button type="button" data-ai-open-panel="app-license">Licence</button>
-          <button type="button" data-ai-open-panel="ai-license">Lisensi AI</button>
-        </div>
-      </section>`);
-    }
-    if (flags.roadmap) {
-      cards.push(`<section class="its-ai-card">
-        <div class="its-ai-card-head"><span>${itsMiniIcon("M4 17l6-6 4 4 6-8M4 21h16", "#2563eb")} Roadmap</span><strong>Story</strong></div>
-        <p class="its-ai-card-note">Roadmap story mengambil gambar dari folder publik dan bisa dibuka sebagai halaman AMP story.</p>
-        <div class="its-ai-actions"><button type="button" data-ai-open-panel="roadmap">Buka Roadmap</button><a href="/roadmap/" target="_blank" rel="noopener">Buka penuh</a></div>
-      </section>`);
-    }
-    return {
-      text: itsAssistantText(resolvedQuestion, status),
-      html: cards.length ? `<div class="its-ai-card-stack">${cards.join("")}</div>` : undefined,
-    };
-  }
-  if (!device) return { text: itsFallbackAssistantAnswer(question, status) };
-  const cards: string[] = [];
-  if ((flags.agent || flags.history) && !itsAgentPanelAction(resolvedQuestion)) {
-    onStage?.("Membaca layar internal ITS Maps");
-    cards.push(itsAgentCardHtml(status));
-  }
-  if (
-    itsIncludesAny(q, [
-      "lokasi raspberry",
-      "posisi raspberry",
-      "kembali ke device",
-      "kembali ke sistem",
-      "kembali ke home",
-      "pulang ke lokasi",
-      "rasberi",
-      "raspberry",
-    ]) &&
-    itsIncludesAny(q, [
-      "kembali",
-      "home",
-      "pusatkan",
-      "fokus",
-      "lokasi",
-      "posisi",
-    ])
-  ) {
-    onStage?.("Memusatkan peta ke Raspberry...");
-
-    const bridgeResult =
-      itsRuntimeBridge().goHome?.();
-
-    if (!bridgeResult) {
-      document
-        .querySelector<HTMLButtonElement>(
-          '[data-action="home"]',
-        )
-        ?.click();
-    }
-
-    return {
-      text:
-        "Peta sudah dipusatkan kembali ke lokasi Raspberry Pi utama.",
-    };
-  }
-  if (flags.image) {
-    onStage?.("Mengambil snapshot dan bbox dari RTDB");
-    const snapshot = await itsGetLatestSnapshotImage().catch((error) => ({ error: String(error), device }));
-    cards.push(itsSnapshotCardHtml(device, snapshot));
-  }
-  if (flags.video) {
-    onStage?.("Mengecek kesehatan video live");
-    const cameraHealth = await itsGetCameraHealth(String(device.id || "raspberry-its")).catch((error) => ({ note: String(error), publicOk: false }));
-    cards.push(itsVideoCardHtml(device, cameraHealth));
-  }
-  if (flags.chart || flags.status) {
-    cards.push(itsChartCardHtml(device));
-  }
-  if (flags.map) {
-    cards.push(itsMapCardHtml(device));
-  }
-  if (flags.poi) {
-    cards.push(itsPoiCardHtml(device));
-  }
-  if (flags.userLocation) {
-    cards.push(itsUserLocationCardHtml(device));
-  }
-  const extra = flags.agent ? "Mode agent membaca konteks halaman ITS Maps yang sedang aktif." : "";
+  const fastResponse = await itsFastAssistantResponse(question, history, signal, onStage);
+  if (fastResponse) return fastResponse;
+  itsInstallAgentRuntimeBindings();
+  const execution = await agentOrchestrator.run({
+    question,
+    history,
+    signal,
+    onProgress: (message) => onStage?.(message),
+    applicationState: itsAgentApplicationState(),
+  });
+  await itsExecutePlannedUiActions(execution.plan, onStage);
+  const cards = itsAgentCardsFromOutputs(execution.plan, execution.outputs);
+  const modelText = execution.responseText.trim();
   return {
-    text: itsAssistantText(resolvedQuestion, status, extra),
-    html: cards.length ? `<div class="its-ai-card-stack">${cards.join("")}</div>` : undefined,
+    text: modelText || "Saya belum memiliki bukti atau data yang cukup untuk menjawab dengan aman. Mohon tambahkan konteks yang ingin diperiksa.",
+    html: [execution.responseHtml, cards].filter(Boolean).join(""),
   };
-}
-
-async function askItsMapsAssistant(question: string, onStage?: (stage: string) => void, history: ItsChatTurn[] = []): Promise<ItsAssistantResponse> {
-  const resolvedQuestion = itsResolveConversationalQuestion(question, history);
-  const flags = itsIntentFlags(resolvedQuestion);
-  const needsRealtime = flags.status || flags.image || flags.video || flags.chart || flags.map ||
-    flags.poi || flags.userLocation || flags.history || flags.agent;
-  let status: Record<string, unknown>;
-  if (needsRealtime) {
-    onStage?.("Mengambil data realtime dari Firebase RTDB");
-    status = await itsGetRealtimeMapSummary();
-  } else {
-    status = { generatedAt: new Date().toISOString(), devices: [] };
-  }
-  const context = JSON.stringify(itsCompactAssistantContext(status));
-  const visualResponse = await itsBuildAssistantResponse(question, status, onStage, history);
-  if (flags.plainGreeting || flags.identity || flags.about || flags.license || flags.roadmap || flags.webSearch || flags.image || flags.video || flags.chart || flags.map || flags.poi || flags.userLocation || flags.formula || flags.research || flags.status || flags.agent || flags.history) {
-    return visualResponse;
-  }
-  try {
-    if (!isBrowserTextModelReady("chat")) {
-      onStage?.("Skill bahasa disiapkan di background; jawaban aman ditampilkan sekarang");
-      void warmBrowserTextModel("chat").catch((error) => {
-        console.warn("[ITS] Persiapan model bahasa background belum selesai", error);
-      });
-      return visualResponse;
-    }
-    onStage?.("Skill Pemahaman bahasa: membaca maksud dan konteks pertanyaan");
-    const recentConversation = history.slice(-4).map((turn) => `${turn.role === "user" ? "Pengguna" : "Asisten"}: ${turn.content.slice(0, 320)}`).join("\n");
-    const systemContent = [
-      "Kamu adalah Asisten ITS Maps berbahasa Indonesia.",
-      "Pahami maksud pertanyaan secara langsung dan jawab hanya hal yang ditanyakan.",
-      "Gunakan data RTDB hanya jika relevan. Jangan menumpahkan status perangkat pada sapaan atau pertanyaan profil.",
-      "Jangan mengarang angka, identitas pribadi, foto, pendidikan, atau hasil pencarian eksternal.",
-      "Jika sumber eksternal dibutuhkan, katakan bahwa pengguna perlu membuka tautan sumber yang disediakan UI.",
-      "Jawaban ringkas, natural, dan tidak mengulang template.",
-      recentConversation ? `\nPercakapan sebelumnya:\n${recentConversation}` : "",
-      "",
-      `Data realtime Firebase RTDB (gunakan hanya bila relevan):\n${context}`,
-      "",
-    ].join("\n");
-    const messages = [
-      { role: "system" as const, content: systemContent },
-      { role: "user" as const, content: resolvedQuestion },
-    ];
-    const answer = await generateBrowserText(
-      "chat",
-      messages,
-      { max_new_tokens: 72, temperature: 0.18, do_sample: false, repetition_penalty: 1.08 },
-      (message) => onStage?.(message),
-      75_000,
-    );
-    return { ...visualResponse, text: itsGeneratedAnswerLooksUseful(answer, resolvedQuestion) ? answer : visualResponse.text };
-  } catch (error) {
-    console.warn("[ITS] Local AI assistant fallback", error);
-    onStage?.("Model lokal belum siap, memakai pembaca data realtime");
-    return visualResponse;
-  }
 }
 
 function itsAppAiFabIconHtml(): string {
@@ -15491,16 +18004,16 @@ function itsShowAiChatModal(): void {
       <div class="map-license-grip" data-swipe-handle aria-hidden="true"></div>
       <header class="its-ai-chat-head">
         <div>
-          <span>ITS AI</span>
+          <span>ITS AI <small data-ai-cloud-status>Cloudflare diperiksa...</small></span>
           <h2 id="its-ai-chat-title">Asisten ITS Maps</h2>
-          <p>Menjawab sesuai pertanyaan, memakai data RTDB dan AI browser saat dibutuhkan.</p>
+          <p>Teks nonprivat dapat diproses Workers AI + AI Gateway; pola credential, PII, dan koordinat dialihkan ke model lokal privat/offline.</p>
         </div>
         <button type="button" data-ai-chat-close aria-label="Tutup chat AI">${closeIconSvg()}</button>
       </header>
       <div class="its-ai-chat-log" data-ai-chat-log>
         <article class="its-ai-chat-msg assistant">
           <strong>ITS Assistant</strong>
-          <p>Tanyakan status Raspberry, buat grafik, tampilkan peta, baca snapshot AI, cek video, atau minta rumus RF-DETR.</p>
+          <p>Saya siap membantu. Tanyakan kondisi ITS Maps, data perangkat, sumber ilmiah, formula, atau topik lain.</p>
         </article>
       </div>
       <div class="its-ai-chat-quick">
@@ -15509,13 +18022,21 @@ function itsShowAiChatModal(): void {
         <button type="button" data-ai-chat-prompt="Tampilkan peta lokasi Raspberry dengan link maps.">Peta</button>
         <button type="button" data-ai-agent-toggle class="${itsAgentModeEnabled ? "active" : ""}" aria-pressed="${itsAgentModeEnabled ? "true" : "false"}">${itsAgentModeEnabled ? "Agent aktif" : "Agent"}</button>
       </div>
-      <form class="its-ai-chat-form" data-ai-chat-form>
+      <form class="its-ai-chat-form" data-ai-chat-form
+            toolname="ask_its_maps_assistant"
+            tooldescription="Ask ITS Maps Assistant about maps, devices, traffic data, sources, or technical documentation."
+            toolautosubmit>
         <div class="its-ai-chat-inline-status" data-ai-chat-status role="status" aria-live="polite" hidden>
           <i aria-hidden="true"></i><span></span>
         </div>
         <label>
           <span>Pertanyaan</span>
-          <input name="question" type="text" autocomplete="off" placeholder="Tanya apa saja tentang ITS Maps..." required>
+          <input id="its-ai-chat-question" name="question" type="text" autocomplete="off"
+                 title="Pertanyaan untuk ITS Maps Assistant"
+                 aria-label="Pertanyaan untuk ITS Maps Assistant"
+                 aria-description="Tuliskan pertanyaan tentang peta, perangkat, lalu lintas, sumber data, atau dokumentasi ITS Maps."
+                 toolparamdescription="The question to ask ITS Maps Assistant."
+                 placeholder="Tanya apa saja tentang ITS Maps..." required>
         </label>
         <button type="submit" data-ai-chat-send><span data-ai-send-label>Kirim</span><i data-ai-send-spinner aria-hidden="true"></i></button>
       </form>
@@ -15528,10 +18049,20 @@ function itsShowAiChatModal(): void {
   const form = modal.querySelector<HTMLFormElement>("[data-ai-chat-form]");
   const sendButton = modal.querySelector<HTMLButtonElement>("[data-ai-chat-send]");
   const sendLabel = sendButton?.querySelector<HTMLElement>("[data-ai-send-label]");
+  const cloudStatus = modal.querySelector<HTMLElement>("[data-ai-cloud-status]");
+  void cloudflareAiClient.status().then((status) => {
+    if (!cloudStatus || !cloudStatus.isConnected) return;
+    cloudStatus.textContent = status.ok ? "Cloudflare siap" : "AI lokal fallback";
+    cloudStatus.title = status.ok ? status.endpoint : status.error || "Cloudflare Worker belum siap";
+  });
   const disposeLiveActivity = log ? mountAgentLiveActivity(log) : () => undefined;
   const conversation: ItsChatTurn[] = [];
   let promptRunning = false;
+  let promptController: AbortController | null = null;
   const close = () => {
+    promptController?.abort(new DOMException("Permintaan dibatalkan karena panel ditutup.", "AbortError"));
+    agentOrchestrator.cancel();
+    publicResearchAgent.cancel();
     itsReleaseAgentPanelStack();
     disposeLiveActivity();
     modal.classList.remove("open");
@@ -15574,7 +18105,10 @@ function itsShowAiChatModal(): void {
   const addAssistantMessage = async (text: string, html = "") => {
     const item = addMessage("assistant", "", "");
     const paragraph = item?.querySelector<HTMLElement>("p");
-    if (paragraph) await typewrite(paragraph, text);
+    if (paragraph) {
+      await typewrite(paragraph, text);
+      hydrateChatMath(paragraph, text);
+    }
     if (html && item) {
       const host = document.createElement("div");
       host.innerHTML = html;
@@ -15598,6 +18132,7 @@ function itsShowAiChatModal(): void {
   const runPrompt = async (question: string) => {
     const trimmed = question.trim();
     if (!trimmed || promptRunning) return;
+    promptController = new AbortController();
     setPromptBusy(true);
     const previousConversation = conversation.slice();
     addMessage("user", trimmed);
@@ -15606,18 +18141,16 @@ function itsShowAiChatModal(): void {
     try {
       const answer = await askItsMapsAssistant(trimmed, (stage) => {
         itsSetChatStatus(stage);
-      }, previousConversation);
+      }, previousConversation, promptController.signal);
       itsSetChatStatus();
       await addAssistantMessage(answer.text, answer.html || "");
       conversation.push({ role: "assistant", content: answer.text });
-      const flags = itsIntentFlags(trimmed);
-      if (itsAgentModeEnabled || flags.agent || flags.history) {
-        await itsPerformInPageAgentAction(trimmed);
-      }
     } catch (error) {
       itsSetChatStatus();
-      await addAssistantMessage(error instanceof Error ? error.message : "Chat AI belum dapat menjawab.");
+      const aborted = error instanceof DOMException && error.name === "AbortError";
+      await addAssistantMessage(aborted ? "Permintaan dibatalkan." : error instanceof Error ? error.message : "Chat AI belum dapat menjawab.");
     } finally {
+      promptController = null;
       setPromptBusy(false);
       input?.focus();
     }
@@ -15625,6 +18158,17 @@ function itsShowAiChatModal(): void {
   modal.querySelector<HTMLButtonElement>("[data-ai-chat-close]")?.addEventListener("click", close);
   modal.addEventListener("click", (event) => {
     const target = event.target as HTMLElement | null;
+    const citation = target?.closest<HTMLAnchorElement>("[data-ai-citation]");
+    if (citation) {
+      event.preventDefault();
+      const reference = modal.querySelector<HTMLElement>(`#its-ai-reference-${citation.dataset.aiCitation || ""}`);
+      if (reference) {
+        reference.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
+        reference.classList.add("is-citation-target");
+        window.setTimeout(() => reference.classList.remove("is-citation-target"), 1500);
+      }
+      return;
+    }
     const detailButton = target?.closest<HTMLButtonElement>("[data-ai-detection-detail]");
     if (detailButton && !detailButton.disabled) {
       event.preventDefault();
@@ -15636,16 +18180,10 @@ function itsShowAiChatModal(): void {
     if (openPanelButton) {
       event.preventDefault();
       const panel = openPanelButton.dataset.aiOpenPanel;
-      const prompt = panel === "privacy"
-        ? "Buka panel privasi"
-        : panel === "app-license"
-          ? "Buka licence aplikasi"
-          : panel === "ai-license"
-            ? "Buka lisensi AI"
-            : panel === "roadmap"
-              ? "Buka roadmap"
-              : "";
-      if (prompt) void itsPerformInPageAgentAction(prompt);
+      if (panel === "privacy") itsShowSiteInfoModal("privacy");
+      else if (panel === "app-license") itsShowSiteInfoModal("app-license");
+      else if (panel === "ai-license") itsShowAiLicenseModal();
+      else if (panel === "roadmap") itsShowRoadmapStoryModal();
       return;
     }
     const poiButton = target?.closest<HTMLButtonElement>("[data-ai-poi-id]");
@@ -15673,13 +18211,14 @@ function itsShowAiChatModal(): void {
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
         itsRuntimeBridge().applyUserLocation?.(lat, lng, position.coords.accuracy, true, "ai-chat-gps");
-        const systemLat = Number(card.dataset.systemLat || "-6.977254");
-        const systemLng = Number(card.dataset.systemLng || "107.631817");
+        const runtimeSystem = itsRuntimeBridge().getSystemLocation?.();
+        const systemLat = Number(card.dataset.systemLat || runtimeSystem?.lat);
+        const systemLng = Number(card.dataset.systemLng || runtimeSystem?.lng);
         const distance = itsChatDistanceMeters(lat, lng, systemLat, systemLng);
         const near = distance <= 1800;
         const gmaps = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
         const bing = `https://www.bing.com/maps?cp=${lat}~${lng}&lvl=17`;
-        const its = `https://itstelkom.web.app/?lat=${lat}&lng=${lng}&zoom=17`;
+        const its = `https://itstelkom.web.app/?lat=${lat}&lng=${lng}&z=17&mode=street`;
         const userPoint = { lat, lng };
         const systemPoint = { lat: systemLat, lng: systemLng };
         resultEl.innerHTML = `
@@ -15712,7 +18251,7 @@ function itsShowAiChatModal(): void {
     button.setAttribute("aria-pressed", String(itsAgentModeEnabled));
     button.textContent = itsAgentModeEnabled ? "Agent aktif" : "Agent";
     button.classList.toggle("active", itsAgentModeEnabled);
-    itsSetChatStatus(itsAgentModeEnabled ? "Agent in-page aktif; model hanya dimuat saat benar-benar dibutuhkan" : "Agent in-page dimatikan");
+    itsSetChatStatus(itsAgentModeEnabled ? "Agent in-page aktif; aksi tetap terbatas pada halaman ITS Maps" : "Agent in-page dimatikan");
     window.setTimeout(() => itsSetChatStatus(), 1600);
   });
   modal.querySelector<HTMLFormElement>("[data-ai-chat-form]")?.addEventListener("submit", (event) => {
@@ -15766,6 +18305,35 @@ function itsRegisterWebMcpTools(): boolean {
     execute: async () => {
       const result = await itsListDeviceIds();
       return itsWebMcpContentResponse(JSON.stringify(result, null, 2), result);
+    },
+  });
+
+  register({
+    name: "research_with_its_maps_assistant",
+    description: "Ask the evidence-grounded ITS Maps AI assistant about Indonesian maps, realtime devices, traffic, CCTV availability, scientific sources, calculations, or public technical documentation. The assistant reports uncertainty and source limitations instead of inventing map or camera data.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        question: {
+          type: "string",
+          title: "Question for ITS Maps Assistant",
+          description: "A complete question or task for the ITS Maps research and map assistant.",
+          minLength: 2,
+          maxLength: 4000,
+        },
+      },
+      required: ["question"],
+    },
+    annotations: { readOnlyHint: false },
+    execute: async (input: Record<string, unknown>) => {
+      const question = String(input.question || "").trim();
+      if (!question) return itsWebMcpContentResponse("Pertanyaan wajib diisi.", { ok: false });
+      const answer = await askItsMapsAssistant(question);
+      return itsWebMcpContentResponse(answer.text, {
+        ok: true,
+        answer: answer.text,
+        hasRichContent: Boolean(answer.html),
+      });
     },
   });
 
@@ -15845,6 +18413,28 @@ function itsRegisterWebMcpTools(): boolean {
     annotations: { readOnlyHint: true },
     execute: async () => {
       const result = await itsGetRealtimeMapSummary();
+      return itsWebMcpContentResponse(JSON.stringify(result, null, 2), result);
+    },
+  });
+
+  register({
+    name: "get_its_maps_windows_app_status",
+    description: "Check whether the verified ITS Maps Microsoft Store package is installed on this Windows device. The browser may request the Apps on device permission.",
+    inputSchema: { type: "object", properties: {} },
+    annotations: { readOnlyHint: true },
+    execute: async () => {
+      const result = await queryItsWindowsAppInstallation(true);
+      return itsWebMcpContentResponse(JSON.stringify(result, null, 2), result);
+    },
+  });
+
+  register({
+    name: "get_its_maps_microsoft_store_public_status",
+    description: "Read the verified public Microsoft Store rating, acquisition count, and recent reviews snapshot for ITS Maps. Missing values are returned as unavailable and are never estimated.",
+    inputSchema: { type: "object", properties: {} },
+    annotations: { readOnlyHint: true },
+    execute: async () => {
+      const result = await fetchMicrosoftStorePublicSnapshot(FIREBASE_ROOT_URL, true);
       return itsWebMcpContentResponse(JSON.stringify(result, null, 2), result);
     },
   });
@@ -16081,215 +18671,6 @@ function itsRegisterWebMcpTools(): boolean {
   });
 
   register({
-    name: "search_its_public_sources",
-    description:
-      "Create public search links for Google, Bing, GitHub, LinkedIn, Google Scholar, arXiv, and PDF search. This tool returns links only and does not claim to have read the search results.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        query: {
-          type: "string",
-          description:
-            "Profile, technical, or academic search query.",
-        },
-      },
-      required: ["query"],
-    },
-    annotations: {
-      readOnlyHint: true,
-    },
-    execute: async (
-      input: Record<string, unknown>,
-    ) => {
-      const result =
-        itsBuildPublicSearchLinks(
-          String(input.query || ""),
-        );
-
-      return itsWebMcpContentResponse(
-        `Tautan pencarian disiapkan untuk "${result.query}".`,
-        result,
-      );
-    },
-  });
-
-  register({
-    name: "read_its_public_url",
-    description:
-      "Read a same-origin or CORS-enabled public HTML/PDF URL in the browser. It cannot bypass CORS, authentication, paywalls, robots restrictions, or LinkedIn/Google blocking.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        url: {
-          type: "string",
-          description:
-            "Public HTTP or HTTPS URL.",
-        },
-      },
-      required: ["url"],
-    },
-    annotations: {
-      readOnlyHint: true,
-      untrustedContentHint: true,
-    },
-    execute: async (
-      input: Record<string, unknown>,
-    ) => {
-      try {
-        const result =
-          await itsReadPublicUrlClientSide(
-            String(input.url || ""),
-          );
-
-        return itsWebMcpContentResponse(
-          `${result.title}\n\n${result.text.slice(0, 8000)}`,
-          result,
-        );
-      } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : String(error);
-
-        return itsWebMcpContentResponse(
-          message,
-          {
-            ok: false,
-            error: message,
-          },
-        );
-      }
-    },
-  });
-
-  register({
-    name: "search_its_research_sources",
-    description:
-      "Search current scholarly metadata through Crossref, OpenAlex, and Europe PMC, or search openly licensed website/image evidence through Wikipedia and Wikimedia Commons. Returns real source URLs and never uploads PDFs.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        question: { type: "string", description: "The complete research or source-search question." },
-        mode: { type: "string", enum: ["journal", "profile", "website", "image"] },
-        forceRefresh: { type: "boolean", description: "Ignore the short browser cache and query providers again." },
-      },
-      required: ["question", "mode"],
-    },
-    annotations: { readOnlyHint: true },
-    execute: async (input: Record<string, unknown>) => {
-      const requestedMode = String(input.mode || "journal");
-      const mode: ItsResearchMode = ["journal", "profile", "website", "image"].includes(requestedMode)
-        ? requestedMode as ItsResearchMode
-        : "journal";
-      const sources = await itsSearchResearchSources(
-        String(input.question || ""),
-        mode,
-        input.forceRefresh === true,
-      );
-      return itsWebMcpContentResponse(
-        `${sources.length} sumber daring ditemukan.`,
-        { mode, sources },
-      );
-    },
-  });
-
-  register({
-    name: "plan_its_research",
-    description:
-      "Create an ITS Maps research mission and automatically query public scholarly or Wikimedia APIs. A browsing agent may add stronger page-level evidence with add_its_research_evidence before finishing the mission.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        question: { type: "string", description: "The user's complete question." },
-        mode: { type: "string", enum: ["journal", "profile", "website", "image"] },
-      },
-      required: ["question", "mode"],
-    },
-    annotations: { readOnlyHint: false },
-    execute: async (input: Record<string, unknown>) => {
-      const requestedMode = String(input.mode || "journal");
-      const mode: ItsResearchMode = ["journal", "profile", "website", "image"].includes(requestedMode)
-        ? requestedMode as ItsResearchMode
-        : "journal";
-      const task = await itsCreateResearchTask(String(input.question || ""), mode, true);
-      return itsWebMcpContentResponse(
-        `Misi ${task.id} dibuat dengan ${task.sourceIds.length} sumber awal.`,
-        {
-          ...task,
-          nextSteps: [
-            "Inspect the returned authoritative sources.",
-            "Add page-level evidence only when it was actually read.",
-            "Call finish_its_research to create the cited answer and bibliography.",
-          ],
-        },
-      );
-    },
-  });
-
-  register({
-    name: "add_its_research_evidence",
-    description:
-      "Add one source actually inspected by a browser agent to an existing ITS research mission. Never invent metadata, quotations, images, DOI, or PDF links.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        taskId: { type: "string" },
-        title: { type: "string" },
-        url: { type: "string" },
-        excerpt: { type: "string" },
-        provider: { type: "string" },
-        authors: { type: "array", items: { type: "string" } },
-        publisher: { type: "string" },
-        year: { type: "string" },
-        doi: { type: "string" },
-        pdfUrl: { type: "string" },
-        imageUrl: { type: "string" },
-        imageSourceUrl: { type: "string" },
-        license: { type: "string" },
-        facts: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: { label: { type: "string" }, value: { type: "string" } },
-            required: ["label", "value"],
-          },
-        },
-      },
-      required: ["taskId", "title", "url", "excerpt"],
-    },
-    annotations: { readOnlyHint: false, untrustedContentHint: true },
-    execute: async (input: Record<string, unknown>) => {
-      const evidence = itsAddResearchEvidence(input);
-      return itsWebMcpContentResponse(
-        `Sumber "${evidence.title}" tersimpan.`,
-        { stored: true, evidence, sourceCount: itsEvidenceForTask(evidence.taskId).length },
-      );
-    },
-  });
-
-  register({
-    name: "finish_its_research",
-    description:
-      "Create the final evidence-grounded answer, inline citations, bibliography, legal PDF links, and attributed image links for an ITS research mission.",
-    inputSchema: {
-      type: "object",
-      properties: { taskId: { type: "string" } },
-      required: ["taskId"],
-    },
-    annotations: { readOnlyHint: true, untrustedContentHint: true },
-    execute: async (input: Record<string, unknown>) => {
-      const result = await itsAnswerResearchTask(String(input.taskId || ""));
-      window.dispatchEvent(new CustomEvent("its:research-complete", { detail: result }));
-      return itsWebMcpContentResponse(result.text, {
-        taskId: result.taskId,
-        answer: result.text,
-        bibliography: result.bibliography,
-        sources: result.sources,
-      });
-    },
-  });
-
-  register({
     name: "list_its_ai_skills",
     description:
       "List the client-side AI skills and models available in ITS Maps.",
@@ -16369,4 +18750,9 @@ if (!staticRoute) {
   itsCreateAiChatButton();
   itsCreateSplash();
   itsCreateWindowsDownloadButton();
+  const checkInstalledWindowsApp = () => window.setTimeout(() => {
+    void queryItsWindowsAppInstallation().catch(() => undefined);
+  }, 1_200);
+  if (document.readyState === "complete") checkInstalledWindowsApp();
+  else window.addEventListener("load", checkInstalledWindowsApp, { once: true });
 }

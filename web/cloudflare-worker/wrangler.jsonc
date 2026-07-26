@@ -1,0 +1,96 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "its",
+  "main": "src/index.ts",
+  "account_id": "9d6c1075d9960e3ff376f31d1b8bc590",
+  "compatibility_date": "2026-07-20",
+  "workers_dev": true,
+  "keep_vars": true,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "ai": {
+    "binding": "AI",
+    "remote": true
+  },
+  "ai_search_namespaces": [
+    {
+      "binding": "AI_SEARCH",
+      "namespace": "default",
+      "remote": true
+    }
+  ],
+  "vectorize": [
+    {
+      "binding": "VECTORIZE",
+      "index_name": "its-maps-knowledge",
+      "remote": true
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "EDGE_STATE",
+      "id": "6a777bda1da9406c874db73e0d16f7ae"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "AI_BUDGET",
+        "class_name": "AiBudget"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["AiBudget"]
+    }
+  ],
+  "ratelimits": [
+    {
+      "name": "EDGE_RATE_LIMITER",
+      "namespace_id": "945201",
+      "simple": {
+        "limit": 20,
+        "period": 60
+      }
+    }
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "PUSH_QUEUE",
+        "queue": "its-maps-push-delivery"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "its-maps-push-delivery",
+        "max_batch_size": 25,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "dead_letter_queue": "its-maps-push-dead-letter"
+      }
+    ]
+  },
+  "triggers": {
+    "crons": ["*/15 * * * *"]
+  },
+  "vars": {
+    "ALLOWED_ORIGINS": "https://itstelkom.web.app,https://itstelkom.firebaseapp.com,https://its.hanifahseptiani45.workers.dev,http://localhost:4173,http://127.0.0.1:4173,http://localhost:4181,http://127.0.0.1:4181,http://localhost:4182,http://127.0.0.1:4182,http://localhost:5173,http://127.0.0.1:5173",
+    "UPSTREAM_ORIGIN": "https://itstelkom.web.app",
+    "PUBLIC_UPDATE_URL": "https://itstelkom.web.app/app-update.json",
+    "AI_GATEWAY_ID": "default",
+    "AI_SEARCH_INSTANCE": "its-maps-public",
+    "AI_TEXT_MODEL": "@cf/meta/llama-3.1-8b-instruct-fast",
+    "AI_EMBEDDING_MODEL": "@cf/baai/bge-m3",
+    "AI_REQUESTS_PER_MINUTE": "20",
+    "AI_DAILY_EXECUTION_LIMIT": "250",
+    "FIREBASE_PROJECT_ID": "itstelkom",
+    "MAP_DATA_INDEX_ZOOM": "8",
+    "MAP_PUBLIC_CACHE_SECONDS": "60",
+    "MAP_OBSERVATION_RETENTION_DAYS": "30"
+  }
+}

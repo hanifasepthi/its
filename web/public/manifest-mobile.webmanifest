@@ -12,6 +12,13 @@
   "orientation": "portrait-primary",
   "categories": ["maps", "navigation", "utilities"],
   "prefer_related_applications": false,
+  "related_applications": [
+    {
+      "platform": "windows",
+      "id": "HanifaTeams.ITSMaps_mqhjscd51gq8g!ITSMaps",
+      "url": "https://apps.microsoft.com/detail/9MWFGGW3FD2C"
+    }
+  ],
   "icons": [
     {
       "src": "/icons/icon-96.png",
@@ -43,15 +50,8 @@
       "src": "/screenshots/pwa/mobile-1.png",
       "sizes": "1536x1024",
       "type": "image/png",
-      "form_factor": "narrow",
+      "form_factor": "wide",
       "label": "Tampilan mobile ITS Maps dari folder src/ss/mobile"
-    },
-    {
-      "src": "/screenshots/pwa/mobile-2.png",
-      "sizes": "1672x941",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "Preview fitur mobile ITS Maps"
     }
   ],
   "shortcuts": [

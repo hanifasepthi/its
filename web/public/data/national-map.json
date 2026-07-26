@@ -1,0 +1,39 @@
+﻿{
+    "schemaVersion":  "1.0",
+    "dataset":  "its-maps-indonesia-national-vector",
+    "status":  "ready",
+    "generatedAt":  "2026-07-22T15:54:35.1677437Z",
+    "source":  {
+                   "name":  "OpenStreetMap Indonesia extract by Geofabrik",
+                   "snapshot":  "2026-07-21",
+                   "url":  "https://download.geofabrik.de/asia/indonesia-260721.osm.pbf",
+                   "license":  "ODbL-1.0",
+                   "attribution":  "Â© OpenStreetMap contributors",
+                   "nodes":  275478565,
+                   "ways":  50663267,
+                   "relations":  68343,
+                   "sourceRecordCount":  326210175,
+                   "pbfBytes":  1728516073,
+                   "pbfSha256":  "a23932634a16e519c88902d922f3800146caf3e436941cc1205c00682dbfac8d"
+               },
+    "archive":  {
+                    "format":  "PMTiles",
+                    "tileType":  "MVT",
+                    "minZoom":  0,
+                    "maxZoom":  15,
+                    "bytes":  1918303864,
+                    "sha256":  "25527d2e0bbc30eb0ae5f0644010d1d8374cd9bbc7ede99d3ae44f4bb3907ef9",
+                    "url":  "https://its.hanifahseptiani45.workers.dev/v1/map/archive/indonesia.pmtiles",
+                    "downloadUrl":  "https://github.com/hanifasepthi/its/releases/download/map-data-2026-07-21/indonesia.pmtiles"
+                },
+    "coverage":  {
+                     "country":  "ID",
+                     "bbox":  [
+                                  94.5,
+                                  -11.5,
+                                  141.1,
+                                  6.5
+                              ],
+                     "linked":  true
+                 }
+}

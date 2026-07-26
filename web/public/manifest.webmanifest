@@ -2,7 +2,7 @@
   "id": "/?source=pwa",
   "name": "ITS Maps",
   "short_name": "ITS Maps",
-  "description": "ITS Maps untuk peta realtime OSM, Raspberry Pi, kamera lalu lintas, snapshot AI, widget, PWA mobile, dan PWA desktop.",
+  "description": "ITS Maps untuk peta realtime, Raspberry Pi, kamera lalu lintas, snapshot AI, widget, PWA mobile, dan PWA desktop.",
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
@@ -15,8 +15,8 @@
   "related_applications": [
     {
       "platform": "windows",
-      "id": "id.ac.telkomuniversity.its.maps.windows",
-      "url": "https://itstelkom.web.app/artifacts/apps/ITS-Maps-Windows-Custom-Setup-1.0.14-x64.download"
+      "id": "HanifaTeams.ITSMaps_mqhjscd51gq8g!ITSMaps",
+      "url": "https://apps.microsoft.com/detail/9MWFGGW3FD2C"
     }
   ],
   "icons": [
@@ -58,7 +58,7 @@
       "sizes": "1672x941",
       "type": "image/png",
       "form_factor": "wide",
-      "label": "Peta OSM desktop ITS Maps"
+      "label": "Peta ITS Maps"
     },
     {
       "src": "/screenshots/pwa/mobile-1.png",

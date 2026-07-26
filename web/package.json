@@ -1,7 +1,7 @@
 {
   "name": "its-maps-web",
   "private": true,
-  "version": "1.0.50",
+  "version": "1.0.51",
   "productName": "ITS Maps",
   "description": "Aplikasi Windows ITS Maps untuk sinkronisasi Raspberry Pi, website, peta realtime, grafik lalu lintas, kamera, dan auto-update.",
   "author": {
@@ -11,7 +11,23 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/generate-method-docs.mjs && tsc && vite build && node scripts/prepare-hosting-artifacts.mjs",
+    "build": "npm run poi:generate && node scripts/generate-method-docs.mjs && tsc && vite build && node scripts/prepare-hosting-artifacts.mjs",
+    "cloudflare:check": "npm --prefix cloudflare-worker run check",
+    "cloudflare:dev": "npm --prefix cloudflare-worker run dev",
+    "cloudflare:deploy": "npm --prefix cloudflare-worker run deploy",
+    "poi:generate": "node scripts/generate-poi-icons.mjs",
+    "seo:indexnow": "node scripts/submit-indexnow.mjs",
+    "seo:indexnow:dry": "node scripts/submit-indexnow.mjs --dry-run",
+    "test:research": "node scripts/test-research-architecture.mjs",
+    "map:data:build": "node scripts/build-map-dynamics.mjs",
+    "map:data:check": "node scripts/qa-map-dynamics.mjs",
+    "map:data:coverage:check": "node scripts/qa-map-dynamics-coverage.mjs",
+    "map:data:ingest": "node scripts/ingest-map-dynamics-overpass.mjs",
+    "map:data:extract:pmtiles": "node scripts/extract-national-pmtiles.mjs",
+    "map:data:ingest:check": "node scripts/qa-map-dynamics-ingest.mjs",
+    "map:transit:check": "node scripts/qa-transit-relation-semantics.mjs",
+    "map:data:promote": "node scripts/promote-map-dynamics-observations.mjs",
+    "map:data:promote:check": "node scripts/qa-map-dynamics-promotion.mjs",
     "preview": "vite preview",
     "desktop:dev": "npm run build && electron electron/main.cjs",
     "desktop:open": "electron electron/main.cjs",
@@ -28,7 +44,9 @@
     "@capacitor/cli": "^6.2.1",
     "@capacitor/core": "^6.2.1",
     "@huggingface/transformers": "^4.2.0",
+    "@types/geojson": "^7946.0.16",
     "@types/leaflet": "^1.9.21",
+    "@types/three": "^0.185.1",
     "@yume-chan/adb": "^2.6.0",
     "@yume-chan/adb-credential-web": "^2.1.0",
     "@yume-chan/adb-daemon-webusb": "^2.3.2",
@@ -43,6 +61,7 @@
     "mapbox-gl-leaflet": "^0.0.16",
     "maplibre-gl": "^5.24.0",
     "qrcode": "^1.5.4",
+    "sharp": "^0.35.3",
     "typescript": "^5.9.3",
     "vite": "^8.0.1"
   },
@@ -151,10 +170,13 @@
     },
     "extraMetadata": {
       "name": "its-maps-windows",
-      "version": "1.0.50"
+      "version": "1.0.51"
     }
   },
   "dependencies": {
-    "katex": "^0.17.0"
+    "katex": "^0.17.0",
+    "pdfjs-dist": "4.10.38",
+    "pmtiles": "^4.4.1",
+    "three": "^0.185.1"
   }
 }

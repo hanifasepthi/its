@@ -1,0 +1,8 @@
+# Copy to .dev.vars for local development. Never commit .dev.vars.
+PUSH_ADMIN_TOKEN=generate-a-long-random-secret
+CONTROLLER_WEBHOOK_SECRET=generate-another-long-random-secret
+MAP_ADMIN_TOKEN=generate-a-map-admin-secret-minimum-32-characters
+MAP_OBSERVATION_HMAC_SECRET=generate-a-distinct-observation-secret-minimum-32-characters
+FIREBASE_SERVICE_ACCOUNT_JSON={"type":"service_account","project_id":"itstelkom","private_key_id":"...","private_key":"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n","client_email":"...","token_uri":"https://oauth2.googleapis.com/token"}
+# Public key from Firebase Console > Cloud Messaging > Web Push certificates.
+FIREBASE_VAPID_PUBLIC_KEY=

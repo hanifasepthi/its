@@ -42,7 +42,6 @@ This file is generated from `web/scripts/generate-method-docs.mjs`. It expands t
 ## Contributors And Credits
 
 - [Hanifa Septhi Larasati](https://github.com/hanifasepthi) - Developer utama, publisher Hanifa Teams, dan pemilik repository ITS Maps.
-- [galihru](https://github.com/galihru) - Kontributor repository awal dan kolaborasi pengembangan ITS Maps.
 - [Roboflow RF-DETR](https://github.com/roboflow/rf-detr) - Rujukan arsitektur object detection RF-DETR untuk pipeline deteksi visual.
 - [Hugging Face onnx-community](https://huggingface.co/onnx-community/rfdetr_nano-ONNX) - Model ONNX yang dipakai oleh runtime browser object detection.
 - [Transformers.js / Xenova](https://github.com/huggingface/transformers.js) - Runtime inference JavaScript untuk model AI di browser.

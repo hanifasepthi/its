@@ -3,7 +3,12 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   base: "./",
+  esbuild: {
+    legalComments: "none",
+  },
   build: {
+    // External maps let DevTools resolve production errors without affecting
+    // the normal page-load request graph.
     sourcemap: true,
     target: "es2020",
     minify: "esbuild",
