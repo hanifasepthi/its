@@ -14940,7 +14940,7 @@ const ITS_MICROSOFT_STORE_DEEP_LINK = "ms-windows-store://pdp/?productid=9MWFGGW
 const ITS_MICROSOFT_STORE_REVIEW_LINK = "ms-windows-store://review/?ProductId=9MWFGGW3FD2C";
 const ITS_WINDOWS_INSTALL_URL = "https://github.com/hanifasepthi/its/releases/download/its-maps-v1.0.21/ITS-Maps-Windows-Custom-Setup-1.0.21-x64.exe";
 const ITS_WINDOWS_INSTALL_NAME = "ITS-Maps-Windows-Custom-Setup-1.0.21-x64.exe";
-const ITS_ANDROID_INSTALL_URL = "https://itstelkom.web.app/artifacts/apps/ITS-Maps-Android-1.0.36.apk.b64";
+const ITS_ANDROID_INSTALL_URL = "https://github.com/hanifasepthi/its/releases/download/its-maps-android-1.0.36/ITS-Maps-Android-1.0.36.apk";
 const ITS_ANDROID_INSTALL_NAME = "ITS-Maps-Android-1.0.36.apk";
 const ITS_IOS_INSTALL_URL = "https://itstelkom.web.app/?install=ios";
 const ITS_FALLBACK_PREVIEWS = [WIN_PREVIEW_WELCOME, WIN_PREVIEW_OPTIONS, WIN_PREVIEW_DONE];

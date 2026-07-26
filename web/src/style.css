@@ -2419,15 +2419,32 @@ body.its-sheet-open .leaflet-control-attribution {
 
 @media (max-width: 720px) {
   .leaflet-control-attribution {
-    max-width: calc(100vw - 104px);
-    min-height: 38px;
-    padding: 1px 5px !important;
-    line-height: 1.35;
+    position: fixed !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: auto !important;
+    z-index: 9100 !important;
+    width: auto;
+    max-width: calc(100vw - 112px);
+    min-height: 22px;
+    max-height: 22px;
+    overflow: hidden;
+    padding: 0 5px !important;
+    border-radius: 6px 0 0 0;
+    font-size: 9px !important;
+    line-height: 22px;
     white-space: nowrap;
   }
 
   .leaflet-control-attribution .map-license-link {
     display: inline-flex;
+    min-width: 0;
+    min-height: 22px;
+    height: 22px;
+    margin: 0;
+    padding: 0 4px;
+    font-size: 9px;
+    line-height: 22px;
   }
 
   .leaflet-control-attribution .map-license-separator {

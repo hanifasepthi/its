@@ -21,6 +21,8 @@ const MICROSOFT_CLARITY_PROJECT_ID = String(
 const GOOGLE_SITE_VERIFICATION = "c8bcvZrCDvCbFQbw1nvSf4Dvemq6qb35bh1J64DJ_2g";
 const BING_SITE_VERIFICATION = "C6357AD329BE82ECD8276C53EB8CDFA7";
 const DEFAULT_SOCIAL_IMAGE = `${SITE_ORIGIN}/screenshots/desktop-home.png`;
+const MAP_DATA_GITHUB_BASE =
+  "https://raw.githubusercontent.com/hanifasepthi/its/upload/its-maps-final-20260710/web/public/data/map-dynamics";
 const cloudflareAnalyticsConfigured = /^[a-f0-9]{32}$/i.test(CLOUDFLARE_WEB_ANALYTICS_TOKEN);
 const googleAnalyticsConfigured = /^G-[A-Z0-9]+$/i.test(GOOGLE_MEASUREMENT_ID);
 const clarityConfigured = /^[a-z0-9-]{4,64}$/i.test(MICROSOFT_CLARITY_PROJECT_ID);
@@ -83,6 +85,28 @@ function keepHostingArtifacts() {
     removed += 1;
   }
   console.log(`prepare-hosting-artifacts: kept ${Array.from(keep).join(", ")}; removed ${removed} old app artifact(s).`);
+}
+
+function externalizeMapDynamicsShards() {
+  const manifestPath = path.join(distDir, "data", "map-dynamics", "manifest.json");
+  if (!fs.existsSync(manifestPath)) return;
+  const manifest = readJson(manifestPath);
+  if (!Array.isArray(manifest.shards)) return;
+  manifest.shards = manifest.shards.map((shard) => {
+    if (!shard || typeof shard !== "object" || typeof shard.url !== "string") return shard;
+    const fileName = path.posix.basename(shard.url.replaceAll("\\", "/"));
+    return {
+      ...shard,
+      url: `${MAP_DATA_GITHUB_BASE}/shards/${encodeURIComponent(fileName)}`,
+    };
+  });
+  manifest.hosting = {
+    ...(manifest.hosting && typeof manifest.hosting === "object" ? manifest.hosting : {}),
+    strategy: "github-external-shards",
+    baseUrl: MAP_DATA_GITHUB_BASE,
+  };
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  console.log(`prepare-hosting-artifacts: externalized ${manifest.shards.length} map shard URL(s) to GitHub.`);
 }
 
 function analyticsScript() {
@@ -334,6 +358,7 @@ function enhanceHtmlFiles(directory) {
 }
 
 keepHostingArtifacts();
+externalizeMapDynamicsShards();
 writeAnalyticsAsset();
 const enhanced = enhanceHtmlFiles(distDir);
 console.log(`prepare-hosting-artifacts: enhanced analytics/SEO in ${enhanced} generated HTML file(s).`);

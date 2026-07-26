@@ -10,7 +10,13 @@
       "**/.*",
       "**/node_modules/**",
       "**/*.apk",
-      "**/*.idsig"
+      "**/*.idsig",
+      "artifacts/**",
+      "source-atlas/**",
+      "docs/**",
+      "**/*.jar",
+      "**/*.tar.gz",
+      "data/map-dynamics/shards/**"
     ],
     "rewrites": [
       {
