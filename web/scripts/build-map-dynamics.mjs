@@ -19,6 +19,8 @@ const ALLOWED_KINDS = new Set([
   "waste_basket", "fire_hydrant", "drinking_water", "toilets", "emergency_shelter",
   "entrance", "gate", "elevator", "escalator", "drain", "drain_grate", "manhole",
   "retaining_wall", "seawall", "platform", "taxi_stand", "motorcycle_taxi", "park_ride", "poi",
+  "healthcare", "education", "transport", "food", "lodging", "public_service", "attraction",
+  "worship", "shopping",
 ]);
 
 function usage(message) {

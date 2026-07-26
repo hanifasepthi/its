@@ -90,6 +90,67 @@ function classifiedKind(layer, properties, geometryType) {
   return "";
 }
 
+function normalizedBoolean(value) {
+  const token = String(value ?? "").toLowerCase();
+  return ["1", "true", "yes"].includes(token) ? true
+    : ["0", "false", "no"].includes(token) ? false
+      : value;
+}
+
+function poiKind(properties) {
+  const cls = String(properties.class || "").toLowerCase();
+  const subclass = String(properties.subclass || "").toLowerCase();
+  const token = `${cls} ${subclass}`;
+  const exact = [
+    ["traffic_signals", "traffic_signal"], ["crossing", "crossing"],
+    ["toll_booth", "toll_gate"], ["toll_gantry", "toll_gate"],
+    ["speed_camera", "speed_camera"], ["surveillance", "cctv"],
+    ["fire_hydrant", "fire_hydrant"], ["street_lamp", "street_lamp"],
+    ["gate", "gate"], ["lift_gate", "barrier"], ["bollard", "bollard"],
+    ["elevator", "elevator"], ["escalator", "escalator"],
+    ["toilets", "toilets"], ["drinking_water", "drinking_water"],
+    ["bench", "bench"], ["waste_basket", "waste_basket"],
+    ["taxi", "taxi_stand"], ["bus_stop", "platform"],
+    ["platform", "platform"], ["entrance", "entrance"],
+  ];
+  for (const [needle, kind] of exact) {
+    if (cls === needle || subclass === needle) return kind;
+  }
+  if (/hospital|clinic|doctors|pharmacy/.test(token)) return "healthcare";
+  if (/school|college|university|kindergarten|library/.test(token)) return "education";
+  if (/station|halt|subway|tram_stop|ferry_terminal|airport/.test(token)) return "transport";
+  if (/restaurant|cafe|fast_food|food_court/.test(token)) return "food";
+  if (/hotel|motel|hostel|guest_house/.test(token)) return "lodging";
+  if (/police|fire_station|townhall|government|courthouse|post_office/.test(token)) return "public_service";
+  if (/park|garden|playground|attraction|museum|viewpoint/.test(token)) return "attraction";
+  if (/place_of_worship|mosque|church|temple|synagogue/.test(token)) return "worship";
+  if (/shop|mall|marketplace|supermarket/.test(token)) return "shopping";
+  return "poi";
+}
+
+function enrichedProperties(layer, properties, kind) {
+  const result = { ...properties };
+  const cls = String(properties.class || "").toLowerCase();
+  const subclass = String(properties.subclass || "").toLowerCase();
+  const brunnel = String(properties.brunnel || "").toLowerCase();
+  if (layer === "transportation") {
+    if (kind === "road" || kind === "cycleway" || kind === "pedestrian") {
+      result.highway = cls || subclass || "road";
+      if (kind === "cycleway") result.highway = "cycleway";
+      if (kind === "pedestrian" && !/footway|pedestrian|path|steps/.test(result.highway)) result.highway = "footway";
+    } else if (kind === "railway") {
+      result.railway = cls || subclass || "rail";
+    }
+    if (brunnel === "bridge") result.bridge = true;
+    if (brunnel === "tunnel") result.tunnel = true;
+    if (Number.isFinite(Number(properties.layer))) result.layer = Number(properties.layer);
+    if ("oneway" in properties) result.oneway = normalizedBoolean(properties.oneway);
+  }
+  if (layer === "waterway") result.waterway = cls || subclass || "stream";
+  if (layer === "water") result.water = cls || subclass || "water";
+  return result;
+}
+
 function explodeGeometry(geometry) {
   if (!geometry) return [];
   if (geometry.type === "MultiPoint") return geometry.coordinates.map((coordinates) => ({ type: "Point", coordinates }));
@@ -129,15 +190,17 @@ async function main() {
           for (let index = 0; index < layer.length; index += 1) {
             const raw = layer.feature(index);
             const geo = raw.toGeoJSON(x, y, options.zoom);
-            const kind = classifiedKind(layerName, geo.properties || {}, geo.geometry?.type);
-            if (!kind) continue;
+            const baseKind = classifiedKind(layerName, geo.properties || {}, geo.geometry?.type);
+            if (!baseKind) continue;
+            const kind = baseKind === "poi" ? poiKind(geo.properties || {}) : baseKind;
+            const properties = enrichedProperties(layerName, geo.properties || {}, kind);
             for (const [part, geometry] of explodeGeometry(geo.geometry).entries()) {
               const sourceId = `${tileKey}:${layerName}:${raw.id ?? index}:${part}`;
               lines.push(JSON.stringify({
                 type: "Feature",
                 id: `pmtiles:${sourceId}`,
                 properties: {
-                  ...(geo.properties || {}),
+                  ...properties,
                   kind,
                   verification: "verified",
                   source: "OpenMapTiles/OpenStreetMap national PMTiles",
