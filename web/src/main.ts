@@ -2746,7 +2746,10 @@ if (staticRoute) {
         if (namedA !== namedB) return namedA - namedB;
         return stablePoiHash(a.id) - stablePoiHash(b.id);
       });
-    const clusterCellSize = zoom >= 19 ? 16 : zoom >= 17 ? 24 : zoom >= 15 ? 32 : 42;
+    // A marker may render a small pictogram, but its interactive hit box is
+    // 48 CSS px. Keep neighbouring marker centres farther apart so Lighthouse
+    // and touch users do not see overlapping targets.
+    const clusterCellSize = zoom >= 19 ? 52 : zoom >= 17 ? 56 : zoom >= 15 ? 60 : 64;
     const clusterBuckets = new Map<string, PoiRecord[]>();
     ranked.forEach((poi) => {
       const worldPoint = map.project([poi.lat, poi.lng], Math.floor(zoom));
@@ -2777,15 +2780,15 @@ if (staticRoute) {
       if (selected.length >= poiRenderLimitByZoom(zoom)) break;
       const point = map.latLngToContainerPoint([poi.lat, poi.lng]);
       const rule = poiDisplayRule(poi);
-      const markerSize = poiMarkerSizeByZoom();
       const wantsLabel = renderedLabelCount < labelBudget
         && zoom >= rule.labelZoom
         && poi.title.trim().length > 0;
       const labelWidth = wantsLabel ? clamp(Math.min(22, Math.max(8, Math.ceil(poi.title.length / 2))) * 5.5, 44, 142) : 0;
-      const fullWidth = markerSize + (wantsLabel ? labelWidth + 9 : 0);
-      const fullHeight = Math.max(markerSize, wantsLabel && poi.title.length > 20 ? 32 : 24);
+      const touchSize = 52;
+      const fullWidth = touchSize + (wantsLabel ? labelWidth + 9 : 0);
+      const fullHeight = Math.max(touchSize, wantsLabel && poi.title.length > 20 ? 32 : 24);
       const fullKeys = poiGridKeysForRect(
-        point.x - markerSize / 2,
+        point.x - touchSize / 2,
         point.y - fullHeight / 2,
         fullWidth,
         fullHeight,
@@ -2801,10 +2804,10 @@ if (staticRoute) {
 
       // Retain an interactive icon when its label would collide with another POI.
       const iconKeys = poiGridKeysForRect(
-        point.x - markerSize / 2,
-        point.y - markerSize / 2,
-        markerSize,
-        markerSize,
+        point.x - touchSize / 2,
+        point.y - touchSize / 2,
+        touchSize,
+        touchSize,
         gridSize,
       );
       if (poiKeysAreFree(iconKeys, occupied)) {
@@ -5205,7 +5208,7 @@ if (staticRoute) {
     // footprints would overlap. This keeps dense junctions readable without
     // inventing or discarding any underlying OSM detail.
     const crossingLimit = 12;
-    const crossingSeparation = zoom >= 18 ? 24 : 32;
+    const crossingSeparation = 56;
     const mapCentre = map.getCenter();
     const selectedCrossings = [...guide.crossings]
       .sort((a, b) => {
@@ -13362,13 +13365,13 @@ if (staticRoute) {
     };
     const transitDetailsHtml = transitLegend.length ? transitLegend.map((item) => {
       const endpoints = item.from && item.to ? `${item.from} → ${item.to}` : item.from || item.to || item.network || item.operator;
-      return `<li><i style="--legend-color:${escapeHtml(item.color)}"></i><span><b>${escapeHtml(item.ref || item.name || item.label || transitModeNames[item.mode])}</b>${endpoints ? `<small>${escapeHtml(endpoints)}</small>` : ""}</span></li>`;
+      return `<li tabindex="0" data-legend-kind="transit" data-legend-index="${transitLegend.indexOf(item)}"><i style="--legend-color:${escapeHtml(item.color)}"></i><span><b>${escapeHtml(item.ref || item.name || item.label || transitModeNames[item.mode])}</b>${endpoints ? `<small>${escapeHtml(endpoints)}</small>` : ""}</span></li>`;
     }).join("") : `<li class="m-legend-empty">Perbesar peta untuk membaca rute di area ini.</li>`;
     const roadDetailsHtml = roadLegend.length ? roadLegend.map((item) => (
-      `<li><i class="road-${roadRenderClass(item)}"></i><span><b>${escapeHtml(item.name || item.ref || "Jalan tanpa nama")}</b><small>${escapeHtml(item.highway)}${item.lanes ? ` · ${item.lanes} lajur` : ""}${item.detail.bridge ? " · jembatan" : ""}</small></span></li>`
+      `<li tabindex="0" data-legend-kind="road" data-legend-index="${roadLegend.indexOf(item)}"><i class="road-${roadRenderClass(item)}"></i><span><b>${escapeHtml(item.name || item.ref || "Jalan tanpa nama")}</b><small>${escapeHtml(item.highway)}${item.lanes ? ` · ${item.lanes} lajur` : ""}${item.detail.bridge ? " · jembatan" : ""}</small></span></li>`
     )).join("") : `<li class="m-legend-empty">Perbesar peta untuk membaca jenis jalan di area ini.</li>`;
     const objectDetailsHtml = [
-      ...ornamentLegend.map((item) => `<li><span class="m-legend-symbol">${ornamentSymbolMarkup(item.kind).markup}</span><span><b>${escapeHtml(ornamentNames[item.kind] || item.kind)}</b><small>${item.count.toLocaleString("id-ID")} titik pada area termuat</small></span></li>`),
+      ...ornamentLegend.map((item) => `<li tabindex="0" data-legend-kind="ornament" data-legend-ornament="${escapeHtml(item.kind)}"><span class="m-legend-symbol">${ornamentSymbolMarkup(item.kind).markup}</span><span><b>${escapeHtml(ornamentNames[item.kind] || item.kind)}</b><small>${item.count.toLocaleString("id-ID")} titik pada area termuat</small></span></li>`),
       ...namedNature.map((item) => `<li><span class="m-legend-symbol">${item.icon}</span><span><b>${escapeHtml(item.name)}</b><small>Nama resmi dari data peta</small></span></li>`),
     ].join("") || `<li class="m-legend-empty">Belum ada objek bernama pada area termuat.</li>`;
     overlay.innerHTML = `
@@ -13430,7 +13433,59 @@ if (staticRoute) {
   </div>
 `;
 
-    overlay.querySelector(".m-layer-backdrop")!.addEventListener("click", closeLayerModal);
+    let legendHighlight: L.Layer | null = null;
+    const clearLegendHighlight = (): void => {
+      if (legendHighlight && map.hasLayer(legendHighlight)) map.removeLayer(legendHighlight);
+      legendHighlight = null;
+      overlay.querySelectorAll(".m-dynamics-legend li.is-highlighted").forEach((item) => item.classList.remove("is-highlighted"));
+    };
+    const showLegendHighlight = (item: HTMLElement): void => {
+      clearLegendHighlight();
+      item.classList.add("is-highlighted");
+      const kind = item.dataset.legendKind;
+      const index = Number(item.dataset.legendIndex);
+      if (kind === "transit" && transitLegend[index]?.points.length) {
+        const record = transitLegend[index];
+        legendHighlight = L.polyline(record.points, {
+          pane: ROAD_ORNAMENT_PANE, color: record.color, weight: 9, opacity: 0.96,
+          lineCap: "round", interactive: false, className: "legend-map-highlight",
+        }).addTo(map);
+      } else if (kind === "road" && roadLegend[index]?.points.length) {
+        const record = roadLegend[index];
+        legendHighlight = L.polyline(record.points, {
+          pane: ROAD_ORNAMENT_PANE, color: "#1677ff", weight: 9, opacity: 0.92,
+          lineCap: "round", interactive: false, className: "legend-map-highlight",
+        }).addTo(map);
+      } else if (kind === "ornament") {
+        const ornament = guide?.ornaments.find((record) => record.kind === item.dataset.legendOrnament && record.points[0]);
+        if (ornament) {
+          legendHighlight = L.circleMarker(ornament.points[0], {
+            pane: ROAD_ORNAMENT_PANE, radius: 18, color: "#fff", weight: 4,
+            fillColor: ornamentColor(ornament.kind), fillOpacity: 0.9, interactive: false,
+            className: "legend-map-highlight",
+          }).addTo(map);
+        }
+      }
+    };
+    overlay.querySelectorAll<HTMLElement>(".m-dynamics-legend li[data-legend-kind]").forEach((item) => {
+      item.addEventListener("mouseenter", () => showLegendHighlight(item));
+      item.addEventListener("mouseleave", clearLegendHighlight);
+      item.addEventListener("focus", () => showLegendHighlight(item));
+      item.addEventListener("blur", clearLegendHighlight);
+      item.addEventListener("click", () => {
+        showLegendHighlight(item);
+        const kind = item.dataset.legendKind;
+        const index = Number(item.dataset.legendIndex);
+        const points = kind === "transit" ? transitLegend[index]?.points : kind === "road" ? roadLegend[index]?.points : null;
+        if (points?.length) map.fitBounds(L.latLngBounds(points), { padding: [56, 56], maxZoom: 18, animate: true });
+      });
+    });
+    const closeInteractiveLayerModal = (): void => {
+      clearLegendHighlight();
+      closeLayerModal();
+    };
+
+    overlay.querySelector(".m-layer-backdrop")!.addEventListener("click", closeInteractiveLayerModal);
 
     overlay.querySelectorAll<HTMLButtonElement>(".m-layer-opt").forEach(btn => {
       btn.addEventListener("click", async () => {
@@ -13438,7 +13493,7 @@ if (staticRoute) {
         overlay.querySelectorAll(".m-layer-opt").forEach(b => b.classList.remove("active"));
         btn.classList.add("active");
         await setBaseMap(mode);
-        setTimeout(closeLayerModal, 280);
+        setTimeout(closeInteractiveLayerModal, 280);
       });
     });
 
@@ -13475,7 +13530,7 @@ if (staticRoute) {
 
     setupSheetSwipe(
       overlay.querySelector<HTMLElement>(".m-layer-sheet")!,
-      closeLayerModal
+      closeInteractiveLayerModal
     );
 
     document.body.appendChild(overlay);

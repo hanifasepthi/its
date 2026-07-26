@@ -6508,6 +6508,11 @@ body.its-agent-cursor-active * {
 .road-guide-structure-icon {
   background: transparent !important;
   border: 0 !important;
+  min-width: 48px !important;
+  min-height: 48px !important;
+  overflow: visible !important;
+  pointer-events: auto !important;
+  touch-action: manipulation;
 }
 
 .road-guide-structure-icon > span {
@@ -8764,6 +8769,26 @@ body.ai-history-sheet-desktop .m-ai-history-content {
   gap: 9px;
   min-width: 0;
   padding: 5px 3px;
+  min-height: 44px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+}
+
+.m-dynamics-legend li[data-legend-kind]:hover,
+.m-dynamics-legend li[data-legend-kind]:focus-visible,
+.m-dynamics-legend li.is-highlighted {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  outline: 0;
+  transform: translateX(2px);
+}
+
+.m-dynamics-legend li[data-legend-kind]:hover > i,
+.m-dynamics-legend li[data-legend-kind]:focus-visible > i,
+.m-dynamics-legend li.is-highlighted > i {
+  box-shadow: 0 0 0 4px rgb(37 99 235 / 16%);
 }
 
 .m-dynamics-legend li > i {
@@ -8834,6 +8859,16 @@ body.ai-history-sheet-desktop .m-ai-history-content {
   background: #16a34a;
   border-radius: 50%;
   box-shadow: 0 0 0 3px rgb(22 163 74 / 14%);
+}
+
+.legend-map-highlight {
+  filter: drop-shadow(0 0 5px rgba(22, 119, 255, 0.9));
+  animation: legend-map-pulse 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes legend-map-pulse {
+  from { opacity: 0.72; }
+  to { opacity: 1; }
 }
 
 @media (min-width: 721px) {
