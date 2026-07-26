@@ -230,6 +230,7 @@ body.nav3d-active {
   background: #eff3f6;
   border: 1px solid transparent;
   border-radius: 9px;
+  font: inherit;
   cursor: pointer;
 }
 
@@ -237,21 +238,16 @@ body.nav3d-active {
   background: #e6f1fa;
 }
 
-.nav3d-mode:has(input:checked) {
+.nav3d-mode[aria-checked="true"] {
   color: #075fb9;
   background: #e3f1ff;
   border-color: #6eb4ef;
   box-shadow: inset 0 -3px 0 var(--nav3d-blue);
 }
 
-.nav3d-mode input {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  opacity: 0;
-  cursor: pointer;
+.nav3d-mode:focus-visible {
+  outline: 3px solid rgb(13 132 230 / 30%);
+  outline-offset: 2px;
 }
 
 .nav3d-mode > span {

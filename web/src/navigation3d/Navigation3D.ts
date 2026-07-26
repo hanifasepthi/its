@@ -192,23 +192,21 @@ function modeFields(): string {
     .map((mode) => {
       const profile = MODE_PROFILES[mode];
       return `
-        <label class="nav3d-mode" data-nav3d-mode-label="${mode}">
-          <input
-            type="radio"
-            name="travel_mode"
+        <button
+            type="button"
+            class="nav3d-mode"
             data-nav3d-mode-input
             value="${mode}"
             id="its-nav3d-mode-${mode}"
             title="Moda ${escapeHtml(profile.label)}"
             aria-label="Moda ${escapeHtml(profile.label)}"
-            aria-description="Gunakan moda ${escapeHtml(profile.label)} untuk menghitung rute navigasi."
-            toolparamdescription="Use ${escapeHtml(profile.label)} as the travel mode for ITS Maps 3D route calculation."
-            required
-            ${mode === "car" ? "checked" : ""}
+            role="radio"
+            aria-checked="${mode === "car" ? "true" : "false"}"
+            tabindex="${mode === "car" ? "0" : "-1"}"
           >
           <span aria-hidden="true">${profile.icon}</span>
           <small>${escapeHtml(profile.label)}</small>
-        </label>`;
+        </button>`;
     })
     .join("");
 }
@@ -534,12 +532,13 @@ export class Navigation3D {
     input.addEventListener("keydown", (event) => this.handleSearchKeys(event));
     this.bindSearchSheetGesture();
 
-    this.root?.addEventListener("change", (event) => {
-      const radio = (event.target as Element).closest<HTMLInputElement>("[data-nav3d-mode-input]");
-      if (radio && isNavigationMode(radio.value)) this.setMode(radio.value);
-    });
     this.root?.addEventListener("click", (event) => {
       const target = event.target as Element;
+      const modeButton = target.closest<HTMLButtonElement>("[data-nav3d-mode-input]");
+      if (modeButton && isNavigationMode(modeButton.value)) {
+        this.setMode(modeButton.value);
+        return;
+      }
       const placeButton = target.closest<HTMLButtonElement>("[data-nav3d-place-id]");
       if (!placeButton) return;
       const place = this.searchResults.find((item) => item.id === placeButton.dataset.nav3dPlaceId);
@@ -654,8 +653,10 @@ export class Navigation3D {
 
   private setMode(mode: NavigationMode): void {
     this.mode = mode;
-    this.root?.querySelectorAll<HTMLInputElement>("[data-nav3d-mode-input]").forEach((input) => {
-      input.checked = input.value === mode;
+    this.root?.querySelectorAll<HTMLButtonElement>("[data-nav3d-mode-input]").forEach((button) => {
+      const selected = button.value === mode;
+      button.setAttribute("aria-checked", String(selected));
+      button.tabIndex = selected ? 0 : -1;
     });
     this.element<HTMLSelectElement>("[data-nav3d-mode-parameter]").value = mode;
     this.element("[data-nav3d-speed-limit]").textContent = String(modeSpeedLimit(mode));

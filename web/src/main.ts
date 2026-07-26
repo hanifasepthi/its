@@ -7,6 +7,7 @@ import WIN_PREVIEW_WELCOME from "./windows/welcome.png";
 import WIN_PREVIEW_OPTIONS from "./windows/pilihopsiinstaller.png";
 import WIN_PREVIEW_DONE from "./windows/selesaiinstaller.png";
 import ITS_APP_ICON from "./icon/its.png";
+import ITS_APP_ICON_SMALL from "./icon/its-small.webp";
 import WELCOME_SEGMENT from "./image/welcomsegment.png";
 import {
   drawRfDetrDetections,
@@ -14829,7 +14830,7 @@ function appDataSafetySummaryHtml(info: AppDownloadInfo): string {
 function appPermissionDetailHtml(info: AppDownloadInfo): string {
   return `
     <section class="windows-data-detail-app">
-      <img src="${ITS_APP_ICON}" alt="">
+      <img src="${ITS_APP_ICON_SMALL}" alt="" width="64" height="96">
       <span>
         <strong>ITS Maps ${escapeStaticHtml(info.platformName)}</strong>
         <small>Versi ${escapeStaticHtml(info.versionName)} · pemantauan lalu lintas Raspberry Pi</small>
@@ -15038,12 +15039,12 @@ function itsCreateWindowsDownloadButton(): void {
   host.className = "windows-download-app";
   host.innerHTML = `
     <button type="button" class="windows-download-trigger" aria-label="Download ITS Maps ${info.platformName}" title="Download ITS Maps ${info.platformName}" data-tooltip="Download ITS Maps ${info.platformName}">
-      <img src="${ITS_APP_ICON}" alt="">
+      <img src="${ITS_APP_ICON_SMALL}" alt="" width="64" height="96">
       <span class="windows-download-badge" aria-hidden="true"></span>
     </button>
     <div class="windows-download-hover-card" aria-hidden="true">
       <div class="windows-download-hover-head">
-        <img src="${ITS_APP_ICON}" alt="">
+        <img src="${ITS_APP_ICON_SMALL}" alt="" width="64" height="96">
         <div>
           <strong>ITS Maps ${info.platformName}</strong>
           <span>Versi ${info.versionName}</span>
@@ -15074,7 +15075,7 @@ async function itsShowWindowsDownloadModal(): Promise<void> {
       <div class="windows-download-grip" data-swipe-handle aria-hidden="true"></div>
       <div class="windows-download-view windows-download-summary active" data-download-view="summary">
         <div class="windows-download-head">
-          <img class="windows-download-icon" src="${ITS_APP_ICON}" alt="">
+          <img class="windows-download-icon" src="${ITS_APP_ICON_SMALL}" alt="" width="64" height="96">
           <div>
             <h2 id="windows-download-title">ITS Maps ${info.platformName}</h2>
             <p>Versi ${info.versionName}</p>
@@ -15115,7 +15116,7 @@ async function itsShowWindowsDownloadModal(): Promise<void> {
           <button type="button" class="windows-download-back" data-download-back aria-label="Kembali" title="Kembali">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
           </button>
-          <img class="windows-download-icon" src="${ITS_APP_ICON}" alt="">
+          <img class="windows-download-icon" src="${ITS_APP_ICON_SMALL}" alt="" width="64" height="96">
           <div>
             <h2 data-download-detail-title>Data dan izin aplikasi</h2>
             <p data-download-detail-subtitle>ITS Maps ${info.platformName} ${info.versionName}</p>
