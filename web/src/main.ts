@@ -1544,6 +1544,11 @@ if (staticRoute) {
     poiVisible: (() => {
       try { return localStorage.getItem("its-poi-visible:v1") !== "false"; } catch { return true; }
     })(),
+    transitModeFilter: new Set<TransitGuideMode>(["busway", "bus", "mrt", "lrt", "tram", "monorail", "commuter", "high_speed", "train"]),
+    roadClassFilter: new Set<"major" | "street" | "foot" | "service">(["major", "street", "foot", "service"]),
+    greenVisible: true,
+    waterVisible: true,
+    cctvVisible: true,
     poiVisibilityButton: null as HTMLButtonElement | null,
     trafficById: new Map<string, TrafficState>(),
     roadNameById: new Map<string, string>(),
@@ -4930,7 +4935,7 @@ if (staticRoute) {
     mapRoot.dataset.roadPalettes = [...new Set(guide.roads.map((road) => roadPaletteKey(road)))].sort().join(",");
     const limit = zoom >= 18 ? 120 : zoom >= 16 ? 84 : 52;
 
-    guide.greens.slice(0, zoom >= 17 ? 80 : 44).forEach((green) => {
+    (state.greenVisible ? guide.greens : []).slice(0, zoom >= 17 ? 80 : 44).forEach((green) => {
       if (green.points.length >= 4 && isClosedGuideRing(green.points)) {
         L.polygon(green.points, greenGuideStyle(green)).addTo(state.roadGuideLayer as L.LayerGroup);
       } else {
@@ -4938,7 +4943,7 @@ if (staticRoute) {
       }
     });
 
-    const visibleWaterways = guide.waterways.slice(0, zoom >= 17 ? 70 : 36);
+    const visibleWaterways = (state.waterVisible ? guide.waterways : []).slice(0, zoom >= 17 ? 70 : 36);
     visibleWaterways.forEach((water) => {
       if (water.points.length >= 4 && isClosedGuideRing(water.points)) {
         L.polygon(water.points, {
@@ -4983,13 +4988,16 @@ if (staticRoute) {
       }
     });
 
-    guide.rails.slice(0, zoom >= 17 ? 55 : 30).forEach((rail) => {
+    const railModesVisible = ["commuter", "high_speed", "train"].some((mode) => state.transitModeFilter.has(mode as TransitGuideMode));
+    (railModesVisible ? guide.rails : []).slice(0, zoom >= 17 ? 55 : 30).forEach((rail) => {
       L.polyline(rail.points, railGuideStyle(true)).addTo(state.roadGuideLayer as L.LayerGroup);
       L.polyline(rail.points, railGuideStyle(false)).addTo(state.roadGuideLayer as L.LayerGroup);
       L.polyline(rail.points, railSleeperStyle()).addTo(state.roadGuideLayer as L.LayerGroup);
     });
 
-    const visibleTransit = guide.transit.slice(0, zoom >= 17 ? 80 : 45);
+    const visibleTransit = guide.transit
+      .filter((transit) => state.transitModeFilter.has(transit.mode))
+      .slice(0, zoom >= 17 ? 80 : 45);
     visibleTransit.forEach((transit) => {
       L.polyline(transit.points, transitGuideCasingStyle(transit)).addTo(state.roadGuideLayer as L.LayerGroup);
       L.polyline(transit.points, transitGuideStyle(transit)).addTo(state.roadGuideLayer as L.LayerGroup);
@@ -5057,6 +5065,7 @@ if (staticRoute) {
     });
 
     guide.roads
+      .filter((road) => state.roadClassFilter.has(roadRenderClass(road)))
       .sort((a, b) => {
         const ca = roadRenderClass(a);
         const cb = roadRenderClass(b);
@@ -5126,6 +5135,7 @@ if (staticRoute) {
     }
 
     const pointOrnaments = guide.ornaments
+      .filter((ornament) => state.cctvVisible || (ornament.kind !== "surveillance" && ornament.kind !== "speed_camera"))
       .filter((ornament) => ornament.geometry === "point" && ornamentMinimumZoom(ornament.kind) <= zoom && Boolean(ornament.points[0]) && bounds.contains(ornament.points[0]))
       .sort((a, b) => (
         ornamentPriority(a.kind) - ornamentPriority(b.kind)
@@ -11479,6 +11489,7 @@ if (staticRoute) {
     <button class="mode-btn mode-legend-btn" data-map-symbol-legend type="button" title="Legenda simbol peta" aria-label="Legenda simbol peta" aria-expanded="false">?</button>
     <button class="mode-btn" data-mode="3d" type="button" title="Peta 3D" aria-label="Tampilkan peta 3D" aria-pressed="false">3D</button>
     <button class="mode-btn" data-mode="satellite" type="button" title="Peta satelit" aria-label="Tampilkan peta satelit" aria-pressed="false">Sat</button>
+    <button class="mode-btn mode-dynamics-btn" data-dynamics-panel type="button" title="Filter detail dinamis" aria-label="Buka filter transportasi, jalan, POI, dan CCTV">Dyn</button>
     <div class="map-symbol-legend" data-map-symbol-panel hidden>
       <strong>Legenda 2D</strong>
       <span><i class="legend-road"></i> Jalan utama / avenue</span>
@@ -11494,6 +11505,10 @@ if (staticRoute) {
       container.querySelectorAll<HTMLButtonElement>('.mode-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
           if (btn.dataset.mapSymbolLegend !== undefined) return;
+          if (btn.dataset.dynamicsPanel !== undefined) {
+            openLayerModal();
+            return;
+          }
           const m = (btn.dataset.mode as BaseMapMode) || 'street';
           void setBaseMap(m);
         });
@@ -13303,7 +13318,7 @@ if (staticRoute) {
   <div class="m-layer-backdrop"></div>
   <div class="m-layer-sheet">
     <div class="m-sheet-handle-bar"></div>
-    <div class="m-layer-title">Peta ITS</div>
+    <div class="m-layer-title">Lapisan dinamis ITS Maps</div>
     <div class="m-layer-options">
       <button class="m-layer-opt ${state.baseMode === 'street' ? 'active' : ''}" data-mode="street">
         <div class="m-layer-icon">🗺️</div>
@@ -13318,6 +13333,34 @@ if (staticRoute) {
         <span>3D</span>
       </button>
     </div>
+    <div class="m-dynamics-sections">
+      <fieldset class="m-dynamics-group">
+        <legend>Moda transportasi</legend>
+        ${([
+          ["busway", "Busway"], ["bus", "Bus / angkot"], ["mrt", "MRT"],
+          ["lrt", "LRT"], ["tram", "Tram"], ["monorail", "Monorel"],
+          ["commuter", "KRL komuter"], ["high_speed", "Kereta cepat"], ["train", "Kereta"],
+        ] as Array<[TransitGuideMode, string]>).map(([value, label]) => `
+          <label><input type="checkbox" data-transit-mode="${value}" ${state.transitModeFilter.has(value) ? "checked" : ""}><span>${label}</span></label>
+        `).join("")}
+      </fieldset>
+      <fieldset class="m-dynamics-group">
+        <legend>Jenis jalan</legend>
+        ${([
+          ["major", "Jalan utama/tol"], ["street", "Jalan kota"], ["foot", "Trotoar & sepeda"], ["service", "Jalan layanan"],
+        ] as Array<["major" | "street" | "foot" | "service", string]>).map(([value, label]) => `
+          <label><input type="checkbox" data-road-class="${value}" ${state.roadClassFilter.has(value) ? "checked" : ""}><span>${label}</span></label>
+        `).join("")}
+      </fieldset>
+      <fieldset class="m-dynamics-group">
+        <legend>Objek peta</legend>
+        <label><input type="checkbox" data-map-detail-toggle="green" ${state.greenVisible ? "checked" : ""}><span>🌳 Taman & area hijau</span></label>
+        <label><input type="checkbox" data-map-detail-toggle="water" ${state.waterVisible ? "checked" : ""}><span>💧 Air, sungai & drainase</span></label>
+        <label><input type="checkbox" data-map-detail-toggle="poi" ${state.poiVisible ? "checked" : ""}><span>📍 POI</span></label>
+        <label><input type="checkbox" data-map-detail-toggle="cctv" ${state.cctvVisible ? "checked" : ""}><span>📹 CCTV & kamera kecepatan</span></label>
+        <small><i class="m-video-dot"></i> Video hanya ditampilkan jika feed publik titik tersebut terverifikasi.</small>
+      </fieldset>
+    </div>
   </div>
 `;
 
@@ -13330,6 +13373,37 @@ if (staticRoute) {
         btn.classList.add("active");
         await setBaseMap(mode);
         setTimeout(closeLayerModal, 280);
+      });
+    });
+
+    const rerenderDetails = (): void => {
+      lastRoadGuideFetchBounds = null;
+      void refreshRoadGuideLayer(true);
+    };
+    overlay.querySelectorAll<HTMLInputElement>("[data-transit-mode]").forEach((input) => {
+      input.addEventListener("change", () => {
+        const mode = input.dataset.transitMode as TransitGuideMode;
+        if (input.checked) state.transitModeFilter.add(mode);
+        else state.transitModeFilter.delete(mode);
+        rerenderDetails();
+      });
+    });
+    overlay.querySelectorAll<HTMLInputElement>("[data-road-class]").forEach((input) => {
+      input.addEventListener("change", () => {
+        const roadClass = input.dataset.roadClass as "major" | "street" | "foot" | "service";
+        if (input.checked) state.roadClassFilter.add(roadClass);
+        else state.roadClassFilter.delete(roadClass);
+        rerenderDetails();
+      });
+    });
+    overlay.querySelectorAll<HTMLInputElement>("[data-map-detail-toggle]").forEach((input) => {
+      input.addEventListener("change", () => {
+        const detail = input.dataset.mapDetailToggle;
+        if (detail === "green") state.greenVisible = input.checked;
+        if (detail === "water") state.waterVisible = input.checked;
+        if (detail === "cctv") state.cctvVisible = input.checked;
+        if (detail === "poi") setPoiVisibility(input.checked);
+        if (detail !== "poi") rerenderDetails();
       });
     });
 
@@ -14064,9 +14138,19 @@ async function notifyLatestPublicUpdate(registration: ServiceWorkerRegistration)
 }
 
 if ('serviceWorker' in navigator && !isAndroidApkRuntime()) {
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    const reloadKey = "its-sw-controller-reload:v31";
+    if (sessionStorage.getItem(reloadKey) === "1") return;
+    sessionStorage.setItem(reloadKey, "1");
+    window.location.reload();
+  });
   window.addEventListener('load', async () => {
     try {
-      await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+      const registered = await navigator.serviceWorker.register("/sw.js", {
+        scope: "/",
+        updateViaCache: "none",
+      });
+      await registered.update();
       const registration = await navigator.serviceWorker.ready;
       console.log('[PWA] Service Worker registered');
       void notifyLatestPublicUpdate(registration);
