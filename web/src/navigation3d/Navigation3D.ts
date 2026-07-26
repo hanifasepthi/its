@@ -195,6 +195,7 @@ function modeFields(): string {
         <label class="nav3d-mode" data-nav3d-mode-label="${mode}">
           <input
             type="radio"
+            name="travel_mode"
             data-nav3d-mode-input
             value="${mode}"
             id="its-nav3d-mode-${mode}"
@@ -442,6 +443,9 @@ export class Navigation3D {
   private searchTimer = 0;
   private routeSequence = 0;
   private launcherBeforeOverlay: HTMLElement | null = null;
+  private searchSheetPointerId: number | null = null;
+  private searchSheetStartY = 0;
+  private searchSheetDragY = 0;
 
   mount(): void {
     if (this.root || location.pathname !== "/") return;
@@ -526,6 +530,7 @@ export class Navigation3D {
       this.searchTimer = window.setTimeout(() => void this.performSearch(), SEARCH_DEBOUNCE_MS);
     });
     input.addEventListener("keydown", (event) => this.handleSearchKeys(event));
+    this.bindSearchSheetGesture();
 
     this.root?.addEventListener("change", (event) => {
       const radio = (event.target as Element).closest<HTMLInputElement>("[data-nav3d-mode-input]");
@@ -559,10 +564,45 @@ export class Navigation3D {
     });
   }
 
+  private bindSearchSheetGesture(): void {
+    const panel = this.element<HTMLElement>("[data-nav3d-search-panel]");
+    const reset = (): void => {
+      panel.classList.remove("is-dragging");
+      panel.style.removeProperty("--nav3d-sheet-drag-y");
+      this.searchSheetPointerId = null;
+      this.searchSheetDragY = 0;
+    };
+    panel.addEventListener("pointerdown", (event) => {
+      if (!window.matchMedia("(max-width: 720px)").matches || event.button !== 0) return;
+      const target = event.target as HTMLElement;
+      if (!target.closest(".nav3d-search-header, .nav3d-search-panel") || target.closest("button, input, select, label")) return;
+      this.searchSheetPointerId = event.pointerId;
+      this.searchSheetStartY = event.clientY;
+      this.searchSheetDragY = 0;
+      panel.classList.add("is-dragging");
+      panel.setPointerCapture(event.pointerId);
+    });
+    panel.addEventListener("pointermove", (event) => {
+      if (this.searchSheetPointerId !== event.pointerId) return;
+      this.searchSheetDragY = Math.max(0, event.clientY - this.searchSheetStartY);
+      panel.style.setProperty("--nav3d-sheet-drag-y", `${this.searchSheetDragY}px`);
+    });
+    panel.addEventListener("pointerup", (event) => {
+      if (this.searchSheetPointerId !== event.pointerId) return;
+      const shouldClose = this.searchSheetDragY > Math.min(150, panel.clientHeight * 0.24);
+      reset();
+      if (shouldClose) this.closeSearch();
+    });
+    panel.addEventListener("pointercancel", reset);
+  }
+
   private closeSearch(): void {
     this.searchAbort?.abort();
     window.clearTimeout(this.searchTimer);
-    this.element<HTMLElement>("[data-nav3d-search-panel]").setAttribute("hidden", "");
+    const panel = this.element<HTMLElement>("[data-nav3d-search-panel]");
+    panel.classList.remove("is-dragging");
+    panel.style.removeProperty("--nav3d-sheet-drag-y");
+    panel.setAttribute("hidden", "");
     const launcher = this.element<HTMLButtonElement>("[data-nav3d-launcher]");
     launcher.setAttribute("aria-expanded", "false");
     this.syncNavigationUrl("map");

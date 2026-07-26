@@ -22,7 +22,8 @@ app.whenReady().then(async () => {
   while (Date.now() - started < 45_000) {
     const ready = await window.webContents.executeJavaScript(`Boolean(
       document.querySelector('[data-mode="street"].active') &&
-      document.querySelector('.maplibre-overlay.is-ready canvas')
+      document.querySelector('img.leaflet-tile[src*="cartocdn.com"]') &&
+      !document.querySelector('#its-splash, [data-static-splash]')
     )`);
     if (ready) break;
     await delay(250);
@@ -30,18 +31,18 @@ app.whenReady().then(async () => {
   await delay(2_500);
   const state = await window.webContents.executeJavaScript(`(() => ({
     streetActive: Boolean(document.querySelector('[data-mode="street"].active')),
-    mapLibreReady: Boolean(document.querySelector('.maplibre-overlay.is-ready canvas')),
+    mapLibreAbsent: !document.querySelector('.maplibre-overlay'),
     cartoVisible: [...document.querySelectorAll('img.leaflet-tile')].some((image) =>
       /cartocdn\\.com/i.test(image.currentSrc || image.src) && getComputedStyle(image).display !== 'none'),
     center: new URLSearchParams(location.search).get('lat') + ',' + new URLSearchParams(location.search).get('lng'),
     overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth),
-    canvas: (() => { const canvas = document.querySelector('.maplibre-overlay canvas'); return canvas ? { width: canvas.width, height: canvas.height, clientWidth: canvas.clientWidth, clientHeight: canvas.clientHeight } : null; })(),
-    rects: (() => { const map = document.querySelector('#map')?.getBoundingClientRect(); const overlay = document.querySelector('.maplibre-overlay')?.getBoundingClientRect(); return { map: map && { width: map.width, height: map.height }, overlay: overlay && { width: overlay.width, height: overlay.height } }; })(),
+    overlayPaths: document.querySelectorAll('.leaflet-overlay-pane svg path').length,
+    rects: (() => { const map = document.querySelector('#map')?.getBoundingClientRect(); return { map: map && { width: map.width, height: map.height } }; })(),
   }))()`);
   const image = await window.webContents.capturePage();
   await fs.mkdir(path.dirname(output), { recursive: true });
   await fs.writeFile(output, image.toPNG());
-  if (!state.streetActive || !state.mapLibreReady || state.cartoVisible || state.overflow > 1 || errors.length) {
+  if (!state.streetActive || !state.mapLibreAbsent || !state.cartoVisible || state.overflow > 1 || errors.length) {
     throw new Error(JSON.stringify({ state, errors, archiveRequests }, null, 2));
   }
   console.log(JSON.stringify({ passed: true, target, output, state, archiveRequests: archiveRequests.map((request) => ({ url: request.url, status: request.status, range: request.headers?.["content-range"] })) }, null, 2));

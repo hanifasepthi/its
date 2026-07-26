@@ -976,6 +976,14 @@ body.nav3d-active {
     padding: 10px;
     border-radius: 18px;
     animation-name: nav3d-sheet-in;
+    transform: translate3d(0, var(--nav3d-sheet-drag-y, 0px), 0);
+    transition: transform 220ms cubic-bezier(.2, .8, .2, 1);
+    touch-action: pan-y;
+  }
+
+  .nav3d-search-panel.is-dragging {
+    transition: none;
+    user-select: none;
   }
 
   .nav3d-search-panel::before {

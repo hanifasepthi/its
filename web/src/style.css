@@ -6507,6 +6507,27 @@ body.its-agent-cursor-active * {
   overflow: visible !important;
 }
 
+.road-guide-structure-icon {
+  background: transparent !important;
+  border: 0 !important;
+}
+
+.road-guide-structure-icon > span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  color: #fff;
+  background: #715b43;
+  border: 2px solid #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 7px rgba(15, 23, 42, .34);
+  transform: translate(-50%, -50%);
+}
+
 .rail-crossing-mark {
   position: absolute;
   left: 50%;

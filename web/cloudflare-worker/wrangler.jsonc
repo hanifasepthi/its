@@ -30,7 +30,8 @@
   ],
   "kv_namespaces": [
     {
-      "binding": "EDGE_STATE"
+      "binding": "EDGE_STATE",
+      "id": "6a777bda1da9406c874db73e0d16f7ae"
     }
   ],
   "durable_objects": {

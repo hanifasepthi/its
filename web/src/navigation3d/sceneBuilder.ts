@@ -673,7 +673,11 @@ export function buildScene(
     const isTunnel = isTruthy(tags.tunnel) || tags.tunnel === "building_passage" || layer < 0;
     const isFootbridge =
       isBridge && ["footway", "pedestrian", "steps", "path"].includes(tags.highway);
-    const baseHeight = isBridge ? Math.max(1, layer || 1) * 5 : 0;
+    // OSM commonly marks only the bridge deck, without approach elevation
+    // geometry. Raising the whole polygon by 5 m created disconnected,
+    // floating ramps. Keep the deck continuous with its approach until a
+    // measured elevation profile is available.
+    const baseHeight = 0;
     const surface = feature(
       polygonAroundLine(points, widthM),
       {
@@ -686,7 +690,7 @@ export function buildScene(
         surfaceRole: roadRole(tags),
         layer,
         baseHeight,
-        deckHeight: baseHeight + (isFootbridge ? 0.4 : 0.72),
+        deckHeight: baseHeight + (isFootbridge ? 0.28 : 0.42),
         source: "osm-tag-derived",
       },
       way.id,

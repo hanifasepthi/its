@@ -11,7 +11,14 @@
   "theme_color": "#ffffff",
   "orientation": "portrait-primary",
   "categories": ["maps", "navigation", "utilities"],
-  "prefer_related_applications": false,
+  "prefer_related_applications": true,
+  "related_applications": [
+    {
+      "platform": "windows",
+      "id": "HanifaTeams.ITSMaps_mqhjscd51gq8g!ITSMaps",
+      "url": "https://apps.microsoft.com/detail/9MWFGGW3FD2C"
+    }
+  ],
   "icons": [
     {
       "src": "/icons/icon-96.png",

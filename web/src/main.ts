@@ -4850,6 +4850,15 @@ if (staticRoute) {
     };
   }
 
+  function makePedestrianStructureIcon(label: string): L.DivIcon {
+    return L.divIcon({
+      className: "road-guide-structure-icon",
+      html: `<span role="img" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 16h18M5 16V9m14 7V9M5 11h14M8 11l2-4h4l2 4M10 16v4m4-4v4"/></svg></span>`,
+      iconSize: [48, 48],
+      iconAnchor: [24, 24],
+    });
+  }
+
   function resetRoadGuideMetrics(): void {
     mapRoot.dataset.transitPaths = "0";
     mapRoot.dataset.transitMemberPaths = "0";
@@ -5157,13 +5166,20 @@ if (staticRoute) {
         if (!collides) selected.push(candidate);
         return selected;
       }, []);
-    selectedStructureLabels.forEach(({ label, midpoint }) => {
-      L.marker(midpoint.latlng, {
+    selectedStructureLabels.forEach(({ road, label, midpoint }) => {
+      const isPedestrianStructure = Boolean(road.pedestrianStructure);
+      const marker = L.marker(midpoint.latlng, {
         pane: ROAD_ORNAMENT_PANE,
-        icon: makeRoadSemanticNameIcon(label, midpoint.bearing),
-        interactive: false,
+        icon: isPedestrianStructure
+          ? makePedestrianStructureIcon(label)
+          : makeRoadSemanticNameIcon(label, midpoint.bearing),
+        interactive: isPedestrianStructure,
+        keyboard: isPedestrianStructure,
+        title: isPedestrianStructure ? label : undefined,
         zIndexOffset: 114,
-      }).addTo(state.roadGuideLayer as L.LayerGroup);
+      });
+      if (isPedestrianStructure) marker.bindTooltip(escapeHtml(label), { direction: "top", opacity: 0.94 });
+      marker.addTo(state.roadGuideLayer as L.LayerGroup);
     });
 
     // Crossing data remains complete in the source bundle/GeoJSON, but the
@@ -8086,7 +8102,7 @@ if (staticRoute) {
 
   async function setBaseMap(mode: BaseMapMode): Promise<void> {
     const isCurrentSurface = mode === "street"
-      ? Boolean(state.maplibreMap) && !map.hasLayer(satelliteLayer)
+      ? !state.maplibreMap && map.hasLayer(streetLayer) && !map.hasLayer(satelliteLayer)
       : mode === "3d"
         ? Boolean(state.maplibreMap) && !map.hasLayer(satelliteLayer)
         : !state.maplibreMap && map.hasLayer(satelliteLayer) && !map.hasLayer(streetLayer);
@@ -8104,28 +8120,15 @@ if (staticRoute) {
     mapEl.classList.toggle("map-mode-3d", mode === "3d");
 
     if (mode === "street") {
-      if (map.hasLayer(satelliteLayer)) map.removeLayer(satelliteLayer);
-      if (!mapLibreSurfaceReady() && !map.hasLayer(streetLayer)) streetLayer.addTo(map);
-      const maplibreMap = await ensureMapLibreMap();
+      await removeMapLibreMap();
       if (state.baseMode !== mode) return;
-      if (!maplibreMap) {
-        if (!map.hasLayer(streetLayer)) streetLayer.addTo(map);
-        restoreLeafletPoiSurface();
-      } else {
-        maplibreMap.resize();
-        applyMapLibreDimensionMode(maplibreMap);
-        maplibreMap.easeTo({
-          center: map.getCenter(),
-          zoom: map.getZoom(),
-          bearing: map.getBearing?.() ?? 0,
-          pitch: 0,
-          duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 260,
-        });
-        state.roadGuideLayer?.clearLayers();
-        state.visionLayer?.clearLayers();
-        renderCurrentPoiDataset();
-        void refreshMapLibreDetailLayer(true);
-      }
+      restoreLeafletPoiSurface();
+      if (map.hasLayer(satelliteLayer)) map.removeLayer(satelliteLayer);
+      if (!map.hasLayer(streetLayer)) streetLayer.addTo(map);
+      renderCurrentPoiDataset();
+      void refreshOverpassLayer();
+      void refreshRoadGuideLayer(true);
+      void refreshVisionLayer(true);
     } else if (mode === "3d") {
       if (map.hasLayer(satelliteLayer)) map.removeLayer(satelliteLayer);
       // Keep CARTO underneath until MapLibre has a complete
