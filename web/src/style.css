@@ -6531,6 +6531,119 @@ body.its-agent-cursor-active * {
   transform: translate(-50%, -50%);
 }
 
+.map-camera-source-sheet {
+  width: min(94vw, 680px);
+}
+
+.map-camera-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 2px 0 12px;
+  color: #b91c1c;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.map-camera-live-badge i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #dc2626;
+  box-shadow: 0 0 0 5px rgba(220, 38, 38, .12);
+}
+
+.map-camera-public-player {
+  overflow: hidden;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  margin-bottom: 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 16px;
+  background: #0f172a;
+}
+
+.map-camera-public-player iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.map-camera-unavailable {
+  margin-bottom: 14px;
+  padding: 14px;
+  color: #334155;
+  border: 1px solid #fde68a;
+  border-radius: 14px;
+  background: #fffbeb;
+}
+
+.map-camera-unavailable strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #92400e;
+}
+
+.map-camera-unavailable p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.map-camera-source-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 14px;
+}
+
+.map-camera-source-meta > div {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.map-camera-source-meta dt {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.map-camera-source-meta dd {
+  overflow-wrap: anywhere;
+  margin: 3px 0 0;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.map-camera-source-link {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  color: #fff;
+  border-radius: 12px;
+  background: #0f75d8;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+@media (max-width: 640px) {
+  .map-camera-source-sheet {
+    width: 100%;
+  }
+
+  .map-camera-source-meta {
+    grid-template-columns: 1fr;
+  }
+}
+
 .rail-crossing-mark {
   position: absolute;
   left: 50%;

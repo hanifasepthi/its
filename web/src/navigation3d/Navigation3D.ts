@@ -216,9 +216,14 @@ function applicationHtml(): string {
     <div class="nav3d-launcher">
       <input
         type="search"
+        id="its-nav3d-quick-search"
+        name="destination_query"
         class="nav3d-quick-search"
         data-nav3d-quick-search
+        title="Cari tempat atau rute"
         aria-label="Cari tempat atau rute"
+        aria-description="Masukkan nama tempat, alamat, atau tujuan navigasi ITS Maps."
+        toolparamdescription="Nama tempat, alamat, atau tujuan yang ingin dicari pada ITS Maps."
         placeholder="Cari tempat atau rute"
         autocomplete="off"
       >

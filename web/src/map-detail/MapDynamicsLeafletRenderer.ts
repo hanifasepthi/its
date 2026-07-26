@@ -50,6 +50,7 @@ export type MapDynamicsRendererOptions = {
   minimumSameViewportAgeMs?: number;
   autoStart?: boolean;
   onPublish?: (collection: MapDetailFeatureCollection, stats: Readonly<MapDynamicsRendererStats>) => void;
+  onPointClick?: (feature: MapDynamicsFeature, point: L.LatLng) => void;
 };
 
 const EMPTY_COLLECTION: MapDetailFeatureCollection = { type: "FeatureCollection", features: [] };
@@ -736,8 +737,8 @@ export class MapDynamicsLeafletRenderer {
   private readonly pointPaneName: string;
   private readonly rootLayer = L.layerGroup();
   private readonly vectorRenderer: L.SVG;
-  private readonly options: Required<Omit<MapDynamicsRendererOptions, "manifestUrl" | "loader" | "onPublish">>
-    & Pick<MapDynamicsRendererOptions, "onPublish">;
+  private readonly options: Required<Omit<MapDynamicsRendererOptions, "manifestUrl" | "loader" | "onPublish" | "onPointClick">>
+    & Pick<MapDynamicsRendererOptions, "onPublish" | "onPointClick">;
   private readonly ownsPane: boolean;
   private readonly ownsPointPane: boolean;
   private active = false;
@@ -787,6 +788,7 @@ export class MapDynamicsLeafletRenderer {
       minimumSameViewportAgeMs: options.minimumSameViewportAgeMs ?? 8_000,
       autoStart: options.autoStart ?? true,
       onPublish: options.onPublish,
+      onPointClick: options.onPointClick,
     };
     if (this.options.autoStart) this.start();
   }
@@ -1070,6 +1072,7 @@ export class MapDynamicsLeafletRenderer {
           alt: title,
         });
         marker.bindTooltip(escapeHtml(title), { direction: "top", sticky: true, opacity: 0.94 }).addTo(group);
+        marker.on("click", () => this.options.onPointClick?.(dominant.feature, dominant.point));
         candidates.forEach(({ feature }) => publishFeature(feature));
         clusterMarkers += 1;
         clusteredPoints += candidates.length;
@@ -1091,6 +1094,7 @@ export class MapDynamicsLeafletRenderer {
         alt: title,
       });
       bindFeatureTooltip(marker, candidate.feature).addTo(group);
+      marker.on("click", () => this.options.onPointClick?.(candidate.feature, candidate.point));
       publishFeature(candidate.feature);
       layers += 1;
     });

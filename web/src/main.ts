@@ -1683,6 +1683,61 @@ if (staticRoute) {
   state.overpassLayer = L.layerGroup().addTo(map);
   state.roadGuideLayer = L.layerGroup().addTo(map);
   state.visionLayer = L.layerGroup().addTo(map);
+
+  function openMapDynamicsPoint(feature: MapDetailFeatureCollection["features"][number], point: L.LatLng): void {
+    const properties = feature.properties || {};
+    const kind = String(properties.kind || "").toLowerCase();
+    if (!/(?:cctv|camera|surveillance|speed_camera)/.test(kind)) return;
+    document.getElementById("map-dynamics-camera-modal")?.remove();
+    const name = String(properties.name || properties.title || "Kamera CCTV");
+    const source = String(properties.source || "Sumber data peta");
+    const sourceUrl = usablePublicMediaUrl(String(properties.sourceUrl || ""));
+    const streamCandidate = String(properties.streamUrl || properties.publicUrl || properties.linkLive || properties.link_live || "");
+    // Never move credentials embedded by an upstream metadata service into
+    // client HTML. A public player is rendered only for a credential-free URL.
+    const streamUrl = /^(?:https?):\/\//i.test(streamCandidate) && !/@/.test(streamCandidate)
+      ? usablePublicMediaUrl(streamCandidate)
+      : "";
+    const streamStatus = String(properties.streamStatus || (streamUrl ? "public-live" : "metadata-only"));
+    const modal = document.createElement("div");
+    modal.id = "map-dynamics-camera-modal";
+    modal.className = "map-license-modal map-camera-source-modal";
+    modal.innerHTML = `
+      <section class="map-license-sheet map-camera-source-sheet" role="dialog" aria-modal="true" aria-labelledby="map-camera-source-title">
+        <div class="map-license-grip" data-swipe-handle aria-hidden="true"></div>
+        <header class="map-license-head">
+          <div><span>CCTV terverifikasi</span><h2 id="map-camera-source-title">${escapeHtml(name)}</h2></div>
+          <button type="button" data-camera-source-close aria-label="Tutup detail CCTV" title="Tutup"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        </header>
+        ${streamUrl ? `
+          <div class="map-camera-live-badge"><i></i> LIVE dari penyedia resmi</div>
+          <div class="map-camera-public-player">
+            <iframe src="${escapeHtml(streamUrl)}" title="Video realtime ${escapeHtml(name)}" loading="eager" allow="autoplay; fullscreen; picture-in-picture" referrerpolicy="no-referrer"></iframe>
+          </div>
+        ` : `
+          <div class="map-camera-unavailable">
+            <strong>Lokasi kamera tersedia, URL video publik langsung belum tersedia.</strong>
+            <p>ITS Maps tidak menebak URL dan tidak menyalin kredensial kamera ke browser. Status sumber: ${escapeHtml(streamStatus)}.</p>
+          </div>
+        `}
+        <dl class="map-camera-source-meta">
+          <div><dt>Koordinat</dt><dd>${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}</dd></div>
+          <div><dt>Sumber</dt><dd>${escapeHtml(source)}</dd></div>
+        </dl>
+        ${sourceUrl ? `<a class="map-camera-source-link" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">Buka sumber resmi</a>` : ""}
+      </section>`;
+    const close = () => {
+      modal.classList.remove("open");
+      window.setTimeout(() => modal.remove(), 220);
+    };
+    modal.addEventListener("click", (event) => { if (event.target === modal) close(); });
+    modal.querySelector("[data-camera-source-close]")?.addEventListener("click", close);
+    document.body.appendChild(modal);
+    const sheet = modal.querySelector<HTMLElement>(".map-camera-source-sheet");
+    if (sheet) setupSheetSwipe(sheet, close);
+    requestAnimationFrame(() => modal.classList.add("open"));
+  }
+
   const mapDynamicsRenderer = new MapDynamicsLeafletRenderer(map, {
     manifestUrl: "/data/map-dynamics/manifest.json",
     paneName: "its-map-dynamics",
@@ -1691,6 +1746,7 @@ if (staticRoute) {
     pointPaneZIndex: 620,
     moveDebounceMs: 260,
     refreshIntervalMs: 5 * 60_000,
+    onPointClick: openMapDynamicsPoint,
   });
 
   function applySharedLocationFromUrl(): void {
@@ -5160,15 +5216,33 @@ if (staticRoute) {
     mapRoot.dataset.ornamentVisible = String(selectedOrnaments.length);
     selectedOrnaments.forEach((ornament) => {
       const title = [ornament.name, `${ornament.tagKey}=${ornament.tagValue}`].filter(Boolean).join(" · ");
-      L.marker(ornament.points[0], {
+      const marker = L.marker(ornament.points[0], {
         pane: ROAD_ORNAMENT_PANE,
         icon: makeOrnamentIcon(ornament),
         interactive: true,
-        keyboard: false,
+        keyboard: true,
         title,
         zIndexOffset: 120,
-      }).bindTooltip(escapeHtml(title), { direction: "top", sticky: true, opacity: 0.94 })
-        .addTo(state.roadGuideLayer as L.LayerGroup);
+      }).bindTooltip(escapeHtml(title), { direction: "top", sticky: true, opacity: 0.94 });
+      if (ornament.kind === "surveillance" || ornament.kind === "speed_camera") {
+        marker.on("click", () => openMapDynamicsPoint({
+          type: "Feature",
+          id: ornament.id,
+          geometry: {
+            type: "Point",
+            coordinates: [ornament.points[0].lng, ornament.points[0].lat],
+          },
+          properties: {
+            ...ornament.detail,
+            kind: ornament.kind === "surveillance" ? "cctv" : "speed_camera",
+            name: ornament.name || (ornament.kind === "surveillance" ? "Kamera pengawas" : "Kamera kecepatan"),
+            source: "OpenStreetMap",
+            sourceUrl: "https://www.openstreetmap.org/",
+            streamStatus: "metadata-only",
+          },
+        }, ornament.points[0]));
+      }
+      marker.addTo(state.roadGuideLayer as L.LayerGroup);
     });
 
     const selectedStructureLabels = zoom < 17 ? [] : guide.roads
