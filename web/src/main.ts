@@ -4258,7 +4258,7 @@ if (staticRoute) {
   }
 
   function makeTransitNameIcon(transit: TransitGuideRecord): L.DivIcon {
-    const label = transit.label;
+    const label = transit.ref || transit.name || transit.route || transit.label;
     const title = transitDetailTitle(transit) || label;
     return L.divIcon({
       className: "transit-guide-name-icon",
@@ -4760,6 +4760,7 @@ if (staticRoute) {
   }
 
   const rememberedRoadGuideBundles = new Map<string, RoadGuideBundle>();
+  let visibleRoadGuideBundle: RoadGuideBundle | null = null;
   // Bump when parsed tags or derived geometry change so old cached bundles do
   // not silently drop properties required by the MapLibre detail renderer.
   const ROAD_GUIDE_CACHE_VERSION = 7;
@@ -4884,6 +4885,7 @@ if (staticRoute) {
     if (!state.roadGuideLayer) state.roadGuideLayer = L.layerGroup().addTo(map);
     if (state.baseMode !== "street" || state.maplibreMap) {
       state.roadGuideLayer.clearLayers();
+      visibleRoadGuideBundle = null;
       resetRoadGuideMetrics();
       return;
     }
@@ -4894,6 +4896,7 @@ if (staticRoute) {
     // map equivalent to the clean 2D view requested by the user.
     if (zoom < 16.75) {
       state.roadGuideLayer.clearLayers();
+      visibleRoadGuideBundle = null;
       resetRoadGuideMetrics();
       return;
     }
@@ -4916,6 +4919,7 @@ if (staticRoute) {
     }
     if (!selectedGuide) return;
     const guide = rememberRoadGuideBundle(regionKey, selectedGuide);
+    visibleRoadGuideBundle = guide;
     state.roadGuideLayer.clearLayers();
     mapRoot.dataset.transitPaths = String(guide.transit.length);
     const routeTransit = guide.transit.filter((transit) => transit.source === "route");
@@ -13314,6 +13318,59 @@ if (staticRoute) {
 
     const overlay = document.createElement("div");
     overlay.id = "m-layer-modal";
+    const guide = visibleRoadGuideBundle;
+    const transitLegend = guide?.transit
+      .filter((item) => state.transitModeFilter.has(item.mode))
+      .filter((item, index, rows) => rows.findIndex((candidate) => (
+        candidate.mode === item.mode
+        && candidate.label === item.label
+        && candidate.from === item.from
+        && candidate.to === item.to
+      )) === index)
+      .slice(0, 28) || [];
+    const roadLegend = guide?.roads
+      .filter((item) => state.roadClassFilter.has(roadRenderClass(item)))
+      .filter((item, index, rows) => rows.findIndex((candidate) => (
+        candidate.name === item.name && candidate.highway === item.highway
+      )) === index)
+      .slice(0, 24) || [];
+    const ornamentLegend = (guide?.ornaments
+      .reduce<Array<{ kind: MapOrnamentKind; count: number }>>((rows, item) => {
+        const found = rows.find((row) => row.kind === item.kind);
+        if (found) found.count += 1;
+        else rows.push({ kind: item.kind, count: 1 });
+        return rows;
+      }, [])
+      .sort((a, b) => ornamentPriority(a.kind) - ornamentPriority(b.kind))) || [];
+    const namedNature = [
+      ...(guide?.waterways || []).filter((item) => item.name).map((item) => ({ icon: "💧", name: item.name })),
+      ...(guide?.greens || []).filter((item) => item.name).map((item) => ({ icon: "🌳", name: item.name })),
+    ].filter((item, index, rows) => rows.findIndex((candidate) => candidate.name === item.name) === index).slice(0, 16);
+    const ornamentNames: Partial<Record<MapOrnamentKind, string>> = {
+      surveillance: "CCTV", speed_camera: "Kamera kecepatan / ETLE", street_lamp: "Lampu jalan",
+      traffic_calming: "Penenang lalu lintas", toll_gate: "Gerbang tol", gate: "Gerbang",
+      barrier: "Pembatas", guardrail: "Pagar pengaman", bollard: "Bollard", hydrant: "Hidran",
+      bench: "Bangku", waste_basket: "Tempat sampah", drinking_water: "Air minum",
+      toilets: "Toilet", entrance: "Pintu masuk", elevator: "Lift", escalator: "Eskalator",
+      manhole: "Manhole", drain_grate: "Drainase", retaining_wall: "Dinding penahan",
+      seawall: "Tanggul", taxi: "Taksi", bicycle_parking: "Parkir sepeda",
+      charging_station: "Pengisian kendaraan", park_and_ride: "Park and ride",
+    };
+    const transitModeNames: Record<TransitGuideMode, string> = {
+      busway: "Busway", bus: "Bus / angkot", mrt: "MRT", lrt: "LRT", tram: "Tram",
+      monorail: "Monorel", commuter: "KRL komuter", high_speed: "Kereta cepat", train: "Kereta",
+    };
+    const transitDetailsHtml = transitLegend.length ? transitLegend.map((item) => {
+      const endpoints = item.from && item.to ? `${item.from} → ${item.to}` : item.from || item.to || item.network || item.operator;
+      return `<li><i style="--legend-color:${escapeHtml(item.color)}"></i><span><b>${escapeHtml(item.ref || item.name || item.label || transitModeNames[item.mode])}</b>${endpoints ? `<small>${escapeHtml(endpoints)}</small>` : ""}</span></li>`;
+    }).join("") : `<li class="m-legend-empty">Perbesar peta untuk membaca rute di area ini.</li>`;
+    const roadDetailsHtml = roadLegend.length ? roadLegend.map((item) => (
+      `<li><i class="road-${roadRenderClass(item)}"></i><span><b>${escapeHtml(item.name || item.ref || "Jalan tanpa nama")}</b><small>${escapeHtml(item.highway)}${item.lanes ? ` · ${item.lanes} lajur` : ""}${item.detail.bridge ? " · jembatan" : ""}</small></span></li>`
+    )).join("") : `<li class="m-legend-empty">Perbesar peta untuk membaca jenis jalan di area ini.</li>`;
+    const objectDetailsHtml = [
+      ...ornamentLegend.map((item) => `<li><span class="m-legend-symbol">${ornamentSymbolMarkup(item.kind).markup}</span><span><b>${escapeHtml(ornamentNames[item.kind] || item.kind)}</b><small>${item.count.toLocaleString("id-ID")} titik pada area termuat</small></span></li>`),
+      ...namedNature.map((item) => `<li><span class="m-legend-symbol">${item.icon}</span><span><b>${escapeHtml(item.name)}</b><small>Nama resmi dari data peta</small></span></li>`),
+    ].join("") || `<li class="m-legend-empty">Belum ada objek bernama pada area termuat.</li>`;
     overlay.innerHTML = `
   <div class="m-layer-backdrop"></div>
   <div class="m-layer-sheet">
@@ -13334,8 +13391,9 @@ if (staticRoute) {
       </button>
     </div>
     <div class="m-dynamics-sections">
-      <fieldset class="m-dynamics-group">
-        <legend>Moda transportasi</legend>
+      <details class="m-dynamics-group" open>
+        <summary>Moda transportasi <span>${transitLegend.length} jalur</span></summary>
+        <div class="m-dynamics-grid">
         ${([
           ["busway", "Busway"], ["bus", "Bus / angkot"], ["mrt", "MRT"],
           ["lrt", "LRT"], ["tram", "Tram"], ["monorail", "Monorel"],
@@ -13343,23 +13401,31 @@ if (staticRoute) {
         ] as Array<[TransitGuideMode, string]>).map(([value, label]) => `
           <label><input type="checkbox" data-transit-mode="${value}" ${state.transitModeFilter.has(value) ? "checked" : ""}><span>${label}</span></label>
         `).join("")}
-      </fieldset>
-      <fieldset class="m-dynamics-group">
-        <legend>Jenis jalan</legend>
+        </div>
+        <ul class="m-dynamics-legend">${transitDetailsHtml}</ul>
+      </details>
+      <details class="m-dynamics-group">
+        <summary>Jenis jalan <span>${roadLegend.length} jenis/nama</span></summary>
+        <div class="m-dynamics-grid">
         ${([
           ["major", "Jalan utama/tol"], ["street", "Jalan kota"], ["foot", "Trotoar & sepeda"], ["service", "Jalan layanan"],
         ] as Array<["major" | "street" | "foot" | "service", string]>).map(([value, label]) => `
           <label><input type="checkbox" data-road-class="${value}" ${state.roadClassFilter.has(value) ? "checked" : ""}><span>${label}</span></label>
         `).join("")}
-      </fieldset>
-      <fieldset class="m-dynamics-group">
-        <legend>Objek peta</legend>
+        </div>
+        <ul class="m-dynamics-legend">${roadDetailsHtml}</ul>
+      </details>
+      <details class="m-dynamics-group">
+        <summary>POI, alam & ornamen <span>${ornamentLegend.reduce((sum, item) => sum + item.count, 0)} objek</span></summary>
+        <div class="m-dynamics-grid">
         <label><input type="checkbox" data-map-detail-toggle="green" ${state.greenVisible ? "checked" : ""}><span>🌳 Taman & area hijau</span></label>
         <label><input type="checkbox" data-map-detail-toggle="water" ${state.waterVisible ? "checked" : ""}><span>💧 Air, sungai & drainase</span></label>
         <label><input type="checkbox" data-map-detail-toggle="poi" ${state.poiVisible ? "checked" : ""}><span>📍 POI</span></label>
         <label><input type="checkbox" data-map-detail-toggle="cctv" ${state.cctvVisible ? "checked" : ""}><span>📹 CCTV & kamera kecepatan</span></label>
-        <small><i class="m-video-dot"></i> Video hanya ditampilkan jika feed publik titik tersebut terverifikasi.</small>
-      </fieldset>
+        </div>
+        <p class="m-video-note"><i class="m-video-dot"></i> Video hanya ditampilkan jika feed publik dan koordinat titiknya terverifikasi.</p>
+        <ul class="m-dynamics-legend">${objectDetailsHtml}</ul>
+      </details>
     </div>
   </div>
 `;
