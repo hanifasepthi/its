@@ -23,6 +23,7 @@
     "map:data:check": "node scripts/qa-map-dynamics.mjs",
     "map:data:coverage:check": "node scripts/qa-map-dynamics-coverage.mjs",
     "map:data:ingest": "node scripts/ingest-map-dynamics-overpass.mjs",
+    "map:data:extract:pmtiles": "node scripts/extract-national-pmtiles.mjs",
     "map:data:ingest:check": "node scripts/qa-map-dynamics-ingest.mjs",
     "map:transit:check": "node scripts/qa-transit-relation-semantics.mjs",
     "map:data:promote": "node scripts/promote-map-dynamics-observations.mjs",

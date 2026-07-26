@@ -1,8 +1,10 @@
-const CACHE_NAME = 'its-maps-cache-v19';
+const CACHE_NAME = 'its-maps-cache-v30';
 const OFFLINE_URLS = [
   '/',
   '/index.html',
-  '/presentation/',
+  '/presentation',
+  '/analytics.js',
+  '/data/map-dynamics/manifest.json',
   '/desktop/renderer.html',
   '/document',
   '/documentation',
@@ -61,15 +63,15 @@ function basePresentationManifest(recent = []) {
     name: item.title || `Presentasi terakhir ${index + 1}`,
     short_name: (item.title || 'Terakhir').slice(0, 12),
     description: 'Buka presentasi yang baru dibuka di perangkat ini.',
-    url: item.url || '/presentation/?last=1&source=pwa-shortcut',
+    url: item.url || '/presentation?last=1&source=pwa-shortcut',
     icons: [{ src: '/icons/presentation-96.png', sizes: '96x96', type: 'image/png' }]
   }));
   return {
-    id: '/presentation/?source=pwa',
+    id: '/presentation?source=pwa',
     name: 'ITS Presentasi',
     short_name: 'Presentasi',
     description: 'ITS Presentasi untuk membuat, mengimpor, membagikan, dan mempresentasikan slide realtime dengan komentar dan WebUSB ADB.',
-    start_url: '/presentation/?source=pwa',
+    start_url: '/presentation?source=pwa',
     scope: '/presentation/',
     display: 'standalone',
     display_override: ['standalone', 'minimal-ui'],
@@ -94,14 +96,14 @@ function basePresentationManifest(recent = []) {
         name: 'Buka presentasi terakhir',
         short_name: 'Terakhir',
         description: 'Buka presentasi terakhir yang pernah dibuka di perangkat ini.',
-        url: '/presentation/?last=1&source=pwa-shortcut',
+        url: '/presentation?last=1&source=pwa-shortcut',
         icons: [{ src: '/icons/presentation-96.png', sizes: '96x96', type: 'image/png' }]
       },
       {
         name: 'Buat presentasi baru',
         short_name: 'Baru',
         description: 'Mulai dari daftar project ITS Presentasi.',
-        url: '/presentation/?source=pwa-new',
+        url: '/presentation?source=pwa-new',
         icons: [{ src: '/icons/presentation-96.png', sizes: '96x96', type: 'image/png' }]
       }
     ].slice(0, 4)
@@ -130,7 +132,12 @@ async function presentationManifestResponse() {
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(OFFLINE_URLS))
+    caches.open(CACHE_NAME).then(async (cache) => {
+      await Promise.allSettled(OFFLINE_URLS.map(async (url) => {
+        const response = await fetch(new Request(url, { cache: 'reload' }));
+        if (response.ok) await cache.put(url, response);
+      }));
+    })
   );
 });
 
@@ -194,7 +201,7 @@ self.addEventListener('message', (event) => {
   if (data.type !== 'ITS_PRESENTATION_RECENTS' || !Array.isArray(data.items)) return;
   const items = data.items.slice(0, 3).map((item) => ({
     title: String(item.title || 'Presentasi').slice(0, 64),
-    url: String(item.url || '/presentation/?last=1&source=pwa-shortcut'),
+    url: String(item.url || '/presentation?last=1&source=pwa-shortcut'),
     themeColor: /^#[0-9a-f]{6}$/i.test(String(item.themeColor || '')) ? String(item.themeColor) : undefined,
     backgroundColor: /^#[0-9a-f]{6}$/i.test(String(item.backgroundColor || '')) ? String(item.backgroundColor) : undefined
   }));
@@ -205,15 +212,49 @@ self.addEventListener('message', (event) => {
   );
 });
 
+function safeNotificationUrl(value) {
+  try {
+    const url = new URL(String(value || '/'), self.location.origin);
+    const trustedHosts = new Set([
+      self.location.hostname,
+      'itstelkom.web.app',
+      'itstelkom.firebaseapp.com',
+      'its.hanifahseptiani45.workers.dev'
+    ]);
+    if (url.protocol !== 'https:' || !trustedHosts.has(url.hostname)) return new URL('/', self.location.origin).href;
+    return url.href;
+  } catch {
+    return new URL('/', self.location.origin).href;
+  }
+}
+
+function normalizedPushPayload(payload) {
+  const notification = payload?.notification && typeof payload.notification === 'object' ? payload.notification : {};
+  const data = payload?.data && typeof payload.data === 'object' ? payload.data : {};
+  return {
+    title: notification.title || data.title || payload?.title || 'ITS Maps',
+    body: notification.body || data.body || payload?.body || payload?.message || 'Pembaruan ITS Maps tersedia.',
+    icon: notification.icon || data.icon || payload?.icon || '/icons/icon-192.png',
+    badge: data.badge || payload?.badge || '/icons/icon-96.png',
+    image: notification.image || data.image || payload?.image || undefined,
+    tag: data.tag || payload?.tag || 'its-public-update',
+    eventId: data.eventId || payload?.eventId || '',
+    url: safeNotificationUrl(data.url || payload?.url || payload?.link || payload?.fcmOptions?.link || '/new')
+  };
+}
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = new URL(event.notification.data?.url || '/', self.location.origin).href;
+  if (event.action === 'dismiss') return;
+  const targetUrl = safeNotificationUrl(event.notification.data?.url || '/');
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-      const existing = clients.find((client) => 'focus' in client);
+      const existing = clients.find((client) => {
+        try { return new URL(client.url).origin === new URL(targetUrl).origin && 'focus' in client; }
+        catch { return false; }
+      }) || clients.find((client) => 'focus' in client);
       if (existing) {
-        existing.navigate(targetUrl);
-        return existing.focus();
+        return existing.navigate(targetUrl).then(() => existing.focus());
       }
       return self.clients.openWindow(targetUrl);
     })
@@ -227,16 +268,34 @@ self.addEventListener('push', (event) => {
   } catch {
     payload = { body: event.data?.text() };
   }
-  const title = payload.title || 'ITS Maps';
-  const targetUrl = payload.url || payload.link || '/new';
+  const notification = normalizedPushPayload(payload);
   event.waitUntil(
-    self.registration.showNotification(title, {
-      body: payload.body || payload.message || 'Pembaruan ITS Maps tersedia.',
-      icon: payload.icon || '/icons/icon-192.png',
-      badge: payload.badge || '/icons/icon-96.png',
-      image: payload.image,
-      tag: payload.tag || 'its-public-update',
-      data: { url: targetUrl },
+    Promise.all([
+      self.registration.showNotification(notification.title, {
+        body: notification.body,
+        icon: notification.icon,
+        badge: notification.badge,
+        image: notification.image,
+        tag: notification.tag,
+        timestamp: Date.now(),
+        renotify: false,
+        data: { url: notification.url, eventId: notification.eventId },
+        actions: [
+          { action: 'open', title: 'Buka ITS Maps' },
+          { action: 'dismiss', title: 'Tutup' }
+        ]
+      }),
+      self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+        clients.forEach((client) => client.postMessage({ type: 'its-public-push', notification }));
+      })
+    ])
+  );
+});
+
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      clients.forEach((client) => client.postMessage({ type: 'its-push-subscription-changed' }));
     })
   );
 });

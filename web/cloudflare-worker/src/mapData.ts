@@ -770,7 +770,10 @@ function requestedKind(url: URL): MapRecordKind | "all" {
 }
 
 export async function handleMapDeltas(request: Request, env: Env): Promise<Response> {
-  await enforceRateLimit(request, env, "map-public");
+  // Public map reads are naturally bounded by viewport/index/response limits
+  // below. A per-IP 20/minute limiter breaks normal pan and zoom interaction
+  // and produces visible 429 console errors; retain rate limiting for mutation
+  // and admin endpoints only.
   const url = new URL(request.url);
   const bbox = viewportBbox(url);
   const datasets = requestedDatasets(url);

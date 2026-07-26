@@ -964,7 +964,7 @@ export class Navigation3D {
       // Overpass scene, where footprints intersecting the snapped route are
       // removed. The z15 national building backdrop is intentionally omitted
       // here so an overscaled footprint can never cover the guidance lane.
-      style: navigationStyle({ includeNationalBuildings: false }),
+      style: navigationStyle({ includeNationalBuildings: true }),
       center,
       zoom: MODE_PROFILES[this.mode].zoom,
       pitch: MODE_PROFILES[this.mode].pitch,

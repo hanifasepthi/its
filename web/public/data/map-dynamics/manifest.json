@@ -1,0 +1,1060 @@
+{
+  "$schema": "./manifest.schema.json",
+  "schemaVersion": "1.0",
+  "dataset": "its-map-dynamics-indonesia",
+  "datasetVersion": "2026-07-26.2",
+  "generatedAt": "2026-07-26T08:33:48.420Z",
+  "featureSchema": "./feature.schema.json",
+  "tileZoom": 10,
+  "coverage": {
+    "country": "ID",
+    "bbox": [
+      94.5,
+      -11.5,
+      141.1,
+      6.5
+    ],
+    "mode": "incremental",
+    "actualBbox": [
+      106.73285365104675,
+      -7.1764821,
+      108.3708244,
+      -6.074669605853288
+    ],
+    "completedCells": null,
+    "totalCells": null,
+    "coveragePercent": null,
+    "ingestedCellBbox": null,
+    "progressStatus": "not-linked",
+    "coverageBasis": "published-feature-bounds-only",
+    "progressSource": null
+  },
+  "policy": {
+    "publish": "verified-only",
+    "vision": "observation-before-verification",
+    "maxShardBytes": 8000000
+  },
+  "shards": [
+    {
+      "id": "10-815-529.1.0c1b19c38dd3",
+      "url": "./shards/10-815-529.1.0c1b19c38dd3.geojson",
+      "bbox": [
+        106.73285365104675,
+        -6.146016401359162,
+        106.8753433227539,
+        -6.074669605853288
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6309124,
+      "sha256": "0c1b19c38dd3dc05ddf5e8c698a573181896c30b9622d997ca4e20eb02e16fd2",
+      "updatedAt": "2026-07-26T08:33:43.619Z"
+    },
+    {
+      "id": "10-815-529.2.a3157ed867f8",
+      "url": "./shards/10-815-529.2.a3157ed867f8.geojson",
+      "bbox": [
+        106.7647933959961,
+        -6.2333839809192995,
+        106.83653175830841,
+        -6.107997253107158
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6097775,
+      "sha256": "a3157ed867f81e25227f70d709d4c46da0bd3416df42e664e50513104b69eec7",
+      "updatedAt": "2026-07-26T08:33:43.726Z"
+    },
+    {
+      "id": "10-815-529.3.a0ece3bceb17",
+      "url": "./shards/10-815-529.3.a0ece3bceb17.geojson",
+      "bbox": [
+        106.8087387084961,
+        -6.233378648216387,
+        106.8753433227539,
+        -6.200640165097724
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6163751,
+      "sha256": "a0ece3bceb17d386ac22feade1233636b80edf69d7e765d5e6d86e521edcf247",
+      "updatedAt": "2026-07-26T08:33:43.834Z"
+    },
+    {
+      "id": "10-815-529.4.eda7d7b22149",
+      "url": "./shards/10-815-529.4.eda7d7b22149.geojson",
+      "bbox": [
+        106.73771917819977,
+        -6.2552156116882855,
+        106.8753433227539,
+        -6.200640165097724
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6173290,
+      "sha256": "eda7d7b2214952bf0ced9f9c968347637ec2a6b138061a0f1c9b29a834325b14",
+      "updatedAt": "2026-07-26T08:33:43.945Z"
+    },
+    {
+      "id": "10-815-529.5.24705366083e",
+      "url": "./shards/10-815-529.5.24705366083e.geojson",
+      "bbox": [
+        106.7647933959961,
+        -6.255231609129723,
+        106.83653712272644,
+        -6.222537151176965
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6164488,
+      "sha256": "24705366083e8555e724170d6bca7a8adccd1cdc6273d234887ef8dd07730e13",
+      "updatedAt": "2026-07-26T08:33:44.041Z"
+    },
+    {
+      "id": "10-815-529.6.f9f484d852b5",
+      "url": "./shards/10-815-529.6.f9f484d852b5.geojson",
+      "bbox": [
+        106.8087387084961,
+        -6.255226276649296,
+        106.8753433227539,
+        -6.222483823043703
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6088261,
+      "sha256": "f9f484d852b56c4282e8ee0d0723bd1d15dddff07638d0a1887ab4412fd9d25b",
+      "updatedAt": "2026-07-26T08:33:44.185Z"
+    },
+    {
+      "id": "10-815-529.7.711e297c71ba",
+      "url": "./shards/10-815-529.7.711e297c71ba.geojson",
+      "bbox": [
+        106.737762093544,
+        -6.277078324239113,
+        106.8753433227539,
+        -6.22249448867079
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6199832,
+      "sha256": "711e297c71ba09118fa9c8587a44f4457dfb5759439ab0c6989eff60493d3ef8",
+      "updatedAt": "2026-07-26T08:33:44.289Z"
+    },
+    {
+      "id": "10-815-529.8.8fc4e0de6479",
+      "url": "./shards/10-815-529.8.8fc4e0de6479.geojson",
+      "bbox": [
+        106.7867660522461,
+        -6.287598761279696,
+        106.8753433227539,
+        -6.24432657303673
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6207150,
+      "sha256": "8fc4e0de647901e3bf3d038d88be6b9677100dd9f32a489a2af9abd079b477a4",
+      "updatedAt": "2026-07-26T08:33:44.419Z"
+    },
+    {
+      "id": "10-815-529.9.1abce42e7e68",
+      "url": "./shards/10-815-529.9.1abce42e7e68.geojson",
+      "bbox": [
+        106.73768699169159,
+        -6.29891879107636,
+        106.8753433227539,
+        -6.244358568585042
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6138396,
+      "sha256": "1abce42e7e68505c39959d16e731735657e3718c8252af1642c5dbd70517d002",
+      "updatedAt": "2026-07-26T08:33:44.521Z"
+    },
+    {
+      "id": "10-815-529.10.e4830cdb0123",
+      "url": "./shards/10-815-529.10.e4830cdb0123.geojson",
+      "bbox": [
+        106.7867660522461,
+        -6.301990033099258,
+        106.8753433227539,
+        -6.266157747202627
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6251625,
+      "sha256": "e4830cdb01233ff480424d1ed073c6b2e35cbc57bf9e62c54c88374cec974daf",
+      "updatedAt": "2026-07-26T08:33:44.644Z"
+    },
+    {
+      "id": "10-815-529.11.c5cbd11b24c1",
+      "url": "./shards/10-815-529.11.c5cbd11b24c1.geojson",
+      "bbox": [
+        106.73773527145386,
+        -6.315639777558502,
+        106.8753433227539,
+        -6.266472356869201
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6276780,
+      "sha256": "c5cbd11b24c17da12f71ffc16da8e591187463992ec3c33ddfbd47e1b38d5e4f",
+      "updatedAt": "2026-07-26T08:33:44.813Z"
+    },
+    {
+      "id": "10-815-529.12.24258d7a6a3e",
+      "url": "./shards/10-815-529.12.24258d7a6a3e.geojson",
+      "bbox": [
+        106.7867660522461,
+        -6.315639777558502,
+        106.8753433227539,
+        -6.116286170180857
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6470073,
+      "sha256": "24258d7a6a3e9df1a2841e93681553dc32c245726c8b873cbd9efc6b228fee7b",
+      "updatedAt": "2026-07-26T08:33:44.982Z"
+    },
+    {
+      "id": "10-815-529.13.a261f225681e",
+      "url": "./shards/10-815-529.13.a261f225681e.geojson",
+      "bbox": [
+        106.80359423160553,
+        -6.146011067774296,
+        106.8753433227539,
+        -6.113411199976227
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6214042,
+      "sha256": "a261f225681e8c313df711b39c9c9b31a5b4d6e706a49eaaa14322acb9d7fc2b",
+      "updatedAt": "2026-07-26T08:33:45.176Z"
+    },
+    {
+      "id": "10-815-529.14.5147147546b7",
+      "url": "./shards/10-815-529.14.5147147546b7.geojson",
+      "bbox": [
+        106.7376708984375,
+        -6.167862315899157,
+        106.87526822090149,
+        -6.113411199976227
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6049771,
+      "sha256": "5147147546b7598dd4fd10b6e876e1049acb744eb27ede643f025acff9aaba42",
+      "updatedAt": "2026-07-26T08:33:45.268Z"
+    },
+    {
+      "id": "10-815-529.15.9fba4a66778a",
+      "url": "./shards/10-815-529.15.9fba4a66778a.geojson",
+      "bbox": [
+        106.7867660522461,
+        -6.167862315899157,
+        106.85849368572235,
+        -6.135098441224187
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6090198,
+      "sha256": "9fba4a66778a498d3ab2983a669a4eb9ae4325bb5c9540f33fe6d461106b6e9d",
+      "updatedAt": "2026-07-26T08:33:45.349Z"
+    },
+    {
+      "id": "10-815-529.16.9d6916f0555f",
+      "url": "./shards/10-815-529.16.9d6916f0555f.geojson",
+      "bbox": [
+        106.7376708984375,
+        -6.189691330895911,
+        106.8753433227539,
+        -6.135093107529968
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 5972825,
+      "sha256": "9d6916f0555f8397d005c09412fb54f73d8b634533b9b3a272b87304d39d6d08",
+      "updatedAt": "2026-07-26T08:33:45.443Z"
+    },
+    {
+      "id": "10-815-529.17.c9de10d7f89a",
+      "url": "./shards/10-815-529.17.c9de10d7f89a.geojson",
+      "bbox": [
+        106.7428207397461,
+        -6.189701997186816,
+        106.81455373764038,
+        -6.156944804421599
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6061788,
+      "sha256": "c9de10d7f89a7fbe5bcce4c4055770d68abf753ae41c06a2aef690950f8c7810",
+      "updatedAt": "2026-07-26T08:33:46.143Z"
+    },
+    {
+      "id": "10-815-529.18.7b94d730c7b8",
+      "url": "./shards/10-815-529.18.7b94d730c7b8.geojson",
+      "bbox": [
+        106.7867660522461,
+        -6.189707330332183,
+        106.85850977897644,
+        -6.156939470946355
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6149837,
+      "sha256": "7b94d730c7b89466b8d865866ba0f64328cbae76c3b9fdafd6a955316f586510",
+      "updatedAt": "2026-07-26T08:33:46.250Z"
+    },
+    {
+      "id": "10-815-529.19.a1ed4fcede44",
+      "url": "./shards/10-815-529.19.a1ed4fcede44.geojson",
+      "bbox": [
+        106.73768162727356,
+        -6.21136478913138,
+        106.8753433227539,
+        -6.156939470946355
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 5883023,
+      "sha256": "a1ed4fcede4468d47b37cae03d16dddb1e62c9be2bedb0d81b51866974e4097a",
+      "updatedAt": "2026-07-26T08:33:46.342Z"
+    },
+    {
+      "id": "10-815-529.20.f7d1b5f5ef70",
+      "url": "./shards/10-815-529.20.f7d1b5f5ef70.geojson",
+      "bbox": [
+        106.7428207397461,
+        -6.2115461085955275,
+        106.81456983089447,
+        -6.178784935825192
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6158012,
+      "sha256": "f7d1b5f5ef704b8b6d9081cc175ce217307ad2dc681fbb1d7bcdf3f158256627",
+      "updatedAt": "2026-07-26T08:33:46.448Z"
+    },
+    {
+      "id": "10-815-529.21.712d0d00ecb5",
+      "url": "./shards/10-815-529.21.712d0d00ecb5.geojson",
+      "bbox": [
+        106.79221630096436,
+        -6.2115461085955275,
+        106.85850977897644,
+        -6.178790269080679
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6061482,
+      "sha256": "712d0d00ecb53c424931d6db39eae1204b72c06ff39d0e751ae46a5f4a48a1a6",
+      "updatedAt": "2026-07-26T08:33:46.556Z"
+    },
+    {
+      "id": "10-815-529.22.6bba1182aa38",
+      "url": "./shards/10-815-529.22.6bba1182aa38.geojson",
+      "bbox": [
+        106.73771917819977,
+        -6.233373315513418,
+        106.8753433227539,
+        -6.178790269080679
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6208274,
+      "sha256": "6bba1182aa38c8925f5331bd187c6ef9a027d35c94e34464cb04783573bd9a46",
+      "updatedAt": "2026-07-26T08:33:46.662Z"
+    },
+    {
+      "id": "10-815-529.23.676caa9faa29",
+      "url": "./shards/10-815-529.23.676caa9faa29.geojson",
+      "bbox": [
+        106.75964891910553,
+        -6.2333839809192995,
+        106.8094253540039,
+        -6.200634832062818
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 2617,
+      "bytes": 1607341,
+      "sha256": "676caa9faa29087c802a9e937f10e0a2046b5a45d84455ce7c29db572ce640e7",
+      "updatedAt": "2026-07-26T08:33:46.678Z"
+    },
+    {
+      "id": "10-815-530.1.d044c593fe53",
+      "url": "./shards/10-815-530.1.d044c593fe53.geojson",
+      "bbox": [
+        106.73794984817505,
+        -6.320753007178368,
+        106.87502682209015,
+        -6.31496263074483
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 1288,
+      "bytes": 714023,
+      "sha256": "d044c593fe5356caadb17d0ab5afb337f8e6981368760beeb3e8b13baba7d9e2",
+      "updatedAt": "2026-07-26T08:33:46.693Z"
+    },
+    {
+      "id": "10-816-529.1.95b10e655cd3",
+      "url": "./shards/10-816-529.1.95b10e655cd3.geojson",
+      "bbox": [
+        106.8746566772461,
+        -6.2461475,
+        106.96699976921082,
+        -6.074669605853288
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "railway",
+        "road",
+        "transit",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6261267,
+      "sha256": "95b10e655cd3cd467d7061039990c2989fb93bb0c2519c6e0968e16bfa75ebcb",
+      "updatedAt": "2026-07-26T08:33:47.165Z"
+    },
+    {
+      "id": "10-816-529.2.9c5e3a224345",
+      "url": "./shards/10-816-529.2.9c5e3a224345.geojson",
+      "bbox": [
+        106.8746566772461,
+        -6.167824982339468,
+        106.9683301448822,
+        -6.113251182627721
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6142133,
+      "sha256": "9c5e3a224345d1240a15df09c6608221a6cf9063d326cc78d97dc5ad2a182669",
+      "updatedAt": "2026-07-26T08:33:47.252Z"
+    },
+    {
+      "id": "10-816-529.3.c5cb1f97eeb9",
+      "url": "./shards/10-816-529.3.c5cb1f97eeb9.geojson",
+      "bbox": [
+        106.8746566772461,
+        -6.1896806646047935,
+        106.96836233139038,
+        -6.135103774918363
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6176189,
+      "sha256": "c5cb1f97eeb959b82e7475cbda937ceda321bd26f990f6ec62770f6b89c1fe62",
+      "updatedAt": "2026-07-26T08:33:47.352Z"
+    },
+    {
+      "id": "10-816-529.4.1008026cd9cb",
+      "url": "./shards/10-816-529.4.1008026cd9cb.geojson",
+      "bbox": [
+        106.8746566772461,
+        -6.21153544274641,
+        106.96836233139038,
+        -6.1569501378967715
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6160831,
+      "sha256": "1008026cd9cbee8954d941a8b287e742cdbe70d9ce55375a9022c4b517a80ca4",
+      "updatedAt": "2026-07-26T08:33:47.466Z"
+    },
+    {
+      "id": "10-816-529.5.57e55b42fc84",
+      "url": "./shards/10-816-529.5.57e55b42fc84.geojson",
+      "bbox": [
+        106.8746566772461,
+        -6.233367982810407,
+        106.96820676326752,
+        -6.17882226861245
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6231805,
+      "sha256": "57e55b42fc841a6defc480a74d58d9a5a3e926996cabde842ecf70e998d58df0",
+      "updatedAt": "2026-07-26T08:33:47.553Z"
+    },
+    {
+      "id": "10-816-529.6.e820630db67b",
+      "url": "./shards/10-816-529.6.e820630db67b.geojson",
+      "bbox": [
+        106.8746566772461,
+        -6.233389313622155,
+        106.96822822093964,
+        -6.200629499027855
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6181250,
+      "sha256": "e820630db67bb0c4f7284a790347594bce8ea9ccea8fcc5d43f25e80d4dd5541",
+      "updatedAt": "2026-07-26T08:33:47.652Z"
+    },
+    {
+      "id": "10-816-529.7.86d096f8efad",
+      "url": "./shards/10-816-529.7.86d096f8efad.geojson",
+      "bbox": [
+        106.8746566772461,
+        -6.255188949284815,
+        106.96836233139038,
+        -6.200672163306052
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6142099,
+      "sha256": "86d096f8efad63f58a19c93389b0a200b9134e2407bfcd17e469460220a5f767",
+      "updatedAt": "2026-07-26T08:33:47.752Z"
+    },
+    {
+      "id": "10-816-529.8.aaf9f5d38ec0",
+      "url": "./shards/10-816-529.8.aaf9f5d38ec0.geojson",
+      "bbox": [
+        106.8746566772461,
+        -6.277072991981939,
+        106.96836769580841,
+        -6.222483823043703
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6273093,
+      "sha256": "aaf9f5d38ec022771b16bc96288c9f1fff3473165aba35b78ab910930817e1b0",
+      "updatedAt": "2026-07-26T08:33:47.886Z"
+    },
+    {
+      "id": "10-816-529.9.290eb5021abf",
+      "url": "./shards/10-816-529.9.290eb5021abf.geojson",
+      "bbox": [
+        106.8746566772461,
+        -6.298870802775539,
+        106.96836769580841,
+        -6.244363901176214
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6331560,
+      "sha256": "290eb5021abfb857c195236694b27c36a41256dd61cfa640b6b94385cf974a4b",
+      "updatedAt": "2026-07-26T08:33:47.997Z"
+    },
+    {
+      "id": "10-816-529.10.81cd0318bb14",
+      "url": "./shards/10-816-529.10.81cd0318bb14.geojson",
+      "bbox": [
+        106.8746566772461,
+        -6.315639777558502,
+        106.96836769580841,
+        -6.266189741414664
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 10000,
+      "bytes": 6459089,
+      "sha256": "81cd0318bb149e50d7cdb964e7ee4abbd39d60b96009ee49293da7f1eb573dd8",
+      "updatedAt": "2026-07-26T08:33:48.079Z"
+    },
+    {
+      "id": "10-816-529.11.45d267b513cb",
+      "url": "./shards/10-816-529.11.45d267b513cb.geojson",
+      "bbox": [
+        106.9405746459961,
+        -6.315639777558502,
+        106.9632339477539,
+        -6.292845569769426
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "pedestrian",
+        "poi",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 138,
+      "bytes": 101380,
+      "sha256": "45d267b513cb4265f68a478c90caf4497e09d56984c516b7c5204bdd420a9a45",
+      "updatedAt": "2026-07-26T08:33:48.082Z"
+    },
+    {
+      "id": "10-816-530.1.125a2cd899b6",
+      "url": "./shards/10-816-530.1.125a2cd899b6.geojson",
+      "bbox": [
+        106.87508583068848,
+        -6.3662207,
+        107.2206412,
+        -6.314978626349074
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "pedestrian",
+        "poi",
+        "road",
+        "transit",
+        "waterway"
+      ],
+      "featureCount": 723,
+      "bytes": 430165,
+      "sha256": "125a2cd899b6a636b4bd5e5c9bbdb73959a81caecbfeb1db0c32165102846c9a",
+      "updatedAt": "2026-07-26T08:33:48.096Z"
+    },
+    {
+      "id": "10-817-530.1.e23aa43218f8",
+      "url": "./shards/10-817-530.1.e23aa43218f8.geojson",
+      "bbox": [
+        106.8844718,
+        -6.970833,
+        107.7147876,
+        -6.2428974
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "transit"
+      ],
+      "featureCount": 2,
+      "bytes": 38992,
+      "sha256": "e23aa43218f82c130115577e62e5e60f7faa82da92be35ed3e9c7f9cb239e6e7",
+      "updatedAt": "2026-07-26T08:33:48.098Z"
+    },
+    {
+      "id": "10-817-531.1.66952ffa2841",
+      "url": "./shards/10-817-531.1.66952ffa2841.geojson",
+      "bbox": [
+        107.3711871,
+        -6.9958692,
+        107.6167834,
+        -6.8408212
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "transit",
+        "waterway"
+      ],
+      "featureCount": 3,
+      "bytes": 15423,
+      "sha256": "66952ffa28414a30a0b3950576712354e3b9edaf4d949f53acbd684a30ee51ff",
+      "updatedAt": "2026-07-26T08:33:48.100Z"
+    },
+    {
+      "id": "10-818-531.1.dcb286fe8137",
+      "url": "./shards/10-818-531.1.dcb286fe8137.geojson",
+      "bbox": [
+        107.5698915,
+        -7.0309184,
+        107.725848,
+        -6.9345785
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "barrier",
+        "bollard",
+        "cctv",
+        "crossing",
+        "drain",
+        "entrance",
+        "gate",
+        "green",
+        "pedestrian",
+        "platform",
+        "railway",
+        "road",
+        "street_lamp",
+        "taxi_stand",
+        "toilets",
+        "toll_gate",
+        "traffic_signal",
+        "tree",
+        "waterway"
+      ],
+      "featureCount": 5123,
+      "bytes": 7999935,
+      "sha256": "dcb286fe8137d7ea26f40122613b14902a87084d8b90f49cf51cc2443521af61",
+      "updatedAt": "2026-07-26T08:33:48.343Z"
+    },
+    {
+      "id": "10-818-531.2.0e27b11ca268",
+      "url": "./shards/10-818-531.2.0e27b11ca268.geojson",
+      "bbox": [
+        107.55502,
+        -7.051239,
+        108.2502383,
+        -6.7604985
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "crossing",
+        "cycleway",
+        "drain",
+        "green",
+        "pedestrian",
+        "railway",
+        "road",
+        "sidewalk",
+        "transit",
+        "tree_row",
+        "waterway"
+      ],
+      "featureCount": 1525,
+      "bytes": 3117736,
+      "sha256": "0e27b11ca268ee33db99d460ba66bae09bfd8096059937c5f056786fa79743ac",
+      "updatedAt": "2026-07-26T08:33:48.401Z"
+    },
+    {
+      "id": "10-818-532.1.25642d220a6c",
+      "url": "./shards/10-818-532.1.25642d220a6c.geojson",
+      "bbox": [
+        107.5537119,
+        -7.1764821,
+        107.627188,
+        -6.9339301
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "transit"
+      ],
+      "featureCount": 2,
+      "bytes": 110614,
+      "sha256": "25642d220a6c23eef81c0749d512a181ee75a470367f96a073f74868a05408e4",
+      "updatedAt": "2026-07-26T08:33:48.408Z"
+    },
+    {
+      "id": "10-819-531.1.191dff46dcf1",
+      "url": "./shards/10-819-531.1.191dff46dcf1.geojson",
+      "bbox": [
+        108.2502249,
+        -6.836229,
+        108.2503992,
+        -6.8360502
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "transit"
+      ],
+      "featureCount": 2,
+      "bytes": 5281,
+      "sha256": "191dff46dcf196d43de233058840e86d6cea994a2605d47b4c904fe95bcdc632",
+      "updatedAt": "2026-07-26T08:33:48.409Z"
+    },
+    {
+      "id": "10-820-531.1.9f54245231fb",
+      "url": "./shards/10-820-531.1.9f54245231fb.geojson",
+      "bbox": [
+        108.2498842,
+        -7.019844,
+        108.3708244,
+        -6.8362005
+      ],
+      "minZoom": 5,
+      "maxZoom": 22,
+      "groups": [
+        "transit"
+      ],
+      "featureCount": 2,
+      "bytes": 81858,
+      "sha256": "9f54245231fbb18784f181bb12f502fe48bcdd101c940ee8d63601bf56343db7",
+      "updatedAt": "2026-07-26T08:33:48.416Z"
+    }
+  ],
+  "deltaFeed": "https://its.hanifahseptiani45.workers.dev/v1/map/deltas"
+}

@@ -1604,8 +1604,10 @@ if (staticRoute) {
   ] as const;
   const OVERPASS_NETWORK_ENABLED = (() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("overpass") === "0") return false;
-    return true;
+    // The national PMTiles + verified shard pipeline is the production source.
+    // Direct public Overpass calls remain an explicit diagnostics option; they
+    // otherwise generate visible 504 errors and duplicate national features.
+    return params.get("overpass") === "1";
   })();
   let overpassPoiCooldownUntil = 0;
   let overpassRoadCooldownUntil = 0;

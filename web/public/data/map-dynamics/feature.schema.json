@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://itstelkom.web.app/data/map-dynamics/feature.schema.json",
+  "title": "ITS Maps verified dynamic GeoJSON",
+  "type": "object",
+  "required": ["type", "features"],
+  "properties": {
+    "type": { "const": "FeatureCollection" },
+    "features": { "type": "array", "items": { "$ref": "#/$defs/feature" } }
+  },
+  "$defs": {
+    "position": {
+      "type": "array",
+      "prefixItems": [
+        { "type": "number", "minimum": -180, "maximum": 180 },
+        { "type": "number", "minimum": -90, "maximum": 90 }
+      ],
+      "minItems": 2,
+      "maxItems": 3
+    },
+    "geometry": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["type", "coordinates"],
+          "properties": {
+            "type": { "const": "Point" },
+            "coordinates": { "$ref": "#/$defs/position" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "coordinates"],
+          "properties": {
+            "type": { "const": "LineString" },
+            "coordinates": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/position" } }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "coordinates"],
+          "properties": {
+            "type": { "const": "Polygon" },
+            "coordinates": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "array", "minItems": 4, "items": { "$ref": "#/$defs/position" } }
+            }
+          }
+        }
+      ]
+    },
+    "properties": {
+      "type": "object",
+      "required": ["kind", "source", "sourceId", "verification", "updatedAt"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "road", "sidewalk", "median", "cycleway", "pedestrian", "railway", "transit",
+            "waterway", "green", "tree_row", "tree", "crossing", "traffic_signal", "school_zone",
+            "street_lamp", "traffic_sign", "traffic_camera", "cctv", "speed_camera", "guardrail",
+            "barrier", "bollard", "delineator", "speed_bump", "speed_table", "rumble_strip",
+            "toll_gate", "traffic_island", "stop_line", "yield_line", "lane_arrow", "bench",
+            "waste_basket", "fire_hydrant", "drinking_water", "toilets", "emergency_shelter",
+            "entrance", "gate", "elevator", "escalator", "drain", "drain_grate", "manhole",
+            "retaining_wall", "seawall", "platform", "taxi_stand", "motorcycle_taxi", "park_ride", "poi"
+          ]
+        },
+        "source": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "sourceId": { "type": "string", "minLength": 1, "maxLength": 180 },
+        "sourceUrl": { "type": "string", "format": "uri" },
+        "verification": { "const": "verified" },
+        "verifiedBy": { "type": "string", "maxLength": 120 },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "revision": { "type": "integer", "minimum": 0 },
+        "name": { "type": "string", "maxLength": 240 },
+        "officialName": { "type": "string", "maxLength": 240 },
+        "ref": { "type": "string", "maxLength": 120 },
+        "highway": {
+          "enum": [
+            "motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link",
+            "secondary", "secondary_link", "tertiary", "tertiary_link", "unclassified",
+            "residential", "living_street", "service", "pedestrian", "track", "path", "footway",
+            "steps", "road", "construction", "proposed", "cycleway", "bus_guideway"
+          ]
+        },
+        "roadFunction": { "enum": ["arteri", "kolektor", "lokal", "lingkungan", ""] },
+        "roadSystem": { "enum": ["primer", "sekunder", ""] },
+        "roadStatus": { "enum": ["nasional", "provinsi", "kabupaten", "kota", "desa", ""] },
+        "roadClass": { "type": ["string", "number"] },
+        "lanes": { "type": "number", "minimum": 0, "maximum": 64 },
+        "lanesForward": { "type": "number", "minimum": 0, "maximum": 32 },
+        "lanesBackward": { "type": "number", "minimum": 0, "maximum": 32 },
+        "oneway": { "type": ["boolean", "string"] },
+        "divided": { "type": ["boolean", "string"] },
+        "surface": { "type": "string", "maxLength": 80 },
+        "width": { "type": "number", "minimum": 0, "maximum": 250 },
+        "sidewalkWidth": { "type": "number", "minimum": 0, "maximum": 50 },
+        "crossingWidth": { "type": "number", "minimum": 0, "maximum": 50 },
+        "crossing": { "type": "string", "maxLength": 80 },
+        "crossingType": { "type": "string", "maxLength": 80 },
+        "crossingMarking": { "type": "string", "maxLength": 80 },
+        "marking": { "type": "string", "maxLength": 80 },
+        "roadMarking": { "type": "string", "maxLength": 80 },
+        "bearing": { "type": "number", "minimum": 0, "exclusiveMaximum": 360 },
+        "toll": { "type": ["boolean", "string"] },
+        "bridge": { "type": ["boolean", "string"] },
+        "tunnel": { "type": ["boolean", "string"] },
+        "layer": { "type": "number", "minimum": -10, "maximum": 10 },
+        "sidewalkLeft": { "type": ["boolean", "string"] },
+        "sidewalkRight": { "type": ["boolean", "string"] },
+        "cyclewayLeft": { "type": "string" },
+        "cyclewayRight": { "type": "string" },
+        "busway": { "type": "string" },
+        "medianType": { "type": "string" },
+        "parkingLeft": { "type": "string" },
+        "parkingRight": { "type": "string" },
+        "maxspeed": { "type": ["number", "string"] },
+        "railway": { "type": "string" },
+        "transitMode": { "enum": ["busway", "bus", "mrt", "lrt", "tram", "monorail", "commuter", "high_speed", "train"] },
+        "operator": { "type": "string" },
+        "network": { "type": "string" },
+        "from": { "type": "string" },
+        "to": { "type": "string" },
+        "route": { "type": "string" },
+        "waterway": { "type": "string" },
+        "poiCategory": { "enum": ["amenity", "shop", "tourism", "office", "healthcare", "craft"] },
+        "poiType": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "poiGroup": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "iconKey": { "type": "string", "pattern": "^poi-[a-z0-9-]+$", "maxLength": 160 },
+        "brand": { "type": "string", "maxLength": 160 },
+        "openingHours": { "type": "string", "maxLength": 240 },
+        "website": { "type": "string", "maxLength": 500 },
+        "phone": { "type": "string", "maxLength": 120 },
+        "wheelchair": { "type": "string", "maxLength": 40 },
+        "corridorId": { "type": "string", "maxLength": 120 },
+        "confidence": { "type": ["number", "string"] }
+      },
+      "additionalProperties": true
+    },
+    "feature": {
+      "type": "object",
+      "required": ["type", "id", "properties", "geometry"],
+      "properties": {
+        "type": { "const": "Feature" },
+        "id": { "type": ["string", "number"] },
+        "properties": { "$ref": "#/$defs/properties" },
+        "geometry": { "$ref": "#/$defs/geometry" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
