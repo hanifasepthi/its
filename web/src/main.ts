@@ -762,7 +762,7 @@ const WEBRTC_ICE_SERVERS: RTCIceServer[] = [
 
 const BEARING_STEP = 90;
 const BEARING_SNAP = 5;
-const MAPLIBRE_3D_PITCH = 60;
+const MAPLIBRE_3D_PITCH = 67;
 const VISION_SEGMENTATION_MODEL = "Xenova/segformer-b0-finetuned-ade-512-512";
 const VISION_MIN_ZOOM = 16;
 const VISION_CANVAS_SIZE = 512;
@@ -2696,17 +2696,15 @@ if (staticRoute) {
     return L.divIcon({
       className: "poi-cluster-icon poi-dominant-cluster-icon",
       html: `<span class="poi-dominant-cluster-symbol" data-poi-cluster="${cluster.pois.length}" data-poi-dominant-id="${escapeHtml(dominant.id)}" role="img" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}" style="--poi-accent:${definition.color};--poi-size:${size}px"><img src="${escapeHtml(imageUrl)}" alt="" draggable="false" width="${size}" height="${size}"></span>`,
-      iconSize: [48, 48],
-      iconAnchor: [24, 24],
+      iconSize: [56, 56],
+      iconAnchor: [28, 28],
     });
   }
 
   function poiCollisionGridSize(zoom = map.getZoom()): number {
-    if (zoom < 13) return 40;
-    if (zoom < 15) return 36;
-    if (zoom < 17) return 32;
-    if (zoom < 19) return 28;
-    return 24;
+    if (zoom < 15) return 64;
+    if (zoom < 17) return 60;
+    return 56;
   }
 
   function poiGridKeysForRect(left: number, top: number, width: number, height: number, gridSize: number): string[] {
@@ -8047,20 +8045,20 @@ if (staticRoute) {
               }
             }
 
-            // Keep the provider's mapped heights, but use a restrained
-            // scientific palette instead of exaggerating building geometry.
+            // Preserve real mapped heights. The former compressed scale made
+            // dense Indonesian city blocks look like flat green footprints.
             if (layer.type === 'fill-extrusion') {
               try {
                 maplibreMap.setPaintProperty(id, 'fill-extrusion-color', [
                   'interpolate',
                   ['linear'],
                   ['to-number', ['coalesce', ['get', 'render_height'], ['get', 'height'], ['*', ['to-number', ['coalesce', ['get', 'building:levels'], 0], 0], 3], 0], 0],
-                  0, '#e4e9ef',
-                  20, '#d4dde8',
-                  60, '#c3cfdf',
-                  150, '#afbed3'
+                  0, '#f1e8d8',
+                  20, '#e8d8c0',
+                  60, '#d9c5ae',
+                  150, '#c6b1a2'
                 ]);
-                maplibreMap.setPaintProperty(id, 'fill-extrusion-opacity', 0.86);
+                maplibreMap.setPaintProperty(id, 'fill-extrusion-opacity', 0.93);
               } catch {
                 /* ignore layer incompatibility */
               }
@@ -8068,7 +8066,7 @@ if (staticRoute) {
 
             if ((sourceLayer === 'building' || id.includes('building')) && layer.type === 'fill') {
               try {
-                maplibreMap.setPaintProperty(id, 'fill-color', '#d6e4d4');
+                maplibreMap.setPaintProperty(id, 'fill-color', '#eadfce');
                 maplibreMap.setPaintProperty(id, 'fill-opacity', 0.88);
               } catch {
                 /* ignore layer incompatibility */
@@ -8077,9 +8075,12 @@ if (staticRoute) {
           });
 
           const buildingFill = style.layers.find((layer: any) =>
-            layer.type === "fill" && (layer["source-layer"] === "building" || String(layer.id).includes("building")));
+            (layer.type === "fill" || layer.type === "fill-extrusion")
+            && (layer["source-layer"] === "building" || String(layer.id).includes("building")));
           if (buildingFill && !maplibreMap.getLayer("its-building-footprints")) {
-            const firstSymbol = style.layers.find((layer: any) => layer.type === "symbol")?.id;
+            const beforeBuilding = style.layers.find((layer: any) =>
+              layer.type === "fill-extrusion"
+              && (layer["source-layer"] === "building" || String(layer.id).includes("building")))?.id;
             maplibreMap.addLayer({
               id: "its-building-footprints",
               type: "fill",
@@ -8088,11 +8089,11 @@ if (staticRoute) {
               minzoom: 14,
               ...(Array.isArray(buildingFill.filter) ? { filter: buildingFill.filter } : {}),
               paint: {
-                "fill-color": "#e1e6eb",
-                "fill-outline-color": "#c7d0d9",
+                "fill-color": "#eadfce",
+                "fill-outline-color": "#c9b79f",
                 "fill-opacity": ["interpolate", ["linear"], ["zoom"], 14, 0.7, 17, 0.88],
               },
-            }, firstSymbol);
+            }, beforeBuilding);
           }
           applyMapLibreDimensionMode(maplibreMap);
           updateMapLibrePoiLayer(Array.from(state.poiData.values()));

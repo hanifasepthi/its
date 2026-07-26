@@ -6807,16 +6807,16 @@ body.its-agent-cursor-active * {
   pointer-events: auto !important;
   opacity: 1 !important;
   z-index: 760 !important;
-  min-width: 48px !important;
-  min-height: 48px !important;
+  min-width: 56px !important;
+  min-height: 56px !important;
   overflow: visible !important;
   touch-action: manipulation;
 }
 
 .poi-cluster-icon,
 .poi-dominant-cluster-icon {
-  min-width: 48px !important;
-  min-height: 48px !important;
+  min-width: 56px !important;
+  min-height: 56px !important;
   overflow: visible !important;
   border: 0 !important;
   background: transparent !important;
