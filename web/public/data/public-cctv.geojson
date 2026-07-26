@@ -42,6 +42,98 @@
         "verificationMethod": "coordinate-and-public-page",
         "updatedAt": "2026-07-27T00:00:00Z"
       }
+    },
+    {
+      "type": "Feature",
+      "id": "balitower-monas-barat-010-506633",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [106.826701, -6.178582]
+      },
+      "properties": {
+        "kind": "cctv",
+        "name": "CCTV Monas Barat 010",
+        "address": "Sisi barat kawasan Monas, Jakarta Pusat",
+        "operator": "Bali Tower",
+        "source": "Bali Tower public embed directory",
+        "sourceId": "Monas-Barat-010-506633",
+        "sourceUrl": "https://smartcity.jakarta.go.id/blog/pantau-lalu-lintas-dan-keamanan-dengan-cctv-jakarta/",
+        "publicUrl": "https://cctv.balitower.co.id/Monas-Barat-010-506633_1/embed.html",
+        "streamUrl": "https://cctv.balitower.co.id/Monas-Barat-010-506633_1/embed.html",
+        "streams": [
+          {
+            "name": "Kamera 1",
+            "embedUrl": "https://cctv.balitower.co.id/Monas-Barat-010-506633_1/embed.html"
+          },
+          {
+            "name": "Kamera 2",
+            "embedUrl": "https://cctv.balitower.co.id/Monas-Barat-010-506633_2/embed.html"
+          },
+          {
+            "name": "Kamera 3",
+            "embedUrl": "https://cctv.balitower.co.id/Monas-Barat-010-506633_3/embed.html"
+          }
+        ],
+        "accessType": "public-embed",
+        "streamStatus": "unknown-timeout-on-last-check",
+        "coordinateAccuracy": "approximate-user-observation",
+        "verification": "verified",
+        "verificationMethod": "published-public-embed-and-user-observation",
+        "attribution": "CCTV Jakarta/Bali Tower; titik perkiraan dari observasi pengguna ITS Maps",
+        "updatedAt": "2026-07-27T05:10:00Z"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "pontianak-bundaran-digulis-17",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [109.3494885, -0.0553432]
+      },
+      "properties": {
+        "kind": "cctv",
+        "name": "CCTV Bundaran Digulis",
+        "address": "Jalan Jenderal Ahmad Yani, Bundaran Universitas Tanjungpura, Pontianak",
+        "operator": "Dinas Perhubungan Kota Pontianak",
+        "source": "Panda Pontianak / Dishub Kota Pontianak",
+        "sourceId": "embedpanda/play/17",
+        "sourceUrl": "https://embedpanda.pontianak.go.id/play/17/",
+        "publicUrl": "https://www.youtube-nocookie.com/embed/Lr6mNswN1BE",
+        "streamUrl": "https://www.youtube-nocookie.com/embed/Lr6mNswN1BE",
+        "accessType": "public-youtube",
+        "streamStatus": "public-live-provider-controlled",
+        "coordinateAccuracy": "open-map-verified",
+        "verification": "verified",
+        "verificationMethod": "official-player-code-and-open-map-coordinate",
+        "attribution": "Video: Dishub Kota Pontianak melalui Panda Pontianak/YouTube; koordinat: OpenStreetMap/Nominatim",
+        "updatedAt": "2026-07-27T05:10:00Z"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "pontianak-simpang-tanjung-raya-5",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [109.3704204, -0.0503383]
+      },
+      "properties": {
+        "kind": "cctv",
+        "name": "CCTV Simpang Tanjung Raya",
+        "address": "Pertemuan Jalan Tanjung Raya 2 dan Jalan Tanjung Raya II, Pontianak",
+        "operator": "Dinas Perhubungan Kota Pontianak",
+        "source": "Panda Pontianak / Dishub Kota Pontianak",
+        "sourceId": "embedpanda/play/5",
+        "sourceUrl": "https://embedpanda.pontianak.go.id/play/5/",
+        "publicUrl": "https://www.youtube-nocookie.com/embed/haIfLCuXA38",
+        "streamUrl": "https://www.youtube-nocookie.com/embed/haIfLCuXA38",
+        "accessType": "public-youtube",
+        "streamStatus": "public-live-provider-controlled",
+        "coordinateAccuracy": "open-map-intersection-verified",
+        "verification": "verified",
+        "verificationMethod": "official-player-code-and-shared-open-map-road-node",
+        "attribution": "Video: Dishub Kota Pontianak melalui Panda Pontianak/YouTube; koordinat persimpangan: OpenStreetMap/Overpass",
+        "updatedAt": "2026-07-27T05:10:00Z"
+      }
     }
   ]
 }

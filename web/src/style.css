@@ -12978,3 +12978,43 @@ body.map-legend-closing .map {
   font-weight: 650;
   line-height: 1.45;
 }
+
+.map-camera-stream-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin: -4px 0 14px;
+  padding: 2px 1px 4px;
+  scrollbar-width: thin;
+}
+
+.map-camera-stream-tabs button {
+  min-width: 88px;
+  min-height: 44px;
+  flex: 0 0 auto;
+  padding: 0 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #334155;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.map-camera-stream-tabs button[aria-pressed="true"] {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.map-camera-attribution {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.45;
+}

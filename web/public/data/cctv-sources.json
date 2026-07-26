@@ -1,0 +1,118 @@
+{
+  "schemaVersion": "1.0",
+  "updatedAt": "2026-07-27T05:10:00Z",
+  "notice": "Direktori portal publik. Kehadiran portal tidak berarti semua kamera memiliki stream publik atau sedang online.",
+  "sources": [
+    {
+      "region": "Indonesia",
+      "operator": "Direktorat Jenderal Bina Marga",
+      "url": "https://binamarga.pu.go.id/cctv-ai/",
+      "accessType": "official-portal"
+    },
+    {
+      "region": "Jalan tol Indonesia",
+      "operator": "Direktorat Jenderal Bina Marga",
+      "url": "https://binamarga.pu.go.id/contents/cctv_tol/",
+      "accessType": "official-portal"
+    },
+    {
+      "region": "Jalan tol Indonesia",
+      "operator": "BPJT",
+      "url": "https://bpjt.pu.go.id/cctv/",
+      "accessType": "official-portal"
+    },
+    {
+      "region": "DKI Jakarta",
+      "operator": "Jakarta Smart City",
+      "url": "https://smartcity.jakarta.go.id/blog/pantau-lalu-lintas-dan-keamanan-dengan-cctv-jakarta/",
+      "accessType": "official-information"
+    },
+    {
+      "region": "Kabupaten Tangerang",
+      "operator": "Dishub Kabupaten Tangerang",
+      "url": "https://cctv-dishub.tangerangkab.go.id/cctv",
+      "accessType": "official-portal"
+    },
+    {
+      "region": "Kota Bandung",
+      "operator": "Pelindung Kota Bandung",
+      "url": "https://pelindung.bandung.go.id/",
+      "accessType": "official-portal"
+    },
+    {
+      "region": "Kota Yogyakarta",
+      "operator": "Pemerintah Kota Yogyakarta",
+      "url": "https://cctv.jogjakota.go.id/",
+      "accessType": "official-portal"
+    },
+    {
+      "region": "DI Yogyakarta",
+      "operator": "Pemerintah Provinsi DI Yogyakarta",
+      "url": "https://cctv.jogjaprov.go.id/",
+      "accessType": "official-portal"
+    },
+    {
+      "region": "Jawa Tengah",
+      "operator": "Dinas Perhubungan Jawa Tengah",
+      "url": "https://gis.perhubungan.jatengprov.go.id/cctv",
+      "accessType": "official-portal"
+    },
+    {
+      "region": "Kota Denpasar",
+      "operator": "ATCS Kota Denpasar",
+      "url": "https://atcs.denpasarkota.go.id/streaming",
+      "accessType": "official-portal"
+    },
+    {
+      "region": "Kota Medan",
+      "operator": "ATCS Dishub Kota Medan",
+      "url": "https://atcsdishub.medan.go.id/",
+      "accessType": "official-portal"
+    },
+    {
+      "region": "Kota Palembang",
+      "operator": "Pemerintah Kota Palembang",
+      "url": "https://cctv.palembang.go.id/",
+      "accessType": "official-portal"
+    },
+    {
+      "region": "Kota Banjarmasin",
+      "operator": "ATCS Kota Banjarmasin",
+      "url": "https://atcs.banjarmasinkota.go.id/",
+      "accessType": "official-portal"
+    },
+    {
+      "region": "Kota Pontianak",
+      "operator": "Dishub Kota Pontianak",
+      "url": "https://embedpanda.pontianak.go.id/",
+      "accessType": "public-youtube-directory",
+      "players": [
+        {
+          "name": "Simpang Tanjung Raya",
+          "pageUrl": "https://embedpanda.pontianak.go.id/play/5/",
+          "youtubeId": "haIfLCuXA38"
+        },
+        {
+          "name": "Simpang Garuda",
+          "pageUrl": "https://embedpanda.pontianak.go.id/play/13/",
+          "youtubeId": "MQnvkV8yKPU"
+        },
+        {
+          "name": "Bundaran Digulis",
+          "pageUrl": "https://embedpanda.pontianak.go.id/play/17/",
+          "youtubeId": "Lr6mNswN1BE"
+        },
+        {
+          "name": "Simpang Tanjung Hulu",
+          "pageUrl": "https://embedpanda.pontianak.go.id/play/21/",
+          "youtubeId": "-2Evg8reL8s"
+        },
+        {
+          "name": "Simpang Paris 1",
+          "pageUrl": "https://embedpanda.pontianak.go.id/play/27/",
+          "youtubeId": "YYqN1j3Xr5k"
+        }
+      ]
+    }
+  ]
+}

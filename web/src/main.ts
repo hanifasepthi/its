@@ -1701,6 +1701,17 @@ if (staticRoute) {
     const streamStatus = String(properties.streamStatus || (streamUrl ? "public-live" : "metadata-only"));
     const isThirdPartyPublicPage = streamStatus === "public-page-third-party";
     const address = String(properties.address || properties.location || "").trim();
+    const operator = String(properties.operator || "").trim();
+    const attribution = String(properties.attribution || "").trim();
+    const streamOptions = Array.isArray(properties.streams)
+      ? properties.streams.flatMap((entry) => {
+        if (!entry || typeof entry !== "object") return [];
+        const record = entry as Record<string, unknown>;
+        const url = usablePublicMediaUrl(String(record.embedUrl || record.sourcePageUrl || ""));
+        if (!url || /@/.test(url)) return [];
+        return [{ name: String(record.name || `Kamera ${String(record.id || "")}`).trim() || "Kamera", url }];
+      })
+      : [];
     const modal = document.createElement("div");
     modal.id = "map-dynamics-camera-modal";
     modal.className = "map-license-modal map-camera-source-modal";
@@ -1714,8 +1725,9 @@ if (staticRoute) {
         ${streamUrl ? `
           <div class="map-camera-live-badge"><i></i> ${isThirdPartyPublicPage ? "Pemutar publik — status live mengikuti penyedia" : "LIVE dari penyedia sumber"}</div>
           <div class="map-camera-public-player">
-            <iframe src="${escapeHtml(streamUrl)}" title="Video realtime ${escapeHtml(name)}" loading="eager" allow="autoplay; fullscreen; picture-in-picture" referrerpolicy="no-referrer"></iframe>
+            <iframe data-camera-player src="${escapeHtml(streamUrl)}" title="Video realtime ${escapeHtml(name)}" loading="eager" allow="autoplay; fullscreen; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
           </div>
+          ${streamOptions.length > 1 ? `<div class="map-camera-stream-tabs" role="group" aria-label="Pilih sudut kamera">${streamOptions.map((option, index) => `<button type="button" data-camera-stream="${escapeHtml(option.url)}" aria-pressed="${index === 0 ? "true" : "false"}">${escapeHtml(option.name)}</button>`).join("")}</div>` : ""}
           ${isThirdPartyPublicPage ? `<p class="map-camera-disclaimer">Halaman ini merupakan mirror publik independen. Jika penyedia menolak embed atau membatasi trafik, gunakan tombol buka pemutar.</p>` : ""}
         ` : `
           <div class="map-camera-unavailable">
@@ -1726,9 +1738,11 @@ if (staticRoute) {
         <dl class="map-camera-source-meta">
           <div><dt>Koordinat</dt><dd>${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}</dd></div>
           <div><dt>Sumber</dt><dd>${escapeHtml(source)}</dd></div>
+          ${operator ? `<div><dt>Pengelola</dt><dd>${escapeHtml(operator)}</dd></div>` : ""}
           ${address ? `<div><dt>Alamat</dt><dd>${escapeHtml(address)}</dd></div>` : ""}
         </dl>
         ${sourceUrl ? `<a class="map-camera-source-link" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">${isThirdPartyPublicPage ? "Buka pemutar publik" : "Buka sumber"}</a>` : ""}
+        ${attribution ? `<footer class="map-camera-attribution">Kontribusi data: ${escapeHtml(attribution)}</footer>` : ""}
       </section>`;
     const close = () => {
       modal.classList.remove("open");
@@ -1737,6 +1751,17 @@ if (staticRoute) {
     };
     modal.addEventListener("click", (event) => { if (event.target === modal) close(); });
     modal.querySelector("[data-camera-source-close]")?.addEventListener("click", close);
+    const player = modal.querySelector<HTMLIFrameElement>("[data-camera-player]");
+    modal.querySelectorAll<HTMLButtonElement>("[data-camera-stream]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const nextUrl = usablePublicMediaUrl(button.dataset.cameraStream || "");
+        if (!player || !nextUrl) return;
+        player.src = nextUrl;
+        modal.querySelectorAll<HTMLButtonElement>("[data-camera-stream]").forEach((candidate) => {
+          candidate.setAttribute("aria-pressed", String(candidate === button));
+        });
+      });
+    });
     document.body.appendChild(modal);
     const sheet = modal.querySelector<HTMLElement>(".map-camera-source-sheet");
     if (sheet) setupSheetSwipe(sheet, close);
