@@ -384,6 +384,12 @@ function featureKind(feature: MapDynamicsFeature): string {
   return normalizedToken(feature.properties.kind);
 }
 
+function isMisclassifiedGreen(feature: MapDynamicsFeature): boolean {
+  if (featureKind(feature) !== "green") return false;
+  const classToken = normalizedToken(feature.properties.class || feature.properties.subclass);
+  return /^(residential|commercial|industrial|retail|construction|garages|railway)$/.test(classToken);
+}
+
 function featurePriority(feature: MapDynamicsFeature): number {
   const kind = featureKind(feature);
   if (kind === "waterway" || kind === "drain") return 0;
@@ -950,7 +956,7 @@ export class MapDynamicsLeafletRenderer {
       published.push(feature);
       byKind[kind] = (byKind[kind] || 0) + 1;
     };
-    const sorted = [...collection.features].sort((left, right) => {
+    const sorted = collection.features.filter((feature) => !isMisclassifiedGreen(feature)).sort((left, right) => {
       const priority = featurePriority(left) - featurePriority(right);
       if (priority) return priority;
       const pointPriority = (POINT_PRIORITY[featureKind(left)] ?? 50) - (POINT_PRIORITY[featureKind(right)] ?? 50);

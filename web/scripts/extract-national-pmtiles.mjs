@@ -79,6 +79,7 @@ function tileRange(bbox, z) {
 
 function classifiedKind(layer, properties, geometryType) {
   const cls = String(properties.class || properties.subclass || "").toLowerCase();
+  const subclass = String(properties.subclass || "").toLowerCase();
   if (layer === "transportation" || layer === "transportation_name") {
     if (/rail|tram|subway|light_rail|monorail/.test(cls)) return "railway";
     if (/cycleway/.test(cls)) return "cycleway";
@@ -86,7 +87,13 @@ function classifiedKind(layer, properties, geometryType) {
     return "road";
   }
   if (layer === "water" || layer === "waterway") return "waterway";
-  if (layer === "landcover" || layer === "landuse" || layer === "park") return "green";
+  if (layer === "park") return "green";
+  if (layer === "landcover" && /^(wood|forest|grass|grassland|meadow|scrub|wetland|farmland|orchard|vineyard)$/.test(cls || subclass)) {
+    return "green";
+  }
+  if (layer === "landuse" && /^(forest|grass|meadow|recreation_ground|village_green|allotments|orchard|vineyard|cemetery)$/.test(cls || subclass)) {
+    return "green";
+  }
   if (layer === "poi" || layer === "mountain_peak") return "poi";
   // Residential houses are deliberately excluded. Only named/public,
   // commercial or transport buildings become custom POIs.

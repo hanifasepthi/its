@@ -7487,13 +7487,14 @@ if (staticRoute) {
       "#about-site-info-modal.open",
       "#m-device-modal.open",
       "#m-poi-modal.open",
+      "#m-layer-modal.open",
       "#m-ai-history-detail-modal.open",
       "body.ai-history-sheet-open #m-ai-history-sheet",
     ].join(", ");
   }
 
   function isMapSidePanelModal(id: string): boolean {
-    return id === "m-device-modal" || id === "m-poi-modal" || id === "m-ai-history-detail-modal";
+    return id === "m-device-modal" || id === "m-poi-modal" || id === "m-layer-modal" || id === "m-ai-history-detail-modal";
   }
 
   function clearSidePanelWidth(delayMs = 260): void {
@@ -13609,7 +13610,13 @@ if (staticRoute) {
     );
 
     document.body.appendChild(overlay);
-    requestAnimationFrame(() => overlay.classList.add("open"));
+    requestAnimationFrame(() => {
+      overlay.classList.add("open");
+      if (usesDesktopSidePanel()) {
+        document.body.classList.add("map-modal-panel-open");
+        setSidePanelWidthFromSheet(overlay.querySelector<HTMLElement>(".m-layer-sheet"));
+      }
+    });
   }
 
   function closeLayerModal(): void {
@@ -13618,6 +13625,8 @@ if (staticRoute) {
     modal.classList.remove("open");
     modal.classList.add("closing");
     setTimeout(() => modal.remove(), 320);
+    document.body.classList.remove("map-modal-panel-open");
+    clearSidePanelWidth();
     mobileState.layerModalOpen = false;
   }
 
@@ -17844,13 +17853,21 @@ function itsShowAiChatModal(): void {
         <button type="button" data-ai-chat-prompt="Tampilkan peta lokasi Raspberry dengan link maps.">Peta</button>
         <button type="button" data-ai-agent-toggle class="${itsAgentModeEnabled ? "active" : ""}" aria-pressed="${itsAgentModeEnabled ? "true" : "false"}">${itsAgentModeEnabled ? "Agent aktif" : "Agent"}</button>
       </div>
-      <form class="its-ai-chat-form" data-ai-chat-form>
+      <form class="its-ai-chat-form" data-ai-chat-form
+            toolname="ask_its_maps_assistant"
+            tooldescription="Ask ITS Maps Assistant about maps, devices, traffic data, sources, or technical documentation."
+            toolautosubmit>
         <div class="its-ai-chat-inline-status" data-ai-chat-status role="status" aria-live="polite" hidden>
           <i aria-hidden="true"></i><span></span>
         </div>
         <label>
           <span>Pertanyaan</span>
-          <input name="question" type="text" autocomplete="off" placeholder="Tanya apa saja tentang ITS Maps..." required>
+          <input id="its-ai-chat-question" name="question" type="text" autocomplete="off"
+                 title="Pertanyaan untuk ITS Maps Assistant"
+                 aria-label="Pertanyaan untuk ITS Maps Assistant"
+                 aria-description="Tuliskan pertanyaan tentang peta, perangkat, lalu lintas, sumber data, atau dokumentasi ITS Maps."
+                 toolparamdescription="The question to ask ITS Maps Assistant."
+                 placeholder="Tanya apa saja tentang ITS Maps..." required>
         </label>
         <button type="submit" data-ai-chat-send><span data-ai-send-label>Kirim</span><i data-ai-send-spinner aria-hidden="true"></i></button>
       </form>
