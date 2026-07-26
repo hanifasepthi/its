@@ -5792,6 +5792,8 @@ if (staticRoute) {
   const rememberedPoiDataset = new Map<string, PoiRecord>();
   const MAX_REMEMBERED_POIS = 6_000;
   const mapLibrePoiImageTasks = new Map<string, Promise<void>>();
+  const mapLibrePoiReadyImages = new Set<string>();
+  const MAPLIBRE_POI_FALLBACK_IMAGE = "its-poi-fallback";
   const POI_PREFETCH_SESSION_LIMIT = 16;
   const POI_PREFETCH_DELAY_MS = 2_400;
   const poiPrefetchQueue: Array<{ bounds: L.LatLngBounds; key: string; zoom: number }> = [];
@@ -5898,11 +5900,47 @@ if (staticRoute) {
     return `poi-${iconId.replace(/[^a-z0-9-]+/gi, "-").toLowerCase()}`;
   }
 
+  function mapLibrePoiFallbackImage(): { width: number; height: number; data: Uint8Array } {
+    const width = 48;
+    const height = 56;
+    const data = new Uint8Array(width * height * 4);
+    const put = (x: number, y: number, rgba: [number, number, number, number]) => {
+      if (x < 0 || y < 0 || x >= width || y >= height) return;
+      data.set(rgba, (y * width + x) * 4);
+    };
+    for (let y = 2; y < 42; y += 1) {
+      for (let x = 4; x < width - 4; x += 1) {
+        const dx = x - width / 2;
+        const dy = y - 22;
+        if ((dx * dx) / 360 + (dy * dy) / 400 <= 1) put(x, y, [15, 117, 216, 255]);
+      }
+    }
+    for (let y = 34; y < height - 2; y += 1) {
+      const half = Math.max(1, Math.round((height - y) * 0.42));
+      for (let x = width / 2 - half; x <= width / 2 + half; x += 1) put(Math.round(x), y, [15, 117, 216, 255]);
+    }
+    for (let y = 12; y < 32; y += 1) {
+      for (let x = 14; x < 34; x += 1) {
+        if (Math.hypot(x - 24, y - 22) <= 8) put(x, y, [255, 255, 255, 255]);
+      }
+    }
+    return { width, height, data };
+  }
+
+  function ensureMapLibrePoiFallbackImage(maplibreMap: any): void {
+    if (!maplibreMap.hasImage?.(MAPLIBRE_POI_FALLBACK_IMAGE)) {
+      maplibreMap.addImage(MAPLIBRE_POI_FALLBACK_IMAGE, mapLibrePoiFallbackImage(), { pixelRatio: 2 });
+    }
+  }
+
   function ensureMapLibrePoiImage(definition: PoiIconDefinition): Promise<void> {
     const maplibreMap = state.maplibreMap;
     const imageId = mapLibrePoiImageId(definition.id);
     if (!maplibreMap || !maplibreMap.isStyleLoaded?.()) return Promise.resolve();
-    if (maplibreMap.hasImage?.(imageId)) return Promise.resolve();
+    if (maplibreMap.hasImage?.(imageId)) {
+      mapLibrePoiReadyImages.add(imageId);
+      return Promise.resolve();
+    }
     const existing = mapLibrePoiImageTasks.get(imageId);
     if (existing) return existing;
     const task = (async () => {
@@ -5914,6 +5952,8 @@ if (staticRoute) {
       if (maplibreMap.isStyleLoaded?.() && !maplibreMap.hasImage?.(imageId)) {
         maplibreMap.addImage(imageId, bitmap, { pixelRatio: 2 });
       }
+      mapLibrePoiReadyImages.add(imageId);
+      window.requestAnimationFrame(() => updateMapLibrePoiLayer(currentPoiDataset));
     })().catch((error) => {
       console.debug(`MapLibre POI image unavailable: ${definition.id}`, error);
     }).finally(() => {
@@ -5930,6 +5970,7 @@ if (staticRoute) {
     if (!maplibreMap || state.baseMode === "satellite") return;
 
     try {
+      ensureMapLibrePoiFallbackImage(maplibreMap);
       const zoom = map.getZoom();
       const bounds = map.getBounds().pad(0.08);
       const visiblePois = state.poiVisible ? pois
@@ -5952,7 +5993,9 @@ if (staticRoute) {
             title: state.poiLabelVisibility.get(poi.id) === false ? "" : poi.title,
             kind: poi.kind,
             iconId: poi.iconId,
-            mapIconId: mapLibrePoiImageId(poi.iconId),
+            mapIconId: mapLibrePoiReadyImages.has(mapLibrePoiImageId(poi.iconId))
+              ? mapLibrePoiImageId(poi.iconId)
+              : MAPLIBRE_POI_FALLBACK_IMAGE,
             color: poiDefinition(poi).color,
             priority: poiPriority(poi),
             "icon-emoji": poi.icon,
@@ -5967,6 +6010,63 @@ if (staticRoute) {
     } catch (err) {
       console.warn("Failed to update POI layer:", err);
     }
+  }
+
+  function trafficLightMapImage(active: TrafficColor): { width: number; height: number; data: Uint8Array } {
+    const width = 32;
+    const height = 48;
+    const data = new Uint8Array(width * height * 4);
+    const put = (x: number, y: number, rgba: [number, number, number, number]) => {
+      data.set(rgba, (y * width + x) * 4);
+    };
+    for (let y = 1; y < height - 1; y += 1) {
+      for (let x = 4; x < width - 4; x += 1) {
+        const roundedCorner = (x < 7 || x > width - 8) && (y < 4 || y > height - 5);
+        if (!roundedCorner) put(x, y, [17, 24, 39, 255]);
+      }
+    }
+    const lamps: Array<[TrafficColor, number, [number, number, number]]> = [
+      ["red", 11, [239, 68, 68]],
+      ["yellow", 24, [250, 204, 21]],
+      ["green", 37, [34, 197, 94]],
+    ];
+    for (const [color, cy, rgb] of lamps) {
+      for (let y = cy - 6; y <= cy + 6; y += 1) {
+        for (let x = 10; x <= 22; x += 1) {
+          if (Math.hypot(x - 16, y - cy) > 6) continue;
+          put(x, y, color === active ? [...rgb, 255] : [75, 85, 99, 210]);
+        }
+      }
+    }
+    return { width, height, data };
+  }
+
+  function ensureMapLibreTrafficLightImages(maplibreMap: any): void {
+    (["red", "yellow", "green"] as TrafficColor[]).forEach((color) => {
+      const id = `its-traffic-light-${color}`;
+      if (!maplibreMap.hasImage?.(id)) maplibreMap.addImage(id, trafficLightMapImage(color));
+    });
+  }
+
+  function updateMapLibreDeviceLayer(): void {
+    const maplibreMap = state.maplibreMap;
+    if (!maplibreMap || state.baseMode === "satellite") return;
+    const source = maplibreMap.getSource?.("its-device-source");
+    if (!source || !("setData" in source)) return;
+    (source as any).setData({
+      type: "FeatureCollection",
+      features: state.devices
+        .filter((device) => isValidCoordinate(device.position.lat, device.position.lng))
+        .map((device) => ({
+          type: "Feature",
+          properties: {
+            id: device.id,
+            label: device.label,
+            imageId: `its-traffic-light-${trafficStateForDevice(device).color}`,
+          },
+          geometry: { type: "Point", coordinates: [device.position.lng, device.position.lat] },
+        })),
+    });
   }
 
   function renderCurrentPoiDataset(): void {
@@ -6136,14 +6236,41 @@ if (staticRoute) {
 
   // When user clicks on raster tile, query a small radius for nearby features and open modal
   map.on('click', async (ev: L.LeafletMouseEvent) => {
-    if (!state.poiVisible) return;
     const lat = ev.latlng.lat;
     const lng = ev.latlng.lng;
 
-    // Resolve visible MapLibre POIs while Leaflet remains the interaction plane.
+    // Resolve vector symbols using MapLibre's pitched projection. Leaflet DOM
+    // markers are intentionally hidden in vector modes because their flat
+    // screen projection drifts when the camera is pitched.
     if (state.baseMode !== "satellite" && state.maplibreMap) {
       try {
         const point = state.maplibreMap.project([lng, lat]);
+        const hitBox: [[number, number], [number, number]] = [
+          [point.x - 18, point.y - 18],
+          [point.x + 18, point.y + 18],
+        ];
+        const deviceFeatures = state.maplibreMap.queryRenderedFeatures(hitBox, {
+          layers: ["its-device-symbols"],
+        });
+        const deviceId = String(deviceFeatures[0]?.properties?.id || "");
+        const device = state.devices.find((candidate) => candidate.id === deviceId);
+        if (device) {
+          state.device = device;
+          renderCameraTile();
+          openModal(device);
+          return;
+        }
+
+        const cameraFeatures = state.maplibreMap.queryRenderedFeatures(hitBox, {
+          layers: ["its-detail-ornament-symbols", "its-detail-ornament-points"],
+        }).filter((feature: any) => /^(?:surveillance|speed_camera)$/.test(String(feature.properties?.ornamentKind || "")));
+        const cameraFeature = cameraFeatures[0];
+        if (cameraFeature) {
+          openMapDynamicsPoint(cameraFeature as any, ev.latlng);
+          return;
+        }
+
+        if (!state.poiVisible) return;
         const features = state.maplibreMap.queryRenderedFeatures(point, {
           layers: ["poi-symbols", "poi-halo"],
         });
@@ -6160,6 +6287,8 @@ if (staticRoute) {
         // ignore MapLibre query errors
       }
     }
+
+    if (!state.poiVisible) return;
 
     // Fallback: query Overpass for nearby features
     try {
@@ -7855,6 +7984,9 @@ if (staticRoute) {
       maplibreMap.on("styleimagemissing", (event: any) => {
         const id = event?.id;
         if (!id || maplibreMap.hasImage(id)) return;
+        // These images have dedicated asynchronous/synchronous loaders. A
+        // transparent placeholder would permanently turn their symbols into dots.
+        if (String(id).startsWith("poi-") || String(id).startsWith("its-traffic-light-")) return;
         maplibreMap.addImage(id, {
           width: 1,
           height: 1,
@@ -7921,11 +8053,13 @@ if (staticRoute) {
               source: "poi-source",
               filter: ["!", ["has", "point_count"]],
               paint: {
-                "circle-radius": ["interpolate", ["linear"], ["zoom"], 14, 4, 18, 10],
-                "circle-color": ["coalesce", ["get", "color"], "#475569"],
-                "circle-opacity": 0.32,
-                "circle-stroke-color": "#ffffff",
-                "circle-stroke-width": 2
+                // Keep a generous invisible hit area for touch/click without
+                // exposing a field of ambiguous coloured dots while semantic
+                // bitmap icons are loading.
+                "circle-radius": ["interpolate", ["linear"], ["zoom"], 14, 12, 18, 22],
+                "circle-color": "rgba(0,0,0,0)",
+                "circle-opacity": 0,
+                "circle-stroke-width": 0
               }
             });
           }
@@ -7964,6 +8098,31 @@ if (staticRoute) {
               }
             });
           }
+
+          ensureMapLibreTrafficLightImages(maplibreMap);
+          if (!maplibreMap.getSource("its-device-source")) {
+            maplibreMap.addSource("its-device-source", {
+              type: "geojson",
+              data: { type: "FeatureCollection", features: [] },
+            });
+          }
+          if (!maplibreMap.getLayer("its-device-symbols")) {
+            maplibreMap.addLayer({
+              id: "its-device-symbols",
+              type: "symbol",
+              source: "its-device-source",
+              minzoom: 11,
+              layout: {
+                "icon-image": ["get", "imageId"],
+                "icon-size": ["interpolate", ["linear"], ["zoom"], 11, 0.55, 18, 0.9],
+                "icon-anchor": "bottom",
+                "icon-allow-overlap": true,
+                "icon-ignore-placement": true,
+                "symbol-sort-key": 0,
+              },
+            });
+          }
+          updateMapLibreDeviceLayer();
 
           // Add click handler for POI (allow MapLibre to detect clicks)
           // Note: MapLibre is non-interactive by default, so we detect features via ray casting
@@ -11726,6 +11885,7 @@ if (staticRoute) {
     const activeIds = new Set(devices.map((d) => d.id));
     removeMissingMarkers(activeIds);
     devices.forEach((d) => ensureMarker(d));
+    updateMapLibreDeviceLayer();
     mapRoot.dataset.raspberryMarkerCount = String(state.markers.size);
     const selected = state.device && activeIds.has(state.device.id)
       ? devices.find((d) => d.id === state.device!.id) ?? devices[0]
@@ -18136,6 +18296,35 @@ function itsRegisterWebMcpTools(): boolean {
     execute: async () => {
       const result = await itsListDeviceIds();
       return itsWebMcpContentResponse(JSON.stringify(result, null, 2), result);
+    },
+  });
+
+  register({
+    name: "research_with_its_maps_assistant",
+    description: "Ask the evidence-grounded ITS Maps AI assistant about Indonesian maps, realtime devices, traffic, CCTV availability, scientific sources, calculations, or public technical documentation. The assistant reports uncertainty and source limitations instead of inventing map or camera data.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        question: {
+          type: "string",
+          title: "Question for ITS Maps Assistant",
+          description: "A complete question or task for the ITS Maps research and map assistant.",
+          minLength: 2,
+          maxLength: 4000,
+        },
+      },
+      required: ["question"],
+    },
+    annotations: { readOnlyHint: false },
+    execute: async (input: Record<string, unknown>) => {
+      const question = String(input.question || "").trim();
+      if (!question) return itsWebMcpContentResponse("Pertanyaan wajib diisi.", { ok: false });
+      const answer = await askItsMapsAssistant(question);
+      return itsWebMcpContentResponse(answer.text, {
+        ok: true,
+        answer: answer.text,
+        hasRichContent: Boolean(answer.html),
+      });
     },
   });
 
