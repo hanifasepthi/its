@@ -791,7 +791,7 @@ function createRoadSceneQuery(center: LngLat, radiusM: number): string {
   node(around:${safeRadius},${latitude},${longitude})["surveillance"];
   node(around:${safeRadius},${latitude},${longitude})["natural"="tree"];
   node(around:${safeRadius},${latitude},${longitude})["emergency"="fire_hydrant"];
-  node(around:${safeRadius},${latitude},${longitude})["barrier"~"bollard|gate|lift_gate"];
+  node(around:${safeRadius},${latitude},${longitude})["barrier"~"bollard|lift_gate"];
 );
 out body;
 >;

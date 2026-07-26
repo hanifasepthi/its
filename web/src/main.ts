@@ -1692,13 +1692,15 @@ if (staticRoute) {
     const name = String(properties.name || properties.title || "Kamera CCTV");
     const source = String(properties.source || "Sumber data peta");
     const sourceUrl = usablePublicMediaUrl(String(properties.sourceUrl || ""));
-    const streamCandidate = String(properties.streamUrl || properties.publicUrl || properties.linkLive || properties.link_live || "");
+    const streamCandidate = String(properties.streamUrl || properties.publicUrl || properties.website || properties.linkLive || properties.link_live || "");
     // Never move credentials embedded by an upstream metadata service into
     // client HTML. A public player is rendered only for a credential-free URL.
     const streamUrl = /^(?:https?):\/\//i.test(streamCandidate) && !/@/.test(streamCandidate)
       ? usablePublicMediaUrl(streamCandidate)
       : "";
     const streamStatus = String(properties.streamStatus || (streamUrl ? "public-live" : "metadata-only"));
+    const isThirdPartyPublicPage = streamStatus === "public-page-third-party";
+    const address = String(properties.address || properties.location || "").trim();
     const modal = document.createElement("div");
     modal.id = "map-dynamics-camera-modal";
     modal.className = "map-license-modal map-camera-source-modal";
@@ -1706,14 +1708,15 @@ if (staticRoute) {
       <section class="map-license-sheet map-camera-source-sheet" role="dialog" aria-modal="true" aria-labelledby="map-camera-source-title">
         <div class="map-license-grip" data-swipe-handle aria-hidden="true"></div>
         <header class="map-license-head">
-          <div><span>CCTV terverifikasi</span><h2 id="map-camera-source-title">${escapeHtml(name)}</h2></div>
+          <div><span>${isThirdPartyPublicPage ? "Lokasi CCTV terverifikasi · pemutar publik pihak ketiga" : "CCTV terverifikasi"}</span><h2 id="map-camera-source-title">${escapeHtml(name)}</h2></div>
           <button type="button" data-camera-source-close aria-label="Tutup detail CCTV" title="Tutup"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
         </header>
         ${streamUrl ? `
-          <div class="map-camera-live-badge"><i></i> LIVE dari penyedia resmi</div>
+          <div class="map-camera-live-badge"><i></i> ${isThirdPartyPublicPage ? "Pemutar publik — status live mengikuti penyedia" : "LIVE dari penyedia sumber"}</div>
           <div class="map-camera-public-player">
             <iframe src="${escapeHtml(streamUrl)}" title="Video realtime ${escapeHtml(name)}" loading="eager" allow="autoplay; fullscreen; picture-in-picture" referrerpolicy="no-referrer"></iframe>
           </div>
+          ${isThirdPartyPublicPage ? `<p class="map-camera-disclaimer">Halaman ini merupakan mirror publik independen. Jika penyedia menolak embed atau membatasi trafik, gunakan tombol buka pemutar.</p>` : ""}
         ` : `
           <div class="map-camera-unavailable">
             <strong>Lokasi kamera tersedia, URL video publik langsung belum tersedia.</strong>
@@ -1723,11 +1726,13 @@ if (staticRoute) {
         <dl class="map-camera-source-meta">
           <div><dt>Koordinat</dt><dd>${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}</dd></div>
           <div><dt>Sumber</dt><dd>${escapeHtml(source)}</dd></div>
+          ${address ? `<div><dt>Alamat</dt><dd>${escapeHtml(address)}</dd></div>` : ""}
         </dl>
-        ${sourceUrl ? `<a class="map-camera-source-link" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">Buka sumber resmi</a>` : ""}
+        ${sourceUrl ? `<a class="map-camera-source-link" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">${isThirdPartyPublicPage ? "Buka pemutar publik" : "Buka sumber"}</a>` : ""}
       </section>`;
     const close = () => {
       modal.classList.remove("open");
+      clearSidePanelWidth();
       window.setTimeout(() => modal.remove(), 220);
     };
     modal.addEventListener("click", (event) => { if (event.target === modal) close(); });
@@ -1735,7 +1740,10 @@ if (staticRoute) {
     document.body.appendChild(modal);
     const sheet = modal.querySelector<HTMLElement>(".map-camera-source-sheet");
     if (sheet) setupSheetSwipe(sheet, close);
-    requestAnimationFrame(() => modal.classList.add("open"));
+    requestAnimationFrame(() => {
+      modal.classList.add("open");
+      setSidePanelWidthFromSheet(sheet);
+    });
   }
 
   const mapDynamicsRenderer = new MapDynamicsLeafletRenderer(map, {
@@ -7614,6 +7622,7 @@ if (staticRoute) {
       "#privacy-info-modal.open",
       "#app-license-info-modal.open",
       "#about-site-info-modal.open",
+      "#map-dynamics-camera-modal.open",
       "#m-device-modal.open",
       "#m-poi-modal.open",
       "#m-layer-modal.open",

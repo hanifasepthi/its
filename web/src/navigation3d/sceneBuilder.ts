@@ -415,7 +415,10 @@ function nodeOrnamentKind(tags: Tags): Ornament3D["kind"] | null {
   if (tags.highway === "bus_stop" || tags.public_transport === "platform") return "bus-stop";
   if (tags.emergency === "fire_hydrant") return "hydrant";
   if (tags.barrier === "bollard") return "bollard";
-  if (["gate", "lift_gate", "swing_gate"].includes(tags.barrier)) return "barrier";
+  // Generic and swing gates frequently represent entrances beside a road. A
+  // full-width 3D boom there looks as if it blocks the carriageway. Render only
+  // explicitly mapped lift gates; the other gate nodes remain map metadata.
+  if (tags.barrier === "lift_gate") return "barrier";
   return null;
 }
 

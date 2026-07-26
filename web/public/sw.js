@@ -166,13 +166,21 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
+          if (!response || response.type === 'error') throw new Error('Navigation network response failed');
           const copy = response.clone();
           if (sameOrigin) {
             caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy)).catch(() => {});
           }
           return response;
         })
-        .catch(() => caches.match('/index.html'))
+        .catch(async () => {
+          const cached = await caches.match('/index.html');
+          if (cached) return cached;
+          return new Response(
+            '<!doctype html><html lang="id"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>ITS Maps offline</title><body><main><h1>ITS Maps sedang offline</h1><p>Sambungkan perangkat ke internet lalu muat ulang halaman.</p></main></body></html>',
+            { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } }
+          );
+        })
     );
     return;
   }

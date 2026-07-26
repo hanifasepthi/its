@@ -60,6 +60,7 @@ const MAX_ACTIVE_SHARDS = 16;
 const MAX_FEATURES_PER_RESPONSE = 12_000;
 const DEFAULT_MANIFEST_URL = "/data/map-dynamics/manifest.json";
 const DEFAULT_DELTA_FEED = "https://its.hanifahseptiani45.workers.dev/v1/map/deltas";
+const SUPPLEMENTAL_PUBLIC_CCTV_URL = "/data/public-cctv.geojson";
 
 function finiteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
@@ -223,6 +224,7 @@ export class MapDynamicsLoader {
   private readonly manifestUrl: string;
   private manifestPromise: Promise<{ manifest: MapDynamicsManifest; source: "manifest" | "cache" }> | null = null;
   private manifestLoadedAt = 0;
+  private supplementalCctvPromise: Promise<MapDetailFeatureCollection> | null = null;
 
   constructor(manifestUrl = DEFAULT_MANIFEST_URL) {
     this.manifestUrl = manifestUrl;
@@ -298,6 +300,19 @@ export class MapDynamicsLoader {
     }
   }
 
+  private async supplementalCctv(signal?: AbortSignal): Promise<MapDetailFeatureCollection> {
+    if (this.supplementalCctvPromise) return this.supplementalCctvPromise;
+    this.supplementalCctvPromise = (async () => {
+      try {
+        const value = await fetchJson(SUPPLEMENTAL_PUBLIC_CCTV_URL, signal, "force-cache");
+        return validCollection(value) ? value : EMPTY_COLLECTION;
+      } catch {
+        return EMPTY_COLLECTION;
+      }
+    })();
+    return this.supplementalCctvPromise;
+  }
+
   async load(bounds: MapDynamicsBounds, zoom: number, signal?: AbortSignal): Promise<MapDynamicsLoadResult> {
     if (![bounds.west, bounds.south, bounds.east, bounds.north, zoom].every(finiteNumber)) {
       return { collection: EMPTY_COLLECTION, manifestVersion: "", selectedShards: 0, loadedShards: 0, remoteDeltas: 0, source: "empty" };
@@ -307,12 +322,23 @@ export class MapDynamicsLoader {
       .filter((shard) => zoom >= shard.minZoom && zoom <= shard.maxZoom && intersects(bounds, shard.bbox))
       .sort((left, right) => centerDistance(bounds, left) - centerDistance(bounds, right))
       .slice(0, MAX_ACTIVE_SHARDS);
-    const [shards, deltaCollection] = await Promise.all([
+    const [shards, deltaCollection, supplementalCctv] = await Promise.all([
       Promise.all(selected.map((shard) => this.shard(manifest, shard, signal))),
       this.deltas(manifest, bounds, zoom, signal),
+      this.supplementalCctv(signal),
     ]);
     const available = shards.filter((collection): collection is MapDetailFeatureCollection => Boolean(collection));
-    const collection = mergedCollections([...available, deltaCollection]);
+    const visibleSupplementalCctv: MapDetailFeatureCollection = {
+      type: "FeatureCollection",
+      features: zoom >= 14
+        ? supplementalCctv.features.filter((feature) => {
+          if (feature.geometry.type !== "Point") return false;
+          const [lng, lat] = feature.geometry.coordinates as number[];
+          return lng >= bounds.west && lng <= bounds.east && lat >= bounds.south && lat <= bounds.north;
+        })
+        : [],
+    };
+    const collection = mergedCollections([...available, deltaCollection, visibleSupplementalCctv]);
     return {
       collection,
       manifestVersion: manifest.datasetVersion,

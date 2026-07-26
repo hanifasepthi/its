@@ -1,0 +1,47 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "streetside-jakarta-96",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [106.82295, -6.17926]
+      },
+      "properties": {
+        "kind": "cctv",
+        "name": "Gambir 013",
+        "address": "Jalan Medan Merdeka Barat, Gambir, Jakarta Pusat",
+        "source": "Streetside Jakarta",
+        "sourceId": "camera/96",
+        "sourceUrl": "https://streetside.mugnimaestra.dev/camera/96",
+        "publicUrl": "https://streetside.mugnimaestra.dev/camera/96",
+        "streamStatus": "public-page-third-party",
+        "verification": "verified",
+        "verificationMethod": "coordinate-and-public-page",
+        "updatedAt": "2026-07-27T00:00:00Z"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "streetside-jakarta-63",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [106.80173, -6.35015]
+      },
+      "properties": {
+        "kind": "cctv",
+        "name": "Cipedak 001",
+        "address": "Jalan Moh. Kahfi I, Cipedak, Jakarta Selatan",
+        "source": "Streetside Jakarta",
+        "sourceId": "camera/63",
+        "sourceUrl": "https://streetside.mugnimaestra.dev/camera/63",
+        "publicUrl": "https://streetside.mugnimaestra.dev/camera/63",
+        "streamStatus": "public-page-third-party",
+        "verification": "verified",
+        "verificationMethod": "coordinate-and-public-page",
+        "updatedAt": "2026-07-27T00:00:00Z"
+      }
+    }
+  ]
+}
