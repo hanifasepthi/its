@@ -110,19 +110,28 @@ const POINT_PRIORITY: Record<string, number> = {
   traffic_camera: 3,
   speed_camera: 3,
   cctv: 4,
+  transport: 5,
+  healthcare: 6,
+  education: 7,
+  public_service: 8,
+  attraction: 9,
+  food: 10,
+  shopping: 11,
+  lodging: 12,
+  worship: 13,
   fire_hydrant: 5,
-  school_zone: 6,
-  gate: 7,
-  barrier: 7,
-  toilets: 8,
-  elevator: 9,
-  emergency_shelter: 10,
-  drinking_water: 11,
-  entrance: 12,
-  bench: 13,
-  waste_basket: 14,
-  street_lamp: 15,
-  tree: 16,
+  school_zone: 14,
+  gate: 40,
+  barrier: 41,
+  toilets: 20,
+  elevator: 21,
+  emergency_shelter: 15,
+  drinking_water: 22,
+  entrance: 42,
+  bench: 45,
+  waste_basket: 46,
+  street_lamp: 47,
+  tree: 48,
 };
 
 const POINT_MINIMUM_ZOOM: Record<string, number> = {
@@ -135,8 +144,8 @@ const POINT_MINIMUM_ZOOM: Record<string, number> = {
   school_zone: 16,
   platform: 16,
   fire_hydrant: 17,
-  gate: 17,
-  barrier: 17,
+  gate: 19,
+  barrier: 19,
   toilets: 17,
   emergency_shelter: 17,
   drinking_water: 17,
@@ -150,9 +159,9 @@ const POINT_MINIMUM_ZOOM: Record<string, number> = {
   street_lamp: 18,
   bench: 18,
   waste_basket: 18,
-  entrance: 18,
-  bollard: 18,
-  delineator: 18,
+  entrance: 19,
+  bollard: 19,
+  delineator: 19,
   manhole: 18,
   drain_grate: 18,
   healthcare: 15,
@@ -165,6 +174,7 @@ const POINT_MINIMUM_ZOOM: Record<string, number> = {
   worship: 16,
   shopping: 16,
   tree: 18,
+  poi: 16,
 };
 
 type PointPictogram = {
@@ -1031,6 +1041,11 @@ export class MapDynamicsLeafletRenderer {
     pointCandidates
       .sort((left, right) => stableFeatureKey(left.feature).localeCompare(stableFeatureKey(right.feature)))
       .forEach((candidate) => {
+        if (zoom < candidate.minimumZoom) {
+          generalizedPoints += 1;
+          collisionSkipped += 1;
+          return;
+        }
         const key = `${Math.floor(candidate.screen.x / cellSize)}:${Math.floor(candidate.screen.y / cellSize)}`;
         const bucket = pointBuckets.get(key) || [];
         bucket.push(candidate);
@@ -1038,7 +1053,6 @@ export class MapDynamicsLeafletRenderer {
       });
 
     [...pointBuckets.entries()].sort(([left], [right]) => left.localeCompare(right)).forEach(([, candidates]) => {
-      generalizedPoints += candidates.filter((candidate) => zoom < candidate.minimumZoom).length;
       if (candidates.length >= 2) {
         // Anchor the representative at the actual dominant source instead of
         // an invented centroid. The count remains available to assistive text
@@ -1065,10 +1079,7 @@ export class MapDynamicsLeafletRenderer {
 
       const candidate = candidates[0];
       if (!candidate) return;
-      const generalized = zoom < candidate.minimumZoom;
-      const size = generalized
-        ? Math.round(clamp(10 + (zoom - this.options.minimumZoom) * 0.35, 10, 14))
-        : Math.round(clamp(14 + (zoom - 15) * 1.05, 14, 21));
+      const size = Math.round(clamp(14 + (zoom - 15) * 1.05, 14, 21));
       const title = featureTitle(candidate.feature) || candidate.kind.replaceAll("_", " ");
       const marker = L.marker(candidate.point, {
         pane: this.pointPaneName,

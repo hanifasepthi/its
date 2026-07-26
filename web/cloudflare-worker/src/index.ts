@@ -90,7 +90,6 @@ async function nationalArchive(request: Request, env: Env): Promise<Response> {
     // GitHub release assets redirect to blob storage. Following automatically can
     // discard Range, which would make a PMTiles client download the entire archive.
     redirect: "manual",
-    cf: { cacheEverything: true, cacheTtl: 31_536_000 },
   });
   if (response.status >= 300 && response.status < 400) {
     const location = response.headers.get("Location");
@@ -99,7 +98,9 @@ async function nationalArchive(request: Request, env: Env): Promise<Response> {
       method: request.method,
       headers: upstreamHeaders,
       redirect: "follow",
-      cf: { cacheEverything: true, cacheTtl: 31_536_000 },
+      // Signed GitHub release-asset URLs are short-lived and range-specific.
+      // Caching that URL at Cloudflare can replay an expired signature and
+      // produce a 502 even while the release asset itself remains healthy.
     });
   }
   if (!response.ok) throw new HttpError(502, "map_archive_upstream_failed", "Arsip peta nasional gagal dibaca dari GitHub.");

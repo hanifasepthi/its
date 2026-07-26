@@ -19,19 +19,27 @@ class StableRangeSource {
   constructor(url) { this.url = url; }
   getKey() { return this.url; }
   async getBytes(offset, length, signal) {
-    const response = await fetch(this.url, {
-      headers: { Range: `bytes=${offset}-${offset + length - 1}` },
-      signal,
-    });
-    if (response.status !== 206) throw new Error(`PMTiles range ${offset}+${length} mendapat HTTP ${response.status}`);
-    const data = await response.arrayBuffer();
-    if (data.byteLength !== length) throw new Error(`PMTiles range pendek: ${data.byteLength}/${length}`);
-    return {
-      data,
-      etag: response.headers.get("etag") || undefined,
-      expires: response.headers.get("expires") || undefined,
-      cacheControl: response.headers.get("cache-control") || undefined,
-    };
+    let lastStatus = 0;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const response = await fetch(this.url, {
+        headers: { Range: `bytes=${offset}-${offset + length - 1}` },
+        signal,
+      });
+      lastStatus = response.status;
+      if (response.status === 206) {
+        const data = await response.arrayBuffer();
+        if (data.byteLength !== length) throw new Error(`PMTiles range pendek: ${data.byteLength}/${length}`);
+        return {
+          data,
+          etag: response.headers.get("etag") || undefined,
+          expires: response.headers.get("expires") || undefined,
+          cacheControl: response.headers.get("cache-control") || undefined,
+        };
+      }
+      if (response.status !== 429 && response.status < 500) break;
+      await new Promise((resolve) => setTimeout(resolve, 400 * 2 ** attempt));
+    }
+    throw new Error(`PMTiles range ${offset}+${length} mendapat HTTP ${lastStatus} setelah retry`);
   }
 }
 
@@ -71,7 +79,7 @@ function tileRange(bbox, z) {
 
 function classifiedKind(layer, properties, geometryType) {
   const cls = String(properties.class || properties.subclass || "").toLowerCase();
-  if (layer === "transportation") {
+  if (layer === "transportation" || layer === "transportation_name") {
     if (/rail|tram|subway|light_rail|monorail/.test(cls)) return "railway";
     if (/cycleway/.test(cls)) return "cycleway";
     if (/footway|pedestrian|path|steps/.test(cls)) return "pedestrian";
@@ -133,7 +141,7 @@ function enrichedProperties(layer, properties, kind) {
   const cls = String(properties.class || "").toLowerCase();
   const subclass = String(properties.subclass || "").toLowerCase();
   const brunnel = String(properties.brunnel || "").toLowerCase();
-  if (layer === "transportation") {
+  if (layer === "transportation" || layer === "transportation_name") {
     if (kind === "road" || kind === "cycleway" || kind === "pedestrian") {
       result.highway = cls || subclass || "road";
       if (kind === "cycleway") result.highway = "cycleway";
