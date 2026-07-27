@@ -18,10 +18,6 @@ declare global {
     readonly modelContext?: ItsModelContext;
   }
 
-  interface Navigator {
-    readonly modelContext?: ItsModelContext;
-  }
-
   interface SubmitEvent {
     readonly agentInvoked?: boolean;
     respondWith?: (response: Promise<unknown> | unknown) => void;

@@ -19,6 +19,7 @@ type MapDynamicsShard = {
   bytes: number;
   sha256?: string;
   updatedAt?: string;
+  priority?: number;
 };
 
 type MapDynamicsManifest = {
@@ -56,7 +57,11 @@ const MANIFEST_CACHE_KEY = "map-dynamics:manifest:v1";
 const MANIFEST_MAX_AGE_MS = 15 * 60 * 1000;
 const SHARD_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const DELTA_MAX_AGE_MS = 10 * 60 * 1000;
-const MAX_ACTIVE_SHARDS = 16;
+// National ingest shards can overlap after record-count splitting. Loading 16
+// multi-megabyte shards blocked the small CCTV supplement and made detailed
+// layers appear empty. Four is the safe fallback; spatial hotspot shards take
+// exclusive precedence when present.
+const MAX_ACTIVE_SHARDS = 4;
 const MAX_FEATURES_PER_RESPONSE = 12_000;
 const DEFAULT_MANIFEST_URL = "/data/map-dynamics/manifest.json";
 const DEFAULT_DELTA_FEED = "https://its.hanifahseptiani45.workers.dev/v1/map/deltas";
@@ -318,9 +323,14 @@ export class MapDynamicsLoader {
       return { collection: EMPTY_COLLECTION, manifestVersion: "", selectedShards: 0, loadedShards: 0, remoteDeltas: 0, source: "empty" };
     }
     const { manifest, source } = await this.manifest(signal);
-    const selected = manifest.shards
+    const candidates = manifest.shards
       .filter((shard) => zoom >= shard.minZoom && zoom <= shard.maxZoom && intersects(bounds, shard.bbox))
-      .sort((left, right) => centerDistance(bounds, left) - centerDistance(bounds, right))
+      .sort((left, right) =>
+        (right.priority || 0) - (left.priority || 0)
+        || centerDistance(bounds, left) - centerDistance(bounds, right)
+        || left.bytes - right.bytes);
+    const preferred = candidates.filter((shard) => (shard.priority || 0) > 0);
+    const selected = (preferred.length ? preferred : candidates)
       .slice(0, MAX_ACTIVE_SHARDS);
     const [shards, deltaCollection, supplementalCctv] = await Promise.all([
       Promise.all(selected.map((shard) => this.shard(manifest, shard, signal))),

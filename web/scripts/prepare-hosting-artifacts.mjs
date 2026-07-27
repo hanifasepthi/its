@@ -94,6 +94,14 @@ function externalizeMapDynamicsShards() {
   if (!Array.isArray(manifest.shards)) return;
   manifest.shards = manifest.shards.map((shard) => {
     if (!shard || typeof shard !== "object" || typeof shard.url !== "string") return shard;
+    if (/^\.\.\/map-hotspots\//.test(shard.url.replaceAll("\\", "/"))) {
+      const fileName = path.posix.basename(shard.url.replaceAll("\\", "/"));
+      return {
+        ...shard,
+        url: `${MAP_DATA_GITHUB_BASE.replace(/\/map-dynamics$/, "")}/map-hotspots/${encodeURIComponent(fileName)}`,
+      };
+    }
+    if (!/^\.\/shards\//.test(shard.url.replaceAll("\\", "/"))) return shard;
     const fileName = path.posix.basename(shard.url.replaceAll("\\", "/"));
     return {
       ...shard,
