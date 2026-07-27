@@ -5826,6 +5826,7 @@ if (staticRoute) {
   const MAX_REMEMBERED_POIS = 6_000;
   const mapLibrePoiImageTasks = new Map<string, Promise<void>>();
   const mapLibrePoiReadyImages = new Set<string>();
+  const mapLibrePoiPlaceholderImages = new Set<string>();
   const MAPLIBRE_POI_FALLBACK_IMAGE = "its-poi-fallback";
   const POI_PREFETCH_SESSION_LIMIT = 16;
   const POI_PREFETCH_DELAY_MS = 2_400;
@@ -5970,7 +5971,7 @@ if (staticRoute) {
     const maplibreMap = state.maplibreMap;
     const imageId = mapLibrePoiImageId(definition.id);
     if (!maplibreMap || !maplibreMap.isStyleLoaded?.()) return Promise.resolve();
-    if (maplibreMap.hasImage?.(imageId)) {
+    if (maplibreMap.hasImage?.(imageId) && !mapLibrePoiPlaceholderImages.has(imageId)) {
       mapLibrePoiReadyImages.add(imageId);
       return Promise.resolve();
     }
@@ -5982,6 +5983,10 @@ if (staticRoute) {
       const response = await fetch(imageUrl);
       if (!response.ok) throw new Error(`POI image ${response.status}`);
       const bitmap = await createImageBitmap(await response.blob());
+      if (maplibreMap.isStyleLoaded?.() && mapLibrePoiPlaceholderImages.has(imageId)) {
+        maplibreMap.removeImage?.(imageId);
+        mapLibrePoiPlaceholderImages.delete(imageId);
+      }
       if (maplibreMap.isStyleLoaded?.() && !maplibreMap.hasImage?.(imageId)) {
         maplibreMap.addImage(imageId, bitmap, { pixelRatio: 2 });
       }
@@ -8018,9 +8023,17 @@ if (staticRoute) {
       maplibreMap.on("styleimagemissing", (event: any) => {
         const id = event?.id;
         if (!id || maplibreMap.hasImage(id)) return;
-        // These images have dedicated asynchronous/synchronous loaders. A
-        // transparent placeholder would permanently turn their symbols into dots.
-        if (String(id).startsWith("poi-") || String(id).startsWith("its-traffic-light-")) return;
+        if (String(id).startsWith("poi-")) {
+          // A style can request an icon before its asynchronous bitmap finishes.
+          // Install a visible pin immediately so MapLibre does not emit repeated
+          // errors or replace the POI with an unexplained dot. The async loader
+          // replaces this tracked placeholder with the category artwork.
+          maplibreMap.addImage(id, mapLibrePoiFallbackImage(), { pixelRatio: 2 });
+          mapLibrePoiPlaceholderImages.add(String(id));
+          return;
+        }
+        // Traffic lights have a dedicated synchronous loader.
+        if (String(id).startsWith("its-traffic-light-")) return;
         maplibreMap.addImage(id, {
           width: 1,
           height: 1,
@@ -17863,6 +17876,22 @@ async function askItsMapsAssistant(
   history: ItsChatTurn[] = [],
   signal?: AbortSignal,
 ): Promise<ItsAssistantResponse> {
+  const researchQuestion = /\b(?:rf-?detr|rt-?detr|detr|formulasi|formula|rumus|jurnal|paper|penelitian|ilmiah|literatur|sitasi|referensi|sumber|bandingkan|perbandingan|arsitektur|metode|keterbatasan)\b/i.test(question);
+  if (researchQuestion) {
+    onStage?.("Merencanakan pencarian jurnal dan sumber publik...");
+    const researched = await publicResearchAgent.answer({
+      question,
+      history,
+      signal,
+      onProgress: (message) => onStage?.(message),
+    });
+    if (researched.text.trim()) {
+      return {
+        text: researched.text.trim(),
+        html: researched.html,
+      };
+    }
+  }
   const fastResponse = await itsFastAssistantResponse(question, history, signal, onStage);
   if (fastResponse) return fastResponse;
   itsInstallAgentRuntimeBindings();
@@ -17876,6 +17905,21 @@ async function askItsMapsAssistant(
   await itsExecutePlannedUiActions(execution.plan, onStage);
   const cards = itsAgentCardsFromOutputs(execution.plan, execution.outputs);
   const modelText = execution.responseText.trim();
+  if (!modelText) {
+    onStage?.("Mencari jurnal dan sumber publik yang dapat diverifikasi...");
+    const researched = await publicResearchAgent.answer({
+      question,
+      history,
+      signal,
+      onProgress: (message) => onStage?.(message),
+    });
+    if (researched.text.trim()) {
+      return {
+        text: researched.text.trim(),
+        html: [researched.html, cards].filter(Boolean).join(""),
+      };
+    }
+  }
   return {
     text: modelText || "Saya belum memiliki bukti atau data yang cukup untuk menjawab dengan aman. Mohon tambahkan konteks yang ingin diperiksa.",
     html: [execution.responseHtml, cards].filter(Boolean).join(""),
