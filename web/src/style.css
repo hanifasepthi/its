@@ -3032,6 +3032,14 @@ body.its-sheet-open .leaflet-control-attribution {
   text-decoration: none;
 }
 
+.its-research-result a:hover,
+.its-research-reader a:hover {
+  color: #075985;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
 .its-research-result span,
 .its-research-reader>span,
 .its-research-stage>span {
@@ -4908,6 +4916,45 @@ body.its-sheet-open .leaflet-control-attribution {
   overflow-wrap: anywhere;
 }
 
+.its-ai-source-notes a,
+.its-ai-other-sources a {
+  color: #075985;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.its-ai-source-notes a:hover,
+.its-ai-other-sources a:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+.its-ai-other-sources li {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+
+.its-ai-other-sources li>img {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 6px;
+  object-fit: contain;
+}
+
+.its-ai-other-sources li>div {
+  min-width: 0;
+}
+
+.its-ai-other-sources li small {
+  display: block;
+  margin-top: 3px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
 .its-ai-formula-flow,
 .its-ai-references {
   display: grid;
@@ -6614,6 +6661,59 @@ body.its-agent-cursor-active * {
   width: min(94vw, 680px);
 }
 
+.map-camera-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.map-camera-head-actions button {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+}
+
+.map-camera-head-actions svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.map-camera-source-modal.is-floating-camera {
+  pointer-events: none;
+  background: transparent;
+}
+
+.map-camera-source-modal.is-floating-camera .map-camera-source-sheet {
+  position: fixed;
+  inset: auto;
+  left: var(--camera-float-x, max(12px, calc(100vw - min(680px, 48vw) - 18px)));
+  top: var(--camera-float-y, 72px);
+  width: min(680px, 48vw);
+  height: auto;
+  max-height: calc(100vh - 90px);
+  pointer-events: auto;
+  border: 1px solid #cbd5e1;
+  border-radius: 18px;
+  transform: none;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, .28);
+}
+
+.map-camera-source-modal.is-floating-camera .map-license-head {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.map-camera-source-modal.is-camera-dragging .map-license-head {
+  cursor: grabbing;
+}
+
 .map-camera-live-badge {
   display: inline-flex;
   align-items: center;
@@ -6716,6 +6816,14 @@ body.its-agent-cursor-active * {
 @media (max-width: 640px) {
   .map-camera-source-sheet {
     width: 100%;
+  }
+
+  .map-camera-source-modal.is-floating-camera .map-camera-source-sheet {
+    left: var(--camera-float-x, 8px);
+    top: var(--camera-float-y, 70px);
+    width: calc(100vw - 16px);
+    max-height: calc(100vh - 82px);
+    border-radius: 16px;
   }
 
   .map-camera-source-meta {
@@ -13003,6 +13111,14 @@ body.map-legend-closing .map {
   margin: -4px 0 14px;
   padding: 2px 1px 4px;
   scrollbar-width: thin;
+}
+
+.its-research-viewport.is-auto-scrolling {
+  scrollbar-color: #2563eb #e2e8f0;
+}
+
+.its-research-viewport.is-auto-scrolling::-webkit-scrollbar-thumb {
+  background: #2563eb;
 }
 
 .map-camera-stream-tabs button {

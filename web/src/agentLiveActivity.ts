@@ -400,6 +400,16 @@ function faviconUrl(value: string): string {
   }
 }
 
+function fallbackFaviconUrl(value: string): string {
+  try {
+    const url = new URL(value, window.location.href);
+    if (!/^https?:$/.test(url.protocol)) return "";
+    return `https://www.google.com/s2/favicons?domain_url=${encodeURIComponent(url.origin)}&sz=64`;
+  } catch {
+    return "";
+  }
+}
+
 function createFavicon(
   className: string,
   pageUrl: string,
@@ -414,6 +424,10 @@ function createFavicon(
   image.src = source;
   image.alt = "";
   image.referrerPolicy = "no-referrer";
+  image.addEventListener("error", () => {
+    const fallbackSource = fallbackFaviconUrl(pageUrl);
+    if (fallbackSource && image.src !== fallbackSource) image.src = fallbackSource;
+  });
   image.addEventListener("load", () => {
     icon.textContent = "";
     icon.appendChild(image);
@@ -729,6 +743,8 @@ export function mountAgentLiveActivity(host: HTMLElement): () => void {
       const target = current.viewport.querySelector<HTMLElement>(`[data-playback-id="${CSS.escape(view.highlightedTarget)}"]`)
         || current.viewport.querySelector<HTMLElement>(`[data-playback-id="${CSS.escape(`article-block-${view.highlightedTarget}`)}"]`);
       target?.scrollIntoView({ block: "center", behavior: animate ? "smooth" : "auto" });
+      current.viewport.classList.add("is-auto-scrolling");
+      window.setTimeout(() => current.viewport.classList.remove("is-auto-scrolling"), 760);
     }
     movePointer(current, view.pointerTarget, view.pointerClick, animate);
     current.status.textContent = view.status;

@@ -1722,7 +1722,10 @@ if (staticRoute) {
         <div class="map-license-grip" data-swipe-handle aria-hidden="true"></div>
         <header class="map-license-head">
           <div><span>${isThirdPartyPublicPage ? "Lokasi CCTV terverifikasi · pemutar publik pihak ketiga" : "CCTV terverifikasi"}</span><h2 id="map-camera-source-title">${escapeHtml(name)}</h2></div>
-          <button type="button" data-camera-source-close aria-label="Tutup detail CCTV" title="Tutup"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+          <div class="map-camera-head-actions">
+            ${streamIsPlayable ? `<button type="button" data-camera-float aria-label="Jadikan pemutar CCTV panel mengambang" title="Panel mengambang"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h13v13M21 3l-8 8M16 21H3V8"/></svg></button>` : ""}
+            <button type="button" data-camera-source-close aria-label="Tutup detail CCTV" title="Tutup"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+          </div>
         </header>
         ${streamIsPlayable ? `
           <div class="map-camera-live-badge"><i></i> ${isThirdPartyPublicPage ? "Pemutar publik — status live mengikuti penyedia" : "LIVE dari penyedia sumber"}</div>
@@ -1753,6 +1756,16 @@ if (staticRoute) {
     };
     modal.addEventListener("click", (event) => { if (event.target === modal) close(); });
     modal.querySelector("[data-camera-source-close]")?.addEventListener("click", close);
+    const floatButton = modal.querySelector<HTMLButtonElement>("[data-camera-float]");
+    floatButton?.addEventListener("click", () => {
+      const floating = modal.classList.toggle("is-floating-camera");
+      floatButton.setAttribute("aria-pressed", String(floating));
+      floatButton.title = floating ? "Kembalikan ke panel detail" : "Panel mengambang";
+      if (!floating) {
+        modal.style.removeProperty("--camera-float-x");
+        modal.style.removeProperty("--camera-float-y");
+      }
+    });
     const player = modal.querySelector<HTMLIFrameElement>("[data-camera-player]");
     modal.querySelectorAll<HTMLButtonElement>("[data-camera-stream]").forEach((button) => {
       button.addEventListener("click", () => {
@@ -1766,6 +1779,30 @@ if (staticRoute) {
     });
     document.body.appendChild(modal);
     const sheet = modal.querySelector<HTMLElement>(".map-camera-source-sheet");
+    const cameraHeader = modal.querySelector<HTMLElement>(".map-license-head");
+    let floatDrag: { id: number; x: number; y: number; left: number; top: number } | null = null;
+    cameraHeader?.addEventListener("pointerdown", (event) => {
+      if (!modal.classList.contains("is-floating-camera") || (event.target as HTMLElement).closest("button, a")) return;
+      const rect = sheet?.getBoundingClientRect();
+      if (!rect) return;
+      floatDrag = { id: event.pointerId, x: event.clientX, y: event.clientY, left: rect.left, top: rect.top };
+      cameraHeader.setPointerCapture(event.pointerId);
+      modal.classList.add("is-camera-dragging");
+    });
+    cameraHeader?.addEventListener("pointermove", (event) => {
+      if (!floatDrag || event.pointerId !== floatDrag.id || !sheet) return;
+      const left = clamp(floatDrag.left + event.clientX - floatDrag.x, 8, Math.max(8, window.innerWidth - sheet.offsetWidth - 8));
+      const top = clamp(floatDrag.top + event.clientY - floatDrag.y, 8, Math.max(8, window.innerHeight - sheet.offsetHeight - 8));
+      modal.style.setProperty("--camera-float-x", `${left}px`);
+      modal.style.setProperty("--camera-float-y", `${top}px`);
+    });
+    const endFloatDrag = (event: PointerEvent) => {
+      if (!floatDrag || event.pointerId !== floatDrag.id) return;
+      floatDrag = null;
+      modal.classList.remove("is-camera-dragging");
+    };
+    cameraHeader?.addEventListener("pointerup", endFloatDrag);
+    cameraHeader?.addEventListener("pointercancel", endFloatDrag);
     if (sheet) setupSheetSwipe(sheet, close);
     requestAnimationFrame(() => {
       modal.classList.add("open");
