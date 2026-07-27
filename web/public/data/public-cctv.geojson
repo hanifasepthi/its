@@ -58,27 +58,12 @@
         "source": "Bali Tower public embed directory",
         "sourceId": "Monas-Barat-010-506633",
         "sourceUrl": "https://smartcity.jakarta.go.id/blog/pantau-lalu-lintas-dan-keamanan-dengan-cctv-jakarta/",
-        "publicUrl": "https://cctv.balitower.co.id/Monas-Barat-010-506633_1/embed.html",
-        "streamUrl": "https://cctv.balitower.co.id/Monas-Barat-010-506633_1/embed.html",
-        "streams": [
-          {
-            "name": "Kamera 1",
-            "embedUrl": "https://cctv.balitower.co.id/Monas-Barat-010-506633_1/embed.html"
-          },
-          {
-            "name": "Kamera 2",
-            "embedUrl": "https://cctv.balitower.co.id/Monas-Barat-010-506633_2/embed.html"
-          },
-          {
-            "name": "Kamera 3",
-            "embedUrl": "https://cctv.balitower.co.id/Monas-Barat-010-506633_3/embed.html"
-          }
-        ],
-        "accessType": "public-embed",
-        "streamStatus": "unknown-timeout-on-last-check",
+        "publicUrl": "https://smartcity.jakarta.go.id/blog/pantau-lalu-lintas-dan-keamanan-dengan-cctv-jakarta/",
+        "accessType": "official-information",
+        "streamStatus": "offline-provider-timeout",
         "coordinateAccuracy": "approximate-user-observation",
-        "verification": "verified",
-        "verificationMethod": "published-public-embed-and-user-observation",
+        "verification": "metadata-verified-stream-offline",
+        "verificationMethod": "published-public-embed-timeout-on-live-check",
         "attribution": "CCTV Jakarta/Bali Tower; titik perkiraan dari observasi pengguna ITS Maps",
         "updatedAt": "2026-07-27T05:10:00Z"
       }
@@ -98,13 +83,12 @@
         "source": "Panda Pontianak / Dishub Kota Pontianak",
         "sourceId": "embedpanda/play/17",
         "sourceUrl": "https://embedpanda.pontianak.go.id/play/17/",
-        "publicUrl": "https://www.youtube-nocookie.com/embed/Lr6mNswN1BE",
-        "streamUrl": "https://www.youtube-nocookie.com/embed/Lr6mNswN1BE",
-        "accessType": "public-youtube",
-        "streamStatus": "public-live-provider-controlled",
+        "publicUrl": "https://embedpanda.pontianak.go.id/play/17/",
+        "accessType": "official-player-page",
+        "streamStatus": "offline-youtube-unplayable",
         "coordinateAccuracy": "open-map-verified",
-        "verification": "verified",
-        "verificationMethod": "official-player-code-and-open-map-coordinate",
+        "verification": "metadata-verified-stream-offline",
+        "verificationMethod": "official-player-code-and-youtube-live-check",
         "attribution": "Video: Dishub Kota Pontianak melalui Panda Pontianak/YouTube; koordinat: OpenStreetMap/Nominatim",
         "updatedAt": "2026-07-27T05:10:00Z"
       }
