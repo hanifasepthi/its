@@ -10,7 +10,7 @@ const distDir = path.join(webRoot, "dist");
 const analyticsConfig = readJson(path.join(webRoot, "analytics.config.json"));
 const SITE_ORIGIN = "https://itstelkom.web.app";
 const CLOUDFLARE_WEB_ANALYTICS_TOKEN = String(
-  process.env.CLOUDFLARE_WEB_ANALYTICS_TOKEN || analyticsConfig.cloudflareWebAnalyticsToken || "",
+  process.env.CLOUDFLARE_WEB_ANALYTICS_TOKEN || "",
 ).trim();
 const GOOGLE_MEASUREMENT_ID = String(
   process.env.GOOGLE_MEASUREMENT_ID || analyticsConfig.googleMeasurementId || "",
@@ -21,14 +21,17 @@ const MICROSOFT_CLARITY_PROJECT_ID = String(
 const GOOGLE_SITE_VERIFICATION = "c8bcvZrCDvCbFQbw1nvSf4Dvemq6qb35bh1J64DJ_2g";
 const BING_SITE_VERIFICATION = "C6357AD329BE82ECD8276C53EB8CDFA7";
 const DEFAULT_SOCIAL_IMAGE = `${SITE_ORIGIN}/screenshots/desktop-home.png`;
+// Pin map data to the immutable revision that introduced the classified
+// national shards. The former moving branch later replaced these filenames,
+// producing a 404 whenever users panned into affected tiles.
+const MAP_DATA_REVISION = "3c949a81c73badc44fde9c66ef193ce0464c7161";
+const MAP_DATA_GITHUB_BASE =
+  `https://raw.githubusercontent.com/hanifasepthi/its/${MAP_DATA_REVISION}/web/public/data/map-dynamics`;
 const cloudflareAnalyticsConfigured = /^[a-f0-9]{32}$/i.test(CLOUDFLARE_WEB_ANALYTICS_TOKEN);
 const googleAnalyticsConfigured = /^G-[A-Z0-9]+$/i.test(GOOGLE_MEASUREMENT_ID);
 const clarityConfigured = /^[a-z0-9-]{4,64}$/i.test(MICROSOFT_CLARITY_PROJECT_ID);
-const clientAnalyticsConfigured = googleAnalyticsConfigured || clarityConfigured;
+const clientAnalyticsConfigured = googleAnalyticsConfigured || clarityConfigured || cloudflareAnalyticsConfigured;
 const analyticsLoaderTag = '\n  <!-- Privacy-minimal automatic analytics loader -->\n  <script defer src="/analytics.js"></script>\n';
-const cloudflareAnalyticsTag = cloudflareAnalyticsConfigured
-  ? `\n  <!-- Cloudflare Web Analytics: SPA tracking is disabled so map URL coordinate updates are not counted as page views. -->\n  <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='${JSON.stringify({ token: CLOUDFLARE_WEB_ANALYTICS_TOKEN, spa: false })}'></script>\n  <!-- End Cloudflare Web Analytics -->\n`
-  : "";
 
 const seoRoutes = new Map([
   ["index.html", { path: "/", type: "WebPage", image: DEFAULT_SOCIAL_IMAGE }],
@@ -85,14 +88,57 @@ function keepHostingArtifacts() {
   console.log(`prepare-hosting-artifacts: kept ${Array.from(keep).join(", ")}; removed ${removed} old app artifact(s).`);
 }
 
+function externalizeMapDynamicsShards() {
+  const manifestPath = path.join(distDir, "data", "map-dynamics", "manifest.json");
+  if (!fs.existsSync(manifestPath)) return;
+  const manifest = readJson(manifestPath);
+  if (!Array.isArray(manifest.shards)) return;
+  manifest.shards = manifest.shards.map((shard) => {
+    if (!shard || typeof shard !== "object" || typeof shard.url !== "string") return shard;
+    if (/^\.\.\/map-hotspots\//.test(shard.url.replaceAll("\\", "/"))) {
+      const fileName = path.posix.basename(shard.url.replaceAll("\\", "/"));
+      return {
+        ...shard,
+        url: `${MAP_DATA_GITHUB_BASE.replace(/\/map-dynamics$/, "")}/map-hotspots/${encodeURIComponent(fileName)}`,
+      };
+    }
+    if (!/^\.\/shards\//.test(shard.url.replaceAll("\\", "/"))) return shard;
+    const fileName = path.posix.basename(shard.url.replaceAll("\\", "/"));
+    return {
+      ...shard,
+      url: `${MAP_DATA_GITHUB_BASE}/shards/${encodeURIComponent(fileName)}`,
+    };
+  });
+  manifest.hosting = {
+    ...(manifest.hosting && typeof manifest.hosting === "object" ? manifest.hosting : {}),
+    strategy: "github-external-shards",
+    baseUrl: MAP_DATA_GITHUB_BASE,
+    revision: MAP_DATA_REVISION,
+  };
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  console.log(`prepare-hosting-artifacts: externalized ${manifest.shards.length} map shard URL(s) to GitHub.`);
+}
+
 function analyticsScript() {
   const config = JSON.stringify({
+    cloudflareWebAnalyticsToken: cloudflareAnalyticsConfigured ? CLOUDFLARE_WEB_ANALYTICS_TOKEN : "",
     googleMeasurementId: GOOGLE_MEASUREMENT_ID,
     microsoftClarityProjectId: clarityConfigured ? MICROSOFT_CLARITY_PROJECT_ID : "",
   }).replaceAll("<", "\\u003c");
   return `(() => {
   "use strict";
   const config = ${config};
+  const consentKey = "its:consent:v1";
+  const readConsent = () => {
+    try {
+      const value = JSON.parse(localStorage.getItem(consentKey) || "null");
+      return value && typeof value.analytics === "boolean" && typeof value.advertising === "boolean"
+        ? value
+        : { analytics: false, advertising: false };
+    } catch {
+      return { analytics: false, advertising: false };
+    }
+  };
   window.dataLayer = window.dataLayer || [];
   window.gtag = window.gtag || function(){ window.dataLayer.push(arguments); };
   window.gtag("consent", "default", {
@@ -114,9 +160,7 @@ function analyticsScript() {
 
   const loadGoogle = () => {
     const id = String(config.googleMeasurementId || "");
-    // Query-bearing map links may contain precise coordinates. They remain
-    // functional, but are intentionally excluded from Google and Clarity.
-    if (location.search || !/^(?:G|GT|AW)-[A-Z0-9-]+$/i.test(id) || document.querySelector("script[data-its-google-tag]")) return;
+    if (!readConsent().analytics || !/^(?:G|GT|AW)-[A-Z0-9-]+$/i.test(id) || document.querySelector("script[data-its-google-tag]")) return;
     const script = document.createElement("script");
     script.async = true;
     script.dataset.itsGoogleTag = "true";
@@ -134,6 +178,16 @@ function analyticsScript() {
     });
   };
 
+  const loadCloudflare = () => {
+    const token = String(config.cloudflareWebAnalyticsToken || "");
+    if (!readConsent().analytics || !/^[a-f0-9]{32}$/i.test(token) || document.querySelector("script[data-cf-beacon]")) return;
+    const script = document.createElement("script");
+    script.defer = true;
+    script.dataset.cfBeacon = JSON.stringify({ token, spa: false });
+    script.src = "https://static.cloudflareinsights.com/beacon.min.js";
+    document.head.appendChild(script);
+  };
+
   const sensitiveSelector = "#map,video,canvas,input,textarea,[contenteditable=true],[data-camera],[data-video],[data-device-id],[data-user-location],[data-its-ai-chat],[data-ai-chat-form],[data-ai-chat-log],#its-ai-chat-modal,#its-ai-chat-detection-detail-modal,.leaflet-container,.maplibregl-map";
   const maskSensitiveContent = (root) => {
     if (root instanceof Element && root.matches(sensitiveSelector)) root.setAttribute("data-clarity-mask", "true");
@@ -144,9 +198,9 @@ function analyticsScript() {
 
   const loadClarity = () => {
     const id = String(config.microsoftClarityProjectId || "");
-    if (!/^[a-z0-9-]{4,64}$/i.test(id) || document.querySelector("script[data-its-clarity]")) return;
+    if (!readConsent().analytics || !/^[a-z0-9-]{4,64}$/i.test(id) || document.querySelector("script[data-its-clarity]")) return;
     const measuredPath = /^(?:\\/|\\/documentation|\\/method(?:\\/[^/]*)?|\\/privacy|\\/roadmap|\\/licence|\\/license|\\/pdf-preview(?:\\/[^/]*)?)\\/?$/i.test(location.pathname);
-    if (!measuredPath || location.search) return;
+    if (!measuredPath) return;
     maskSensitiveContent(document);
     window.clarity = window.clarity || function(){ (window.clarity.q = window.clarity.q || []).push(arguments); };
     window.clarity("consentv2", { ad_Storage: "denied", analytics_Storage: "denied" });
@@ -190,17 +244,33 @@ function analyticsScript() {
     }, { passive: true });
   };
 
-  window.ITSAnalytics = { track };
+  const updateConsent = (choice) => {
+    const analytics = choice?.analytics === true;
+    const advertising = choice?.advertising === true;
+    window.gtag("consent", "update", {
+      analytics_storage: analytics ? "granted" : "denied",
+      ad_storage: advertising ? "granted" : "denied",
+      ad_user_data: advertising ? "granted" : "denied",
+      ad_personalization: advertising ? "granted" : "denied"
+    });
+    if (analytics) {
+      loadCloudflare();
+      loadGoogle();
+      loadClarity();
+      window.clarity?.("consentv2", { ad_Storage: advertising ? "granted" : "denied", analytics_Storage: "granted" });
+    }
+  };
+
+  window.ITSAnalytics = { track, updateConsent };
+  window.addEventListener("its:consent-change", (event) => updateConsent(event.detail || {}));
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => {
       installPrivacyGuards();
-      loadGoogle();
-      loadClarity();
+      updateConsent(readConsent());
     }, { once: true });
   } else {
     installPrivacyGuards();
-    loadGoogle();
-    loadClarity();
+    updateConsent(readConsent());
   }
 })();\n`;
 }
@@ -322,9 +392,6 @@ function enhanceHtmlFiles(directory) {
     if (route) additions += seoTags(html, route);
     if (noIndexHtml.has(relativePath)) additions += noIndexTags(html);
     if (additions) html = html.replace("</head>", `${additions}</head>`);
-    if (route && !isAmp && cloudflareAnalyticsTag && !html.includes("static.cloudflareinsights.com/beacon.min.js")) {
-      html = html.replace("</body>", `${cloudflareAnalyticsTag}</body>`);
-    }
     if (html !== originalHtml) {
       fs.writeFileSync(fullPath, html, "utf8");
       updated += 1;
@@ -334,6 +401,7 @@ function enhanceHtmlFiles(directory) {
 }
 
 keepHostingArtifacts();
+externalizeMapDynamicsShards();
 writeAnalyticsAsset();
 const enhanced = enhanceHtmlFiles(distDir);
 console.log(`prepare-hosting-artifacts: enhanced analytics/SEO in ${enhanced} generated HTML file(s).`);

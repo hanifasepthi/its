@@ -17,7 +17,7 @@ function isNavigationMode(value: unknown): value is NavigationMode {
 
 function registerNavigationTool(navigation: Navigation3D): void {
   if (webMcpRegistered) return;
-  const modelContext = document.modelContext || navigator.modelContext;
+  const modelContext = document.modelContext;
   if (!modelContext?.registerTool) return;
   webMcpRegistered = true;
   try {

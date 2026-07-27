@@ -1,0 +1,99 @@
+import type { ResearchContentBlock, ResearchDocument, ResearchSource } from "./ResearchTypes";
+
+const MAX_FILE_BYTES = 600_000;
+const TEXT_FILE = /\.(?:[cm]?[jt]sx?|py|rs|go|java|kt|swift|rb|php|cs|cpp|c|h|md|rst|toml|ya?ml|json|html?|css|scss|sh|ps1)$/i;
+
+type GitHubTreeEntry = { path?: string; type?: string; size?: number };
+
+function repoCoordinates(source: ResearchSource): { owner: string; repo: string } | null {
+  try {
+    const url = new URL(source.url);
+    if (url.hostname !== "github.com") return null;
+    const [owner, repo] = url.pathname.split("/").filter(Boolean);
+    return owner && repo ? { owner, repo: repo.replace(/\.git$/i, "") } : null;
+  } catch {
+    return null;
+  }
+}
+
+function tokens(value: string): string[] {
+  return [...new Set(value.toLocaleLowerCase().match(/[\p{L}\p{N}_-]{3,}/gu) || [])].slice(0, 24);
+}
+
+function snippets(text: string, queryTokens: string[]): Array<{ line: number; text: string }> {
+  const lines = text.split(/\r?\n/);
+  const found: Array<{ line: number; text: string }> = [];
+  lines.forEach((line, index) => {
+    const normalized = line.toLocaleLowerCase();
+    if (!queryTokens.some((token) => normalized.includes(token))) return;
+    const start = Math.max(0, index - 2);
+    const end = Math.min(lines.length, index + 3);
+    found.push({ line: index + 1, text: lines.slice(start, end).join("\n").slice(0, 2_800) });
+  });
+  return found.slice(0, 3);
+}
+
+export class GitHubRepositoryReader {
+  async read(source: ResearchSource, query: string, signal?: AbortSignal): Promise<ResearchDocument> {
+    const coordinates = repoCoordinates(source);
+    if (!coordinates) {
+      return { sourceId: source.id, title: source.title, url: source.url, status: "failed", blocks: [], limitation: "URL repositori GitHub tidak valid." };
+    }
+    // codeload.github.com intentionally restricts browser CORS. Reading its ZIP
+    // first produced a visible console error even when the API fallback worked.
+    // The public Tree + Raw APIs are browser-readable and preserve file/line URLs.
+    return this.readThroughPublicApi(source, query, coordinates, signal);
+  }
+
+  private async readThroughPublicApi(
+    source: ResearchSource,
+    query: string,
+    coordinates: { owner: string; repo: string },
+    signal?: AbortSignal,
+  ): Promise<ResearchDocument> {
+    const repoPath = `${encodeURIComponent(coordinates.owner)}/${encodeURIComponent(coordinates.repo)}`;
+    const treeResponse = await fetch(`https://api.github.com/repos/${repoPath}/git/trees/HEAD?recursive=1`, {
+      headers: { Accept: "application/vnd.github+json" },
+      signal,
+    });
+    if (!treeResponse.ok) {
+      return { sourceId: source.id, title: source.title, url: source.url, status: "failed", blocks: [], limitation: `GitHub API mengembalikan HTTP ${treeResponse.status}.` };
+    }
+    const payload = await treeResponse.json() as { tree?: GitHubTreeEntry[] };
+    const candidates = (payload.tree || [])
+      .filter((entry) => entry.type === "blob" && entry.path && TEXT_FILE.test(entry.path) && Number(entry.size || 0) <= MAX_FILE_BYTES)
+      .slice(0, 160);
+    const queryTokens = tokens(query);
+    const blocks: ResearchContentBlock[] = [];
+    for (const entry of candidates) {
+      if (signal?.aborted) throw signal.reason;
+      const path = entry.path!;
+      const rawUrl = `https://raw.githubusercontent.com/${repoPath}/HEAD/${path.split("/").map(encodeURIComponent).join("/")}`;
+      const response = await fetch(rawUrl, { signal });
+      if (!response.ok) continue;
+      const text = await response.text();
+      for (const match of snippets(text, queryTokens)) {
+        const sourceUrl = `${source.url}/blob/HEAD/${path}#L${match.line}`;
+        blocks.push({
+          id: `github-api-${blocks.length + 1}`,
+          type: "code",
+          text: `${path}:${match.line}\n${match.text}\nSumber: ${sourceUrl}\nLisensi repositori: ${source.license || "tidak dinyatakan oleh API"}`,
+          html: `<pre><code>${match.text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")}</code></pre>`,
+          order: blocks.length,
+        });
+        if (blocks.length >= 24) break;
+      }
+      if (blocks.length >= 24) break;
+    }
+    return {
+      sourceId: source.id,
+      title: source.title,
+      url: source.url,
+      status: blocks.length ? "full-text" : "metadata-only",
+      blocks,
+      limitation: blocks.length ? "" : "GitHub API dapat dibaca, tetapi tidak ditemukan potongan teks yang sesuai query.",
+    };
+  }
+}
+
+export const githubRepositoryReader = new GitHubRepositoryReader();

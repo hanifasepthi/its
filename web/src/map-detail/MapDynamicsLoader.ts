@@ -19,6 +19,7 @@ type MapDynamicsShard = {
   bytes: number;
   sha256?: string;
   updatedAt?: string;
+  priority?: number;
 };
 
 type MapDynamicsManifest = {
@@ -52,11 +53,17 @@ export type MapDynamicsLoadResult = {
 };
 
 const EMPTY_COLLECTION: MapDetailFeatureCollection = { type: "FeatureCollection", features: [] };
-const MANIFEST_CACHE_KEY = "map-dynamics:manifest:v1";
+// v2 invalidates the old relative-shard manifest that was cached before map
+// payloads moved to an immutable GitHub revision.
+const MANIFEST_CACHE_KEY = "map-dynamics:manifest:v2";
 const MANIFEST_MAX_AGE_MS = 15 * 60 * 1000;
 const SHARD_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const DELTA_MAX_AGE_MS = 10 * 60 * 1000;
-const MAX_ACTIVE_SHARDS = 16;
+// National ingest shards can overlap after record-count splitting. Loading 16
+// multi-megabyte shards blocked the small CCTV supplement and made detailed
+// layers appear empty. Four is the safe fallback; spatial hotspot shards take
+// exclusive precedence when present.
+const MAX_ACTIVE_SHARDS = 4;
 const MAX_FEATURES_PER_RESPONSE = 12_000;
 const DEFAULT_MANIFEST_URL = "/data/map-dynamics/manifest.json";
 const DEFAULT_DELTA_FEED = "https://its.hanifahseptiani45.workers.dev/v1/map/deltas";
@@ -216,8 +223,20 @@ async function fetchJson(url: string, signal: AbortSignal | undefined, cache: Re
     cache,
     headers: { Accept: "application/geo+json, application/json" },
   });
-  if (!response.ok) throw new Error(`Map dynamics HTTP ${response.status}`);
+  if (!response.ok) throw new MapDynamicsHttpError(response.status, url);
   return response.json();
+}
+
+class MapDynamicsHttpError extends Error {
+  readonly status: number;
+  readonly url: string;
+
+  constructor(status: number, url: string) {
+    super(`Map dynamics HTTP ${status}`);
+    this.name = "MapDynamicsHttpError";
+    this.status = status;
+    this.url = url;
+  }
 }
 
 export class MapDynamicsLoader {
@@ -230,15 +249,19 @@ export class MapDynamicsLoader {
     this.manifestUrl = manifestUrl;
   }
 
-  private async manifest(signal?: AbortSignal): Promise<{ manifest: MapDynamicsManifest; source: "manifest" | "cache" }> {
-    if (this.manifestPromise && Date.now() - this.manifestLoadedAt < MANIFEST_MAX_AGE_MS) return this.manifestPromise;
+  private async manifest(signal?: AbortSignal, forceRefresh = false): Promise<{ manifest: MapDynamicsManifest; source: "manifest" | "cache" }> {
+    if (!forceRefresh && this.manifestPromise && Date.now() - this.manifestLoadedAt < MANIFEST_MAX_AGE_MS) return this.manifestPromise;
     this.manifestPromise = null;
     this.manifestPromise = (async () => {
-      const cached = await mapDetailCache.get<MapDynamicsManifest>(MANIFEST_CACHE_KEY, MANIFEST_MAX_AGE_MS);
+      const cached = forceRefresh
+        ? null
+        : await mapDetailCache.get<MapDynamicsManifest>(MANIFEST_CACHE_KEY, MANIFEST_MAX_AGE_MS);
       try {
-        const value = await fetchJson(this.manifestUrl, signal, "no-cache");
+        const manifestUrl = new URL(this.manifestUrl, window.location.href);
+        if (forceRefresh) manifestUrl.searchParams.set("manifestRefresh", String(Date.now()));
+        const value = await fetchJson(manifestUrl.toString(), signal, "no-store");
         if (!validManifest(value)) throw new Error("Manifest map dynamics tidak valid");
-        void mapDetailCache.set(MANIFEST_CACHE_KEY, value);
+        await mapDetailCache.set(MANIFEST_CACHE_KEY, value);
         this.manifestLoadedAt = Date.now();
         return { manifest: value, source: "manifest" as const };
       } catch (error) {
@@ -263,7 +286,8 @@ export class MapDynamicsLoader {
       if (!validCollection(value)) throw new Error(`Shard ${shard.id} tidak valid`);
       void mapDetailCache.set(cacheKey, value);
       return value;
-    } catch {
+    } catch (error) {
+      if (error instanceof MapDynamicsHttpError && error.status === 404) throw error;
       const stored = await mapDetailCache.peek<MapDetailFeatureCollection>(cacheKey);
       return stored && validCollection(stored) ? stored : null;
     }
@@ -313,20 +337,41 @@ export class MapDynamicsLoader {
     return this.supplementalCctvPromise;
   }
 
-  async load(bounds: MapDynamicsBounds, zoom: number, signal?: AbortSignal): Promise<MapDynamicsLoadResult> {
+  private async loadInternal(
+    bounds: MapDynamicsBounds,
+    zoom: number,
+    signal: AbortSignal | undefined,
+    manifestRefreshAvailable: boolean,
+  ): Promise<MapDynamicsLoadResult> {
     if (![bounds.west, bounds.south, bounds.east, bounds.north, zoom].every(finiteNumber)) {
       return { collection: EMPTY_COLLECTION, manifestVersion: "", selectedShards: 0, loadedShards: 0, remoteDeltas: 0, source: "empty" };
     }
     const { manifest, source } = await this.manifest(signal);
-    const selected = manifest.shards
+    const candidates = manifest.shards
       .filter((shard) => zoom >= shard.minZoom && zoom <= shard.maxZoom && intersects(bounds, shard.bbox))
-      .sort((left, right) => centerDistance(bounds, left) - centerDistance(bounds, right))
+      .sort((left, right) =>
+        (right.priority || 0) - (left.priority || 0)
+        || centerDistance(bounds, left) - centerDistance(bounds, right)
+        || left.bytes - right.bytes);
+    const preferred = candidates.filter((shard) => (shard.priority || 0) > 0);
+    const selected = (preferred.length ? preferred : candidates)
       .slice(0, MAX_ACTIVE_SHARDS);
-    const [shards, deltaCollection, supplementalCctv] = await Promise.all([
-      Promise.all(selected.map((shard) => this.shard(manifest, shard, signal))),
-      this.deltas(manifest, bounds, zoom, signal),
-      this.supplementalCctv(signal),
-    ]);
+    let shards: Array<MapDetailFeatureCollection | null>;
+    let deltaCollection: MapDetailFeatureCollection;
+    let supplementalCctv: MapDetailFeatureCollection;
+    try {
+      [shards, deltaCollection, supplementalCctv] = await Promise.all([
+        Promise.all(selected.map((shard) => this.shard(manifest, shard, signal))),
+        this.deltas(manifest, bounds, zoom, signal),
+        this.supplementalCctv(signal),
+      ]);
+    } catch (error) {
+      if (manifestRefreshAvailable && error instanceof MapDynamicsHttpError && error.status === 404) {
+        await this.manifest(signal, true);
+        return this.loadInternal(bounds, zoom, signal, false);
+      }
+      throw error;
+    }
     const available = shards.filter((collection): collection is MapDetailFeatureCollection => Boolean(collection));
     const visibleSupplementalCctv: MapDetailFeatureCollection = {
       type: "FeatureCollection",
@@ -347,5 +392,9 @@ export class MapDynamicsLoader {
       remoteDeltas: deltaCollection.features.length,
       source,
     };
+  }
+
+  async load(bounds: MapDynamicsBounds, zoom: number, signal?: AbortSignal): Promise<MapDynamicsLoadResult> {
+    return this.loadInternal(bounds, zoom, signal, true);
   }
 }

@@ -71,7 +71,8 @@
         "featureCount": { "type": "integer", "minimum": 0 },
         "bytes": { "type": "integer", "minimum": 0 },
         "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-        "updatedAt": { "type": "string", "format": "date-time" }
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "priority": { "type": "integer", "minimum": 0, "maximum": 1000 }
       },
       "additionalProperties": false
     }

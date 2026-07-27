@@ -2,8 +2,8 @@
   "$schema": "./manifest.schema.json",
   "schemaVersion": "1.0",
   "dataset": "its-map-dynamics-indonesia",
-  "datasetVersion": "2026-07-26.8",
-  "generatedAt": "2026-07-26T10:49:32.240Z",
+  "datasetVersion": "2026-07-26.8.hotspot18",
+  "generatedAt": "2026-07-27T00:13:58.792Z",
   "featureSchema": "./feature.schema.json",
   "tileZoom": 10,
   "coverage": {
@@ -35,6 +35,441 @@
     "maxShardBytes": 8000000
   },
   "shards": [
+    {
+      "id": "hotspot-sorong-pusat-v1",
+      "url": "../map-hotspots/sorong-pusat.geojson",
+      "bbox": [
+        131.23,
+        -0.92,
+        131.33,
+        -0.82
+      ],
+      "minZoom": 15,
+      "maxZoom": 22,
+      "groups": [
+        "road",
+        "waterway"
+      ],
+      "featureCount": 67,
+      "bytes": 274480,
+      "sha256": "9b9b030da80fb745a87de02b708b19226b8d561ebb9122b6e073daa71f1309bc",
+      "updatedAt": "2026-07-27T00:13:58.791Z",
+      "priority": 100
+    },
+    {
+      "id": "hotspot-jayapura-pusat-v1",
+      "url": "../map-hotspots/jayapura-pusat.geojson",
+      "bbox": [
+        140.66,
+        -2.59,
+        140.75,
+        -2.51
+      ],
+      "minZoom": 15,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "poi",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 75,
+      "bytes": 144798,
+      "sha256": "a9690324b3193f29d05fdeeb0297c5a44853cc9e7ca784665df44946546b326d",
+      "updatedAt": "2026-07-27T00:13:58.782Z",
+      "priority": 100
+    },
+    {
+      "id": "hotspot-kupang-pusat-v1",
+      "url": "../map-hotspots/kupang-pusat.geojson",
+      "bbox": [
+        123.56,
+        -10.22,
+        123.66,
+        -10.12
+      ],
+      "minZoom": 15,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 144,
+      "bytes": 392432,
+      "sha256": "2032cace9004c7da33f9ca441ffe421a75302cb4aee9b53e953e19d443076282",
+      "updatedAt": "2026-07-27T00:13:58.775Z",
+      "priority": 100
+    },
+    {
+      "id": "hotspot-mataram-pusat-v1",
+      "url": "../map-hotspots/mataram-pusat.geojson",
+      "bbox": [
+        116.07,
+        -8.62,
+        116.15,
+        -8.54
+      ],
+      "minZoom": 15,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 205,
+      "bytes": 346283,
+      "sha256": "b9170ce0a44115eb7d48381c59e5d76813aa01e2f2fb97d79cee2c13ef37dbc8",
+      "updatedAt": "2026-07-27T00:13:58.762Z",
+      "priority": 100
+    },
+    {
+      "id": "hotspot-denpasar-pusat-v1",
+      "url": "../map-hotspots/denpasar-pusat.geojson",
+      "bbox": [
+        115.18,
+        -8.7,
+        115.26,
+        -8.62
+      ],
+      "minZoom": 15,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 135,
+      "bytes": 218200,
+      "sha256": "7070fecf1f6f19d47d546505dc0522a3a427c1b437e97e16b2c76f85b0f8543f",
+      "updatedAt": "2026-07-27T00:13:58.753Z",
+      "priority": 100
+    },
+    {
+      "id": "hotspot-manado-pusat-v1",
+      "url": "../map-hotspots/manado-pusat.geojson",
+      "bbox": [
+        124.81,
+        1.44,
+        124.89,
+        1.52
+      ],
+      "minZoom": 15,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 98,
+      "bytes": 223777,
+      "sha256": "5444f29f0f615990e1a3172c1ab24b12a123d8603d28e16906047744b274fb2c",
+      "updatedAt": "2026-07-27T00:13:58.744Z",
+      "priority": 100
+    },
+    {
+      "id": "hotspot-makassar-pusat-v1",
+      "url": "../map-hotspots/makassar-pusat.geojson",
+      "bbox": [
+        119.38,
+        -5.19,
+        119.47,
+        -5.1
+      ],
+      "minZoom": 15,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 390,
+      "bytes": 419204,
+      "sha256": "6a26edbd4ad9bbefdac6d4f8a7afc8786a6828142f4c7abb8c25c507879f37a6",
+      "updatedAt": "2026-07-27T00:13:58.737Z",
+      "priority": 100
+    },
+    {
+      "id": "hotspot-samarinda-pusat-v1",
+      "url": "../map-hotspots/samarinda-pusat.geojson",
+      "bbox": [
+        117.1,
+        -0.55,
+        117.2,
+        -0.45
+      ],
+      "minZoom": 15,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "poi",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 195,
+      "bytes": 232026,
+      "sha256": "4c815077df04cceb9b34b95042508dae8a7f5f76f3c730a4ee0b3887d32098ea",
+      "updatedAt": "2026-07-27T00:13:58.726Z",
+      "priority": 100
+    },
+    {
+      "id": "hotspot-banjarmasin-pusat-v1",
+      "url": "../map-hotspots/banjarmasin-pusat.geojson",
+      "bbox": [
+        114.55,
+        -3.36,
+        114.65,
+        -3.26
+      ],
+      "minZoom": 15,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 357,
+      "bytes": 429041,
+      "sha256": "9187f158306e04b1ce60ff13be22710cf69055a37a8505d2903da833efd16745",
+      "updatedAt": "2026-07-27T00:13:58.715Z",
+      "priority": 100
+    },
+    {
+      "id": "hotspot-pontianak-pusat-v1",
+      "url": "../map-hotspots/pontianak-pusat.geojson",
+      "bbox": [
+        109.3,
+        -0.07,
+        109.38,
+        0.01
+      ],
+      "minZoom": 15,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 127,
+      "bytes": 141374,
+      "sha256": "c67a5945e057767595e182cceb31e028dccc28388d67f83f5c406c6176c0e7db",
+      "updatedAt": "2026-07-27T00:13:58.700Z",
+      "priority": 100
+    },
+    {
+      "id": "hotspot-bandar-lampung-v1",
+      "url": "../map-hotspots/bandar-lampung.geojson",
+      "bbox": [
+        105.22,
+        -5.43,
+        105.3,
+        -5.35
+      ],
+      "minZoom": 15,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "railway",
+        "road"
+      ],
+      "featureCount": 236,
+      "bytes": 192848,
+      "sha256": "f2c10fbb4a5f6872c6094a47c10efa8eae3a519952280c72da0a90a9f7afc75c",
+      "updatedAt": "2026-07-27T00:13:58.690Z",
+      "priority": 100
+    },
+    {
+      "id": "hotspot-palembang-pusat-v1",
+      "url": "../map-hotspots/palembang-pusat.geojson",
+      "bbox": [
+        104.72,
+        -3.02,
+        104.8,
+        -2.94
+      ],
+      "minZoom": 15,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 285,
+      "bytes": 303839,
+      "sha256": "456707377682a05c60692c03bf19fa4b47f6cf28db4c2accc015d7c3207395f1",
+      "updatedAt": "2026-07-27T00:13:58.676Z",
+      "priority": 100
+    },
+    {
+      "id": "hotspot-medan-pusat-v1",
+      "url": "../map-hotspots/medan-pusat.geojson",
+      "bbox": [
+        98.64,
+        3.55,
+        98.72,
+        3.63
+      ],
+      "minZoom": 15,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 337,
+      "bytes": 285585,
+      "sha256": "730bc011035ec29e88b8a4ec67e8e0fcd9938f85338c97c57be8c2a8c4b74fe2",
+      "updatedAt": "2026-07-27T00:13:58.666Z",
+      "priority": 100
+    },
+    {
+      "id": "hotspot-yogyakarta-pusat-v1",
+      "url": "../map-hotspots/yogyakarta-pusat.geojson",
+      "bbox": [
+        110.33,
+        -7.83,
+        110.4,
+        -7.75
+      ],
+      "minZoom": 15,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 445,
+      "bytes": 342727,
+      "sha256": "6b84417a8795180951f6d278caf09ac86ee4b5ab0db0ebc5ea1b180a7e7a7b38",
+      "updatedAt": "2026-07-27T00:13:58.656Z",
+      "priority": 100
+    },
+    {
+      "id": "hotspot-semarang-pusat-v1",
+      "url": "../map-hotspots/semarang-pusat.geojson",
+      "bbox": [
+        110.38,
+        -7.02,
+        110.46,
+        -6.94
+      ],
+      "minZoom": 15,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 579,
+      "bytes": 515752,
+      "sha256": "d66cf17299738454732067d77573009d406d332148ba46934a818b5b3b847b6b",
+      "updatedAt": "2026-07-27T00:13:58.645Z",
+      "priority": 100
+    },
+    {
+      "id": "hotspot-surabaya-pusat-v1",
+      "url": "../map-hotspots/surabaya-pusat.geojson",
+      "bbox": [
+        112.7,
+        -7.3,
+        112.78,
+        -7.22
+      ],
+      "minZoom": 15,
+      "maxZoom": 22,
+      "groups": [
+        "green",
+        "railway",
+        "road",
+        "waterway"
+      ],
+      "featureCount": 654,
+      "bytes": 553355,
+      "sha256": "10da443f2ff2024ace2ead3e815d96fa246cbbfac24f59d8aa7dbd7bd1801327",
+      "updatedAt": "2026-07-27T00:13:58.626Z",
+      "priority": 100
+    },
+    {
+      "id": "hotspot-bandung-telkom-v1",
+      "url": "../map-hotspots/bandung-telkom.geojson",
+      "bbox": [
+        107.615,
+        -6.988,
+        107.647,
+        -6.963
+      ],
+      "minZoom": 15,
+      "maxZoom": 22,
+      "groups": [
+        "barrier",
+        "bollard",
+        "crossing",
+        "cycleway",
+        "drain",
+        "entrance",
+        "gate",
+        "green",
+        "pedestrian",
+        "platform",
+        "railway",
+        "road",
+        "sidewalk",
+        "transit",
+        "tree",
+        "tree_row",
+        "waterway"
+      ],
+      "featureCount": 3593,
+      "bytes": 6337932,
+      "sha256": "82c8872b9f1289b567b03e94ecc3bfa2b94eec94ba287ba2049d43d7962ad274",
+      "updatedAt": "2026-07-27T00:13:58.610Z",
+      "priority": 100
+    },
+    {
+      "id": "hotspot-jakarta-pusat-monas-v1",
+      "url": "../map-hotspots/jakarta-pusat-monas.geojson",
+      "bbox": [
+        106.815,
+        -6.19,
+        106.84,
+        -6.17
+      ],
+      "minZoom": 15,
+      "maxZoom": 22,
+      "groups": [
+        "attraction",
+        "barrier",
+        "bollard",
+        "drinking_water",
+        "education",
+        "food",
+        "gate",
+        "green",
+        "healthcare",
+        "lodging",
+        "pedestrian",
+        "platform",
+        "poi",
+        "public_service",
+        "railway",
+        "road",
+        "shopping",
+        "toilets",
+        "transport",
+        "waste_basket",
+        "waterway",
+        "worship"
+      ],
+      "featureCount": 8980,
+      "bytes": 5728371,
+      "sha256": "0e011faadde869dd7ec877e97058bba122be076724f4805a6d647b5d420c01f4",
+      "updatedAt": "2026-07-27T00:13:58.453Z",
+      "priority": 100
+    },
     {
       "id": "10-780-493.1.c33148a46396",
       "url": "./shards/10-780-493.1.c33148a46396.geojson",

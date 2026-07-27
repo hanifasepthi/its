@@ -143,7 +143,7 @@ async function health(env: Env): Promise<Response> {
 }
 
 async function apiRouter(context: ApiContext): Promise<Response> {
-  const { request, env } = context;
+  const { request, env, execution } = context;
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/$/, "") || "/";
   if (request.method === "OPTIONS") return optionsResponse(request, env);
@@ -191,7 +191,9 @@ async function apiRouter(context: ApiContext): Promise<Response> {
   }
 
   if (path === "/mcp" || path.startsWith("/mcp/")) {
-    if (request.method === "GET" || request.method === "POST") return handleMcp(request, env);
+    if (request.method === "GET" || request.method === "POST" || request.method === "DELETE" || request.method === "OPTIONS") {
+      return handleMcp(request, env, execution);
+    }
     throw new HttpError(405, "method_not_allowed", "Gunakan GET atau POST untuk MCP.");
   }
   if (path === "/.well-known/mcp.json" && request.method === "GET") return mcpServerCard();

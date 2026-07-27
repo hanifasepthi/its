@@ -19,8 +19,8 @@ type WorkerResponse = {
 };
 
 const MODEL_BY_SKILL: Record<BrowserTextSkill, string> = {
-  chat: "onnx-community/SmolLM2-135M-Instruct-ONNX",
-  research: "onnx-community/Qwen2.5-0.5B-Instruct",
+  chat: "onnx-community/Qwen3-1.7B-ONNX",
+  research: "onnx-community/Qwen3-4B-ONNX",
 };
 
 const workerScope = self as unknown as {

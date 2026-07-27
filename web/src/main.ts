@@ -3,6 +3,9 @@ import "leaflet/dist/leaflet.css";
 import "leaflet-rotate";
 import "./style.css";
 import "./mapLegend";
+import "./components/ItsMapsApp";
+import "./components/ItsConsentManager";
+import "./components/ItsAdSlot";
 import WIN_PREVIEW_WELCOME from "./windows/welcome.png";
 import WIN_PREVIEW_OPTIONS from "./windows/pilihopsiinstaller.png";
 import WIN_PREVIEW_DONE from "./windows/selesaiinstaller.png";
@@ -19,10 +22,10 @@ import {
   type BrowserRfDetrResult,
 } from "./browserRfDetr";
 import { publicResearchAgent } from "./publicResearchAgent";
+import { pythonSandbox } from "./research/PythonSandbox";
 import { agentOrchestrator } from "./agent-core/AgentOrchestrator";
 import type { DynamicAgentPlan } from "./agent-core/AgentPlanSchema";
 import { mountAgentLiveActivity } from "./agentLiveActivity";
-import { cloudflareAiClient } from "./ai-runtime/CloudflareAiClient";
 import { disablePublicPush, enablePublicPush, publicPushOptedIn, restorePublicPush } from "./pushNotifications";
 import {
   fetchMicrosoftStorePublicSnapshot,
@@ -124,8 +127,8 @@ const FREE_MAP_SERVICE_STACK = [
 
 const AI_SERVICE_STACK = [
   ["RF-DETR", "Deteksi objek COCO pada video/snapshot browser dengan model transformer ONNX dari Hugging Face.", "https://hf.co/onnx-community/rfdetr_medium-ONNX"],
-  ["SmolLM2 135M Instruct", "Model bahasa ONNX q4 yang berjalan lokal di browser untuk memahami pertanyaan bebas tanpa mengirim percakapan ke layanan AI eksternal.", "https://huggingface.co/onnx-community/SmolLM2-135M-Instruct-ONNX"],
-  ["Qwen2.5 0.5B Instruct", "Model riset ONNX q4 lokal yang menyusun ringkasan hanya dari bukti hasil pencarian terstruktur.", "https://huggingface.co/onnx-community/Qwen2.5-0.5B-Instruct"],
+  ["Qwen3 1.7B ONNX", "Model bahasa ONNX lokal untuk perangkat menengah; percakapan tidak dikirim ke layanan inferensi eksternal.", "https://huggingface.co/onnx-community/Qwen3-1.7B-ONNX"],
+  ["Qwen3 4B ONNX", "Model riset ONNX lokal untuk perangkat WebGPU yang menyusun jawaban hanya dari evidence terverifikasi.", "https://huggingface.co/onnx-community/Qwen3-4B-ONNX"],
   ["Crossref, OpenAlex, Europe PMC", "Indeks metadata ilmiah publik untuk judul, penulis, DOI, abstrak, sitasi, dan tautan open-access. ITS Maps tidak mengunggah PDF jurnal.", "https://www.crossref.org/documentation/retrieve-metadata/rest-api/"],
   ["Wikipedia dan Wikimedia Commons", "Pencarian konteks web dan gambar terbuka dengan URL sumber serta atribusi lisensi yang ditampilkan pada jawaban.", "https://www.mediawiki.org/wiki/API:Cross-site_requests"],
   ["Transformers.js", "Pipeline object-detection RF-DETR di browser, termasuk preprocessing dan postprocessing bounding box.", "https://huggingface.co/docs/transformers.js"],
@@ -1699,8 +1702,21 @@ if (staticRoute) {
       ? usablePublicMediaUrl(streamCandidate)
       : "";
     const streamStatus = String(properties.streamStatus || (streamUrl ? "public-live" : "metadata-only"));
+    const streamIsPlayable = Boolean(streamUrl)
+      && /^(?:public-live|verified-live|public-page-third-party)$/i.test(streamStatus);
     const isThirdPartyPublicPage = streamStatus === "public-page-third-party";
     const address = String(properties.address || properties.location || "").trim();
+    const operator = String(properties.operator || "").trim();
+    const attribution = String(properties.attribution || "").trim();
+    const streamOptions = Array.isArray(properties.streams)
+      ? properties.streams.flatMap((entry) => {
+        if (!entry || typeof entry !== "object") return [];
+        const record = entry as Record<string, unknown>;
+        const url = usablePublicMediaUrl(String(record.embedUrl || record.sourcePageUrl || ""));
+        if (!url || /@/.test(url)) return [];
+        return [{ name: String(record.name || `Kamera ${String(record.id || "")}`).trim() || "Kamera", url }];
+      })
+      : [];
     const modal = document.createElement("div");
     modal.id = "map-dynamics-camera-modal";
     modal.className = "map-license-modal map-camera-source-modal";
@@ -1709,26 +1725,32 @@ if (staticRoute) {
         <div class="map-license-grip" data-swipe-handle aria-hidden="true"></div>
         <header class="map-license-head">
           <div><span>${isThirdPartyPublicPage ? "Lokasi CCTV terverifikasi · pemutar publik pihak ketiga" : "CCTV terverifikasi"}</span><h2 id="map-camera-source-title">${escapeHtml(name)}</h2></div>
-          <button type="button" data-camera-source-close aria-label="Tutup detail CCTV" title="Tutup"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+          <div class="map-camera-head-actions">
+            ${streamIsPlayable ? `<button type="button" data-camera-float aria-label="Jadikan pemutar CCTV panel mengambang" title="Panel mengambang"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h13v13M21 3l-8 8M16 21H3V8"/></svg></button>` : ""}
+            <button type="button" data-camera-source-close aria-label="Tutup detail CCTV" title="Tutup"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+          </div>
         </header>
-        ${streamUrl ? `
+        ${streamIsPlayable ? `
           <div class="map-camera-live-badge"><i></i> ${isThirdPartyPublicPage ? "Pemutar publik — status live mengikuti penyedia" : "LIVE dari penyedia sumber"}</div>
           <div class="map-camera-public-player">
-            <iframe src="${escapeHtml(streamUrl)}" title="Video realtime ${escapeHtml(name)}" loading="eager" allow="autoplay; fullscreen; picture-in-picture" referrerpolicy="no-referrer"></iframe>
+            <iframe data-camera-player src="${escapeHtml(streamUrl)}" title="Video realtime ${escapeHtml(name)}" loading="eager" allow="autoplay; fullscreen; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
           </div>
+          ${streamOptions.length > 1 ? `<div class="map-camera-stream-tabs" role="group" aria-label="Pilih sudut kamera">${streamOptions.map((option, index) => `<button type="button" data-camera-stream="${escapeHtml(option.url)}" aria-pressed="${index === 0 ? "true" : "false"}">${escapeHtml(option.name)}</button>`).join("")}</div>` : ""}
           ${isThirdPartyPublicPage ? `<p class="map-camera-disclaimer">Halaman ini merupakan mirror publik independen. Jika penyedia menolak embed atau membatasi trafik, gunakan tombol buka pemutar.</p>` : ""}
         ` : `
           <div class="map-camera-unavailable">
-            <strong>Lokasi kamera tersedia, URL video publik langsung belum tersedia.</strong>
-            <p>ITS Maps tidak menebak URL dan tidak menyalin kredensial kamera ke browser. Status sumber: ${escapeHtml(streamStatus)}.</p>
+            <strong>Lokasi kamera tersedia, tetapi video tidak dapat diputar di ITS Maps.</strong>
+            <p>Embed penyedia sedang tidak aktif, dibatasi pemilik, atau belum lolos verifikasi pemutaran. Status sumber: ${escapeHtml(streamStatus)}.</p>
           </div>
         `}
         <dl class="map-camera-source-meta">
           <div><dt>Koordinat</dt><dd>${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}</dd></div>
           <div><dt>Sumber</dt><dd>${escapeHtml(source)}</dd></div>
+          ${operator ? `<div><dt>Pengelola</dt><dd>${escapeHtml(operator)}</dd></div>` : ""}
           ${address ? `<div><dt>Alamat</dt><dd>${escapeHtml(address)}</dd></div>` : ""}
         </dl>
         ${sourceUrl ? `<a class="map-camera-source-link" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">${isThirdPartyPublicPage ? "Buka pemutar publik" : "Buka sumber"}</a>` : ""}
+        ${attribution ? `<footer class="map-camera-attribution">Kontribusi data: ${escapeHtml(attribution)}</footer>` : ""}
       </section>`;
     const close = () => {
       modal.classList.remove("open");
@@ -1737,8 +1759,53 @@ if (staticRoute) {
     };
     modal.addEventListener("click", (event) => { if (event.target === modal) close(); });
     modal.querySelector("[data-camera-source-close]")?.addEventListener("click", close);
+    const floatButton = modal.querySelector<HTMLButtonElement>("[data-camera-float]");
+    floatButton?.addEventListener("click", () => {
+      const floating = modal.classList.toggle("is-floating-camera");
+      floatButton.setAttribute("aria-pressed", String(floating));
+      floatButton.title = floating ? "Kembalikan ke panel detail" : "Panel mengambang";
+      if (!floating) {
+        modal.style.removeProperty("--camera-float-x");
+        modal.style.removeProperty("--camera-float-y");
+      }
+    });
+    const player = modal.querySelector<HTMLIFrameElement>("[data-camera-player]");
+    modal.querySelectorAll<HTMLButtonElement>("[data-camera-stream]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const nextUrl = usablePublicMediaUrl(button.dataset.cameraStream || "");
+        if (!player || !nextUrl) return;
+        player.src = nextUrl;
+        modal.querySelectorAll<HTMLButtonElement>("[data-camera-stream]").forEach((candidate) => {
+          candidate.setAttribute("aria-pressed", String(candidate === button));
+        });
+      });
+    });
     document.body.appendChild(modal);
     const sheet = modal.querySelector<HTMLElement>(".map-camera-source-sheet");
+    const cameraHeader = modal.querySelector<HTMLElement>(".map-license-head");
+    let floatDrag: { id: number; x: number; y: number; left: number; top: number } | null = null;
+    cameraHeader?.addEventListener("pointerdown", (event) => {
+      if (!modal.classList.contains("is-floating-camera") || (event.target as HTMLElement).closest("button, a")) return;
+      const rect = sheet?.getBoundingClientRect();
+      if (!rect) return;
+      floatDrag = { id: event.pointerId, x: event.clientX, y: event.clientY, left: rect.left, top: rect.top };
+      cameraHeader.setPointerCapture(event.pointerId);
+      modal.classList.add("is-camera-dragging");
+    });
+    cameraHeader?.addEventListener("pointermove", (event) => {
+      if (!floatDrag || event.pointerId !== floatDrag.id || !sheet) return;
+      const left = clamp(floatDrag.left + event.clientX - floatDrag.x, 8, Math.max(8, window.innerWidth - sheet.offsetWidth - 8));
+      const top = clamp(floatDrag.top + event.clientY - floatDrag.y, 8, Math.max(8, window.innerHeight - sheet.offsetHeight - 8));
+      modal.style.setProperty("--camera-float-x", `${left}px`);
+      modal.style.setProperty("--camera-float-y", `${top}px`);
+    });
+    const endFloatDrag = (event: PointerEvent) => {
+      if (!floatDrag || event.pointerId !== floatDrag.id) return;
+      floatDrag = null;
+      modal.classList.remove("is-camera-dragging");
+    };
+    cameraHeader?.addEventListener("pointerup", endFloatDrag);
+    cameraHeader?.addEventListener("pointercancel", endFloatDrag);
     if (sheet) setupSheetSwipe(sheet, close);
     requestAnimationFrame(() => {
       modal.classList.add("open");
@@ -5801,6 +5868,7 @@ if (staticRoute) {
   const MAX_REMEMBERED_POIS = 6_000;
   const mapLibrePoiImageTasks = new Map<string, Promise<void>>();
   const mapLibrePoiReadyImages = new Set<string>();
+  const mapLibrePoiPlaceholderImages = new Set<string>();
   const MAPLIBRE_POI_FALLBACK_IMAGE = "its-poi-fallback";
   const POI_PREFETCH_SESSION_LIMIT = 16;
   const POI_PREFETCH_DELAY_MS = 2_400;
@@ -5945,7 +6013,7 @@ if (staticRoute) {
     const maplibreMap = state.maplibreMap;
     const imageId = mapLibrePoiImageId(definition.id);
     if (!maplibreMap || !maplibreMap.isStyleLoaded?.()) return Promise.resolve();
-    if (maplibreMap.hasImage?.(imageId)) {
+    if (maplibreMap.hasImage?.(imageId) && !mapLibrePoiPlaceholderImages.has(imageId)) {
       mapLibrePoiReadyImages.add(imageId);
       return Promise.resolve();
     }
@@ -5957,6 +6025,10 @@ if (staticRoute) {
       const response = await fetch(imageUrl);
       if (!response.ok) throw new Error(`POI image ${response.status}`);
       const bitmap = await createImageBitmap(await response.blob());
+      if (maplibreMap.isStyleLoaded?.() && mapLibrePoiPlaceholderImages.has(imageId)) {
+        maplibreMap.removeImage?.(imageId);
+        mapLibrePoiPlaceholderImages.delete(imageId);
+      }
       if (maplibreMap.isStyleLoaded?.() && !maplibreMap.hasImage?.(imageId)) {
         maplibreMap.addImage(imageId, bitmap, { pixelRatio: 2 });
       }
@@ -7993,9 +8065,17 @@ if (staticRoute) {
       maplibreMap.on("styleimagemissing", (event: any) => {
         const id = event?.id;
         if (!id || maplibreMap.hasImage(id)) return;
-        // These images have dedicated asynchronous/synchronous loaders. A
-        // transparent placeholder would permanently turn their symbols into dots.
-        if (String(id).startsWith("poi-") || String(id).startsWith("its-traffic-light-")) return;
+        if (String(id).startsWith("poi-")) {
+          // A style can request an icon before its asynchronous bitmap finishes.
+          // Install a visible pin immediately so MapLibre does not emit repeated
+          // errors or replace the POI with an unexplained dot. The async loader
+          // replaces this tracked placeholder with the category artwork.
+          maplibreMap.addImage(id, mapLibrePoiFallbackImage(), { pixelRatio: 2 });
+          mapLibrePoiPlaceholderImages.add(String(id));
+          return;
+        }
+        // Traffic lights have a dedicated synchronous loader.
+        if (String(id).startsWith("its-traffic-light-")) return;
         maplibreMap.addImage(id, {
           width: 1,
           height: 1,
@@ -14915,7 +14995,7 @@ const ITS_MICROSOFT_STORE_DEEP_LINK = "ms-windows-store://pdp/?productid=9MWFGGW
 const ITS_MICROSOFT_STORE_REVIEW_LINK = "ms-windows-store://review/?ProductId=9MWFGGW3FD2C";
 const ITS_WINDOWS_INSTALL_URL = "https://github.com/hanifasepthi/its/releases/download/its-maps-v1.0.21/ITS-Maps-Windows-Custom-Setup-1.0.21-x64.exe";
 const ITS_WINDOWS_INSTALL_NAME = "ITS-Maps-Windows-Custom-Setup-1.0.21-x64.exe";
-const ITS_ANDROID_INSTALL_URL = "https://itstelkom.web.app/artifacts/apps/ITS-Maps-Android-1.0.36.apk.b64";
+const ITS_ANDROID_INSTALL_URL = "https://github.com/hanifasepthi/its/releases/download/its-maps-android-1.0.36/ITS-Maps-Android-1.0.36.apk";
 const ITS_ANDROID_INSTALL_NAME = "ITS-Maps-Android-1.0.36.apk";
 const ITS_IOS_INSTALL_URL = "https://itstelkom.web.app/?install=ios";
 const ITS_FALLBACK_PREVIEWS = [WIN_PREVIEW_WELCOME, WIN_PREVIEW_OPTIONS, WIN_PREVIEW_DONE];
@@ -15755,8 +15835,8 @@ let itsAgentStackCleanup: (() => void) | null = null;
 let itsLastRealPointer = { x: Math.max(16, window.innerWidth - 72), y: Math.max(16, window.innerHeight - 72), valid: false };
 
 const ITS_MODEL_IDS = {
-  control: "onnx-community/SmolLM2-135M-Instruct-ONNX",
-  research: "onnx-community/Qwen2.5-0.5B-Instruct",
+  control: "onnx-community/Qwen3-1.7B-ONNX",
+  research: "onnx-community/Qwen3-4B-ONNX",
   vision: RF_DETR_ANDROID_MODEL_ID,
 } as const;
 
@@ -17838,6 +17918,28 @@ async function askItsMapsAssistant(
   history: ItsChatTurn[] = [],
   signal?: AbortSignal,
 ): Promise<ItsAssistantResponse> {
+  const socialOnly = /^(?:hai|halo|hello|hi|hey|selamat (?:pagi|siang|sore|malam)|ass?alamualaikum|apa kabar|terima kasih|makasih|thanks)[!.,?\s]*$/i.test(question.trim());
+  if (!socialOnly) {
+    onStage?.("Merencanakan pencarian sumber publik...");
+    try {
+      const researched = await publicResearchAgent.answer({
+        question,
+        history,
+        signal,
+        onProgress: (message) => onStage?.(message),
+      });
+      if (researched.text.trim()) {
+        return {
+          text: researched.text.trim(),
+          html: researched.html,
+        };
+      }
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      console.warn("[ITS AI] Public research unavailable; continuing through the local application agent.", error);
+      onStage?.("Sumber publik belum dapat dibaca; melanjutkan dengan model lokal tanpa mengarang sitasi...");
+    }
+  }
   const fastResponse = await itsFastAssistantResponse(question, history, signal, onStage);
   if (fastResponse) return fastResponse;
   itsInstallAgentRuntimeBindings();
@@ -17851,6 +17953,21 @@ async function askItsMapsAssistant(
   await itsExecutePlannedUiActions(execution.plan, onStage);
   const cards = itsAgentCardsFromOutputs(execution.plan, execution.outputs);
   const modelText = execution.responseText.trim();
+  if (!modelText) {
+    onStage?.("Mencari jurnal dan sumber publik yang dapat diverifikasi...");
+    const researched = await publicResearchAgent.answer({
+      question,
+      history,
+      signal,
+      onProgress: (message) => onStage?.(message),
+    });
+    if (researched.text.trim()) {
+      return {
+        text: researched.text.trim(),
+        html: [researched.html, cards].filter(Boolean).join(""),
+      };
+    }
+  }
   return {
     text: modelText || "Saya belum memiliki bukti atau data yang cukup untuk menjawab dengan aman. Mohon tambahkan konteks yang ingin diperiksa.",
     html: [execution.responseHtml, cards].filter(Boolean).join(""),
@@ -18004,9 +18121,9 @@ function itsShowAiChatModal(): void {
       <div class="map-license-grip" data-swipe-handle aria-hidden="true"></div>
       <header class="its-ai-chat-head">
         <div>
-          <span>ITS AI <small data-ai-cloud-status>Cloudflare diperiksa...</small></span>
+          <span>ITS AI <small data-ai-cloud-status>Model lokal</small></span>
           <h2 id="its-ai-chat-title">Asisten ITS Maps</h2>
-          <p>Teks nonprivat dapat diproses Workers AI + AI Gateway; pola credential, PII, dan koordinat dialihkan ke model lokal privat/offline.</p>
+          <p>Jawaban disusun oleh model ONNX lokal; jaringan hanya dipakai untuk membaca sumber publik yang dapat diverifikasi.</p>
         </div>
         <button type="button" data-ai-chat-close aria-label="Tutup chat AI">${closeIconSvg()}</button>
       </header>
@@ -18020,11 +18137,14 @@ function itsShowAiChatModal(): void {
         <button type="button" data-ai-chat-prompt="Bagaimana status Raspberry Pi sekarang?">Status</button>
         <button type="button" data-ai-chat-prompt="Buatkan gambar snapshot AI dan jelaskan objeknya.">Gambar</button>
         <button type="button" data-ai-chat-prompt="Tampilkan peta lokasi Raspberry dengan link maps.">Peta</button>
+        <button type="button" data-ai-python-run title="Jalankan Python lokal setelah konfirmasi">Python lokal</button>
         <button type="button" data-ai-agent-toggle class="${itsAgentModeEnabled ? "active" : ""}" aria-pressed="${itsAgentModeEnabled ? "true" : "false"}">${itsAgentModeEnabled ? "Agent aktif" : "Agent"}</button>
       </div>
       <form class="its-ai-chat-form" data-ai-chat-form
+            method="get"
+            action="/"
             toolname="ask_its_maps_assistant"
-            tooldescription="Ask ITS Maps Assistant about maps, devices, traffic data, sources, or technical documentation."
+            tooldescription="Understand a natural-language request, search permitted public sources when fresh evidence is needed, and answer with traceable citations about maps, programming, science, public documents, or ITS Maps."
             toolautosubmit>
         <div class="its-ai-chat-inline-status" data-ai-chat-status role="status" aria-live="polite" hidden>
           <i aria-hidden="true"></i><span></span>
@@ -18035,7 +18155,7 @@ function itsShowAiChatModal(): void {
                  title="Pertanyaan untuk ITS Maps Assistant"
                  aria-label="Pertanyaan untuk ITS Maps Assistant"
                  aria-description="Tuliskan pertanyaan tentang peta, perangkat, lalu lintas, sumber data, atau dokumentasi ITS Maps."
-                 toolparamdescription="The question to ask ITS Maps Assistant."
+                 toolparamdescription="A complete natural-language question or task. It may request public web research, scientific papers, programming explanations, map information, or analysis of an explicitly supplied public URL."
                  placeholder="Tanya apa saja tentang ITS Maps..." required>
         </label>
         <button type="submit" data-ai-chat-send><span data-ai-send-label>Kirim</span><i data-ai-send-spinner aria-hidden="true"></i></button>
@@ -18050,11 +18170,10 @@ function itsShowAiChatModal(): void {
   const sendButton = modal.querySelector<HTMLButtonElement>("[data-ai-chat-send]");
   const sendLabel = sendButton?.querySelector<HTMLElement>("[data-ai-send-label]");
   const cloudStatus = modal.querySelector<HTMLElement>("[data-ai-cloud-status]");
-  void cloudflareAiClient.status().then((status) => {
-    if (!cloudStatus || !cloudStatus.isConnected) return;
-    cloudStatus.textContent = status.ok ? "Cloudflare siap" : "AI lokal fallback";
-    cloudStatus.title = status.ok ? status.endpoint : status.error || "Cloudflare Worker belum siap";
-  });
+  if (cloudStatus) {
+    cloudStatus.textContent = "Model lokal";
+    cloudStatus.title = "Inferensi chat berjalan lokal melalui Transformers.js; sumber publik diambil terpisah.";
+  }
   const disposeLiveActivity = log ? mountAgentLiveActivity(log) : () => undefined;
   const conversation: ItsChatTurn[] = [];
   let promptRunning = false;
@@ -18125,7 +18244,7 @@ function itsShowAiChatModal(): void {
     if (input) input.disabled = busy;
     if (sendButton) sendButton.disabled = busy;
     if (sendLabel) sendLabel.textContent = busy ? "Memproses" : "Kirim";
-    modal.querySelectorAll<HTMLButtonElement>("[data-ai-chat-prompt], [data-ai-agent-toggle]").forEach((button) => {
+    modal.querySelectorAll<HTMLButtonElement>("[data-ai-chat-prompt], [data-ai-agent-toggle], [data-ai-python-run]").forEach((button) => {
       button.disabled = busy;
     });
   };
@@ -18244,6 +18363,19 @@ function itsShowAiChatModal(): void {
   });
   modal.querySelectorAll<HTMLButtonElement>("[data-ai-chat-prompt]").forEach((button) => {
     button.addEventListener("click", () => void runPrompt(button.dataset.aiChatPrompt || ""));
+  });
+  modal.querySelector<HTMLButtonElement>("[data-ai-python-run]")?.addEventListener("click", async () => {
+    const code = window.prompt("Kode Python lokal (modul aman: math, statistics, json, re, collections, itertools, functools):", "import math\nprint(math.sqrt(144))");
+    if (!code) return;
+    try {
+      itsSetChatStatus("Menjalankan Python lokal di Web Worker...");
+      const output = await pythonSandbox.runFromUserGesture(code);
+      itsSetChatStatus();
+      await addAssistantMessage(`Hasil Python lokal:\n${output}`);
+    } catch (error) {
+      itsSetChatStatus();
+      await addAssistantMessage(error instanceof Error ? error.message : String(error));
+    }
   });
   modal.querySelector<HTMLButtonElement>("[data-ai-agent-toggle]")?.addEventListener("click", (event) => {
     const button = event.currentTarget as HTMLButtonElement;

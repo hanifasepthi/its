@@ -10,42 +10,6 @@
   <meta http-equiv="origin-trial" content="A/yLSto1peEstniGxrmY6vd5X1JtgdJcVVXDevhUBYSXYXnk536C+/SE4/y7Cdx6OYeKilNb5TfqTp35LnMWCQwAAAB4eyJvcmlnaW4iOiJodHRwczovL2l0c3RlbGtvbS53ZWIuYXBwOjQ0MyIsImZlYXR1cmUiOiJXZWJNQ1AiLCJleHBpcnkiOjE3OTQ4NzM2MDAsImlzU3ViZG9tYWluIjp0cnVlLCJpc1RoaXJkUGFydHkiOnRydWV9" />
   <meta name="google-site-verification" content="c8bcvZrCDvCbFQbw1nvSf4Dvemq6qb35bh1J64DJ_2g" />
   <meta name="msvalidate.01" content="C6357AD329BE82ECD8276C53EB8CDFA7" />
-  <style id="analytics-consent-retired">
-    [data-analytics-consent],
-    [data-analytics-preferences],
-    .analytics-consent-banner,
-    .analytics-preferences-button,
-    .analytics-preferences-panel {
-      display: none !important;
-    }
-  </style>
-  <script>
-    (() => {
-      const retiredSelector = [
-        "[data-analytics-consent]",
-        "[data-analytics-preferences]",
-        ".analytics-consent-banner",
-        ".analytics-preferences-button",
-        ".analytics-preferences-panel"
-      ].join(",");
-      const removeRetiredAnalyticsUi = (root = document) => {
-        root.querySelectorAll?.(retiredSelector).forEach((node) => node.remove());
-      };
-      removeRetiredAnalyticsUi();
-      const observer = new MutationObserver((records) => {
-        records.forEach((record) => record.addedNodes.forEach((node) => {
-          if (!(node instanceof Element)) return;
-          if (node.matches(retiredSelector)) node.remove();
-          else removeRetiredAnalyticsUi(node);
-        }));
-      });
-      observer.observe(document.documentElement, { childList: true, subtree: true });
-      window.addEventListener("load", () => window.setTimeout(() => {
-        removeRetiredAnalyticsUi();
-        observer.disconnect();
-      }, 15000), { once: true });
-    })();
-  </script>
   <link id="pwa-manifest" rel="manifest" href="/manifest.webmanifest" />
   <link rel="alternate" type="text/markdown" href="/llms.txt" title="ITS Maps llms.txt" />
   <script>
@@ -237,8 +201,9 @@
 </head>
 
 <body>
-  <div id="app">
-    <main class="map-app-skeleton" aria-busy="true" aria-label="Memuat peta ITS Maps">
+  <its-maps-app>
+    <div id="app">
+      <main class="map-app-skeleton" aria-busy="true" aria-label="Memuat peta ITS Maps">
       <div class="map-skeleton-header" aria-hidden="true">
         <span class="map-skeleton-logo"></span>
         <span class="map-skeleton-search"></span>
@@ -261,8 +226,9 @@
           <a href="/privacy">Privasi</a>
         </nav>
       </div>
-    </main>
-  </div>
+      </main>
+    </div>
+  </its-maps-app>
   <details class="webmcp-tools" aria-label="ITS Maps WebMCP tools">
     <summary>AI agent tools</summary>
     <p>WebMCP tools for public ITS Maps navigation and documentation.</p>

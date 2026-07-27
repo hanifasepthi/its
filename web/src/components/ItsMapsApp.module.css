@@ -1,0 +1,7 @@
+.shell {
+  display: contents;
+}
+
+.shell:focus {
+  outline: none;
+}
