@@ -108,13 +108,13 @@
         "source": "Panda Pontianak / Dishub Kota Pontianak",
         "sourceId": "embedpanda/play/5",
         "sourceUrl": "https://embedpanda.pontianak.go.id/play/5/",
-        "publicUrl": "https://www.youtube-nocookie.com/embed/haIfLCuXA38",
-        "streamUrl": "https://www.youtube-nocookie.com/embed/haIfLCuXA38",
+        "publicUrl": "https://embedpanda.pontianak.go.id/play/5/",
+        "streamUrl": "",
         "accessType": "public-youtube",
-        "streamStatus": "public-live-provider-controlled",
+        "streamStatus": "offline-embedding-disabled-by-owner",
         "coordinateAccuracy": "open-map-intersection-verified",
         "verification": "verified",
-        "verificationMethod": "official-player-code-and-shared-open-map-road-node",
+        "verificationMethod": "official-player-code-checked-2026-07-27-embedding-disabled-by-owner",
         "attribution": "Video: Dishub Kota Pontianak melalui Panda Pontianak/YouTube; koordinat persimpangan: OpenStreetMap/Overpass",
         "updatedAt": "2026-07-27T05:10:00Z"
       }

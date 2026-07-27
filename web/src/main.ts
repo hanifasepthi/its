@@ -1699,6 +1699,8 @@ if (staticRoute) {
       ? usablePublicMediaUrl(streamCandidate)
       : "";
     const streamStatus = String(properties.streamStatus || (streamUrl ? "public-live" : "metadata-only"));
+    const streamIsPlayable = Boolean(streamUrl)
+      && /^(?:public-live|verified-live|public-page-third-party)$/i.test(streamStatus);
     const isThirdPartyPublicPage = streamStatus === "public-page-third-party";
     const address = String(properties.address || properties.location || "").trim();
     const operator = String(properties.operator || "").trim();
@@ -1722,7 +1724,7 @@ if (staticRoute) {
           <div><span>${isThirdPartyPublicPage ? "Lokasi CCTV terverifikasi · pemutar publik pihak ketiga" : "CCTV terverifikasi"}</span><h2 id="map-camera-source-title">${escapeHtml(name)}</h2></div>
           <button type="button" data-camera-source-close aria-label="Tutup detail CCTV" title="Tutup"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
         </header>
-        ${streamUrl ? `
+        ${streamIsPlayable ? `
           <div class="map-camera-live-badge"><i></i> ${isThirdPartyPublicPage ? "Pemutar publik — status live mengikuti penyedia" : "LIVE dari penyedia sumber"}</div>
           <div class="map-camera-public-player">
             <iframe data-camera-player src="${escapeHtml(streamUrl)}" title="Video realtime ${escapeHtml(name)}" loading="eager" allow="autoplay; fullscreen; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
@@ -1731,8 +1733,8 @@ if (staticRoute) {
           ${isThirdPartyPublicPage ? `<p class="map-camera-disclaimer">Halaman ini merupakan mirror publik independen. Jika penyedia menolak embed atau membatasi trafik, gunakan tombol buka pemutar.</p>` : ""}
         ` : `
           <div class="map-camera-unavailable">
-            <strong>Lokasi kamera tersedia, URL video publik langsung belum tersedia.</strong>
-            <p>ITS Maps tidak menebak URL dan tidak menyalin kredensial kamera ke browser. Status sumber: ${escapeHtml(streamStatus)}.</p>
+            <strong>Lokasi kamera tersedia, tetapi video tidak dapat diputar di ITS Maps.</strong>
+            <p>Embed penyedia sedang tidak aktif, dibatasi pemilik, atau belum lolos verifikasi pemutaran. Status sumber: ${escapeHtml(streamStatus)}.</p>
           </div>
         `}
         <dl class="map-camera-source-meta">
