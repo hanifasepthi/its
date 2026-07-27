@@ -3,6 +3,9 @@ import "leaflet/dist/leaflet.css";
 import "leaflet-rotate";
 import "./style.css";
 import "./mapLegend";
+import "./components/ItsMapsApp";
+import "./components/ItsConsentManager";
+import "./components/ItsAdSlot";
 import WIN_PREVIEW_WELCOME from "./windows/welcome.png";
 import WIN_PREVIEW_OPTIONS from "./windows/pilihopsiinstaller.png";
 import WIN_PREVIEW_DONE from "./windows/selesaiinstaller.png";
@@ -19,10 +22,10 @@ import {
   type BrowserRfDetrResult,
 } from "./browserRfDetr";
 import { publicResearchAgent } from "./publicResearchAgent";
+import { pythonSandbox } from "./research/PythonSandbox";
 import { agentOrchestrator } from "./agent-core/AgentOrchestrator";
 import type { DynamicAgentPlan } from "./agent-core/AgentPlanSchema";
 import { mountAgentLiveActivity } from "./agentLiveActivity";
-import { cloudflareAiClient } from "./ai-runtime/CloudflareAiClient";
 import { disablePublicPush, enablePublicPush, publicPushOptedIn, restorePublicPush } from "./pushNotifications";
 import {
   fetchMicrosoftStorePublicSnapshot,
@@ -124,8 +127,8 @@ const FREE_MAP_SERVICE_STACK = [
 
 const AI_SERVICE_STACK = [
   ["RF-DETR", "Deteksi objek COCO pada video/snapshot browser dengan model transformer ONNX dari Hugging Face.", "https://hf.co/onnx-community/rfdetr_medium-ONNX"],
-  ["SmolLM2 135M Instruct", "Model bahasa ONNX q4 yang berjalan lokal di browser untuk memahami pertanyaan bebas tanpa mengirim percakapan ke layanan AI eksternal.", "https://huggingface.co/onnx-community/SmolLM2-135M-Instruct-ONNX"],
-  ["Qwen2.5 0.5B Instruct", "Model riset ONNX q4 lokal yang menyusun ringkasan hanya dari bukti hasil pencarian terstruktur.", "https://huggingface.co/onnx-community/Qwen2.5-0.5B-Instruct"],
+  ["Qwen3 1.7B ONNX", "Model bahasa ONNX lokal untuk perangkat menengah; percakapan tidak dikirim ke layanan inferensi eksternal.", "https://huggingface.co/onnx-community/Qwen3-1.7B-ONNX"],
+  ["Qwen3 4B ONNX", "Model riset ONNX lokal untuk perangkat WebGPU yang menyusun jawaban hanya dari evidence terverifikasi.", "https://huggingface.co/onnx-community/Qwen3-4B-ONNX"],
   ["Crossref, OpenAlex, Europe PMC", "Indeks metadata ilmiah publik untuk judul, penulis, DOI, abstrak, sitasi, dan tautan open-access. ITS Maps tidak mengunggah PDF jurnal.", "https://www.crossref.org/documentation/retrieve-metadata/rest-api/"],
   ["Wikipedia dan Wikimedia Commons", "Pencarian konteks web dan gambar terbuka dengan URL sumber serta atribusi lisensi yang ditampilkan pada jawaban.", "https://www.mediawiki.org/wiki/API:Cross-site_requests"],
   ["Transformers.js", "Pipeline object-detection RF-DETR di browser, termasuk preprocessing dan postprocessing bounding box.", "https://huggingface.co/docs/transformers.js"],
@@ -15832,8 +15835,8 @@ let itsAgentStackCleanup: (() => void) | null = null;
 let itsLastRealPointer = { x: Math.max(16, window.innerWidth - 72), y: Math.max(16, window.innerHeight - 72), valid: false };
 
 const ITS_MODEL_IDS = {
-  control: "onnx-community/SmolLM2-135M-Instruct-ONNX",
-  research: "onnx-community/Qwen2.5-0.5B-Instruct",
+  control: "onnx-community/Qwen3-1.7B-ONNX",
+  research: "onnx-community/Qwen3-4B-ONNX",
   vision: RF_DETR_ANDROID_MODEL_ID,
 } as const;
 
@@ -17915,20 +17918,26 @@ async function askItsMapsAssistant(
   history: ItsChatTurn[] = [],
   signal?: AbortSignal,
 ): Promise<ItsAssistantResponse> {
-  const researchQuestion = /\b(?:rf-?detr|rt-?detr|detr|formulasi|formula|rumus|jurnal|paper|penelitian|ilmiah|literatur|sitasi|referensi|sumber|bandingkan|perbandingan|arsitektur|metode|keterbatasan)\b/i.test(question);
-  if (researchQuestion) {
-    onStage?.("Merencanakan pencarian jurnal dan sumber publik...");
-    const researched = await publicResearchAgent.answer({
-      question,
-      history,
-      signal,
-      onProgress: (message) => onStage?.(message),
-    });
-    if (researched.text.trim()) {
-      return {
-        text: researched.text.trim(),
-        html: researched.html,
-      };
+  const socialOnly = /^(?:hai|halo|hello|hi|hey|selamat (?:pagi|siang|sore|malam)|ass?alamualaikum|apa kabar|terima kasih|makasih|thanks)[!.,?\s]*$/i.test(question.trim());
+  if (!socialOnly) {
+    onStage?.("Merencanakan pencarian sumber publik...");
+    try {
+      const researched = await publicResearchAgent.answer({
+        question,
+        history,
+        signal,
+        onProgress: (message) => onStage?.(message),
+      });
+      if (researched.text.trim()) {
+        return {
+          text: researched.text.trim(),
+          html: researched.html,
+        };
+      }
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      console.warn("[ITS AI] Public research unavailable; continuing through the local application agent.", error);
+      onStage?.("Sumber publik belum dapat dibaca; melanjutkan dengan model lokal tanpa mengarang sitasi...");
     }
   }
   const fastResponse = await itsFastAssistantResponse(question, history, signal, onStage);
@@ -18112,9 +18121,9 @@ function itsShowAiChatModal(): void {
       <div class="map-license-grip" data-swipe-handle aria-hidden="true"></div>
       <header class="its-ai-chat-head">
         <div>
-          <span>ITS AI <small data-ai-cloud-status>Cloudflare diperiksa...</small></span>
+          <span>ITS AI <small data-ai-cloud-status>Model lokal</small></span>
           <h2 id="its-ai-chat-title">Asisten ITS Maps</h2>
-          <p>Teks nonprivat dapat diproses Workers AI + AI Gateway; pola credential, PII, dan koordinat dialihkan ke model lokal privat/offline.</p>
+          <p>Jawaban disusun oleh model ONNX lokal; jaringan hanya dipakai untuk membaca sumber publik yang dapat diverifikasi.</p>
         </div>
         <button type="button" data-ai-chat-close aria-label="Tutup chat AI">${closeIconSvg()}</button>
       </header>
@@ -18128,11 +18137,14 @@ function itsShowAiChatModal(): void {
         <button type="button" data-ai-chat-prompt="Bagaimana status Raspberry Pi sekarang?">Status</button>
         <button type="button" data-ai-chat-prompt="Buatkan gambar snapshot AI dan jelaskan objeknya.">Gambar</button>
         <button type="button" data-ai-chat-prompt="Tampilkan peta lokasi Raspberry dengan link maps.">Peta</button>
+        <button type="button" data-ai-python-run title="Jalankan Python lokal setelah konfirmasi">Python lokal</button>
         <button type="button" data-ai-agent-toggle class="${itsAgentModeEnabled ? "active" : ""}" aria-pressed="${itsAgentModeEnabled ? "true" : "false"}">${itsAgentModeEnabled ? "Agent aktif" : "Agent"}</button>
       </div>
       <form class="its-ai-chat-form" data-ai-chat-form
+            method="get"
+            action="/"
             toolname="ask_its_maps_assistant"
-            tooldescription="Ask ITS Maps Assistant about maps, devices, traffic data, sources, or technical documentation."
+            tooldescription="Understand a natural-language request, search permitted public sources when fresh evidence is needed, and answer with traceable citations about maps, programming, science, public documents, or ITS Maps."
             toolautosubmit>
         <div class="its-ai-chat-inline-status" data-ai-chat-status role="status" aria-live="polite" hidden>
           <i aria-hidden="true"></i><span></span>
@@ -18143,7 +18155,7 @@ function itsShowAiChatModal(): void {
                  title="Pertanyaan untuk ITS Maps Assistant"
                  aria-label="Pertanyaan untuk ITS Maps Assistant"
                  aria-description="Tuliskan pertanyaan tentang peta, perangkat, lalu lintas, sumber data, atau dokumentasi ITS Maps."
-                 toolparamdescription="The question to ask ITS Maps Assistant."
+                 toolparamdescription="A complete natural-language question or task. It may request public web research, scientific papers, programming explanations, map information, or analysis of an explicitly supplied public URL."
                  placeholder="Tanya apa saja tentang ITS Maps..." required>
         </label>
         <button type="submit" data-ai-chat-send><span data-ai-send-label>Kirim</span><i data-ai-send-spinner aria-hidden="true"></i></button>
@@ -18158,11 +18170,10 @@ function itsShowAiChatModal(): void {
   const sendButton = modal.querySelector<HTMLButtonElement>("[data-ai-chat-send]");
   const sendLabel = sendButton?.querySelector<HTMLElement>("[data-ai-send-label]");
   const cloudStatus = modal.querySelector<HTMLElement>("[data-ai-cloud-status]");
-  void cloudflareAiClient.status().then((status) => {
-    if (!cloudStatus || !cloudStatus.isConnected) return;
-    cloudStatus.textContent = status.ok ? "Cloudflare siap" : "AI lokal fallback";
-    cloudStatus.title = status.ok ? status.endpoint : status.error || "Cloudflare Worker belum siap";
-  });
+  if (cloudStatus) {
+    cloudStatus.textContent = "Model lokal";
+    cloudStatus.title = "Inferensi chat berjalan lokal melalui Transformers.js; sumber publik diambil terpisah.";
+  }
   const disposeLiveActivity = log ? mountAgentLiveActivity(log) : () => undefined;
   const conversation: ItsChatTurn[] = [];
   let promptRunning = false;
@@ -18233,7 +18244,7 @@ function itsShowAiChatModal(): void {
     if (input) input.disabled = busy;
     if (sendButton) sendButton.disabled = busy;
     if (sendLabel) sendLabel.textContent = busy ? "Memproses" : "Kirim";
-    modal.querySelectorAll<HTMLButtonElement>("[data-ai-chat-prompt], [data-ai-agent-toggle]").forEach((button) => {
+    modal.querySelectorAll<HTMLButtonElement>("[data-ai-chat-prompt], [data-ai-agent-toggle], [data-ai-python-run]").forEach((button) => {
       button.disabled = busy;
     });
   };
@@ -18352,6 +18363,19 @@ function itsShowAiChatModal(): void {
   });
   modal.querySelectorAll<HTMLButtonElement>("[data-ai-chat-prompt]").forEach((button) => {
     button.addEventListener("click", () => void runPrompt(button.dataset.aiChatPrompt || ""));
+  });
+  modal.querySelector<HTMLButtonElement>("[data-ai-python-run]")?.addEventListener("click", async () => {
+    const code = window.prompt("Kode Python lokal (modul aman: math, statistics, json, re, collections, itertools, functools):", "import math\nprint(math.sqrt(144))");
+    if (!code) return;
+    try {
+      itsSetChatStatus("Menjalankan Python lokal di Web Worker...");
+      const output = await pythonSandbox.runFromUserGesture(code);
+      itsSetChatStatus();
+      await addAssistantMessage(`Hasil Python lokal:\n${output}`);
+    } catch (error) {
+      itsSetChatStatus();
+      await addAssistantMessage(error instanceof Error ? error.message : String(error));
+    }
   });
   modal.querySelector<HTMLButtonElement>("[data-ai-agent-toggle]")?.addEventListener("click", (event) => {
     const button = event.currentTarget as HTMLButtonElement;

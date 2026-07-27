@@ -11,7 +11,7 @@ import {
 import { enforceAiDailyBudget } from "./budget";
 import type { AiMessage, Env, SearchSource, VectorizeMatch } from "./types";
 
-const DEFAULT_TEXT_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
+const DEFAULT_TEXT_MODEL = "@cf/qwen/qwen3-30b-a3b-fp8";
 const DEFAULT_EMBEDDING_MODEL = "@cf/baai/bge-m3";
 const DEFAULT_SEARCH_INSTANCE = "its-maps-public";
 
@@ -226,7 +226,7 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
   const body = await readJson<ChatBody>(request, 40_000);
   const question = cleanText(body.question, 4_000);
   if (!question) throw new HttpError(400, "question_required", "Pertanyaan wajib diisi.");
-  const history = normalizedMessages(body.history, 6).filter((message) => message.role !== "system");
+  const history = normalizedMessages(body.history, 16).filter((message) => message.role !== "system");
   const applicationContext = body.applicationContext && typeof body.applicationContext === "object"
     ? JSON.stringify(body.applicationContext).slice(0, 6_000)
     : "";
@@ -252,7 +252,8 @@ export async function handleChat(request: Request, env: Env): Promise<Response> 
       ].filter(Boolean).join("\n\n"),
     },
   ];
-  const output = await runTextModel(env, messages, { maxTokens: 620, temperature: 0.25, task: "rag-chat" });
+  const taskBudget = /(?:kode|code|audit|analisis|paper|jurnal|rumus|langkah|banding)/i.test(question) ? 1_800 : 1_000;
+  const output = await runTextModel(env, messages, { maxTokens: taskBudget, temperature: 0.2, task: "rag-chat" });
   return json({
     ok: true,
     answer: output.text,

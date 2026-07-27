@@ -22,6 +22,7 @@
     "map:data:build": "node scripts/build-map-dynamics.mjs",
     "map:data:check": "node scripts/qa-map-dynamics.mjs",
     "map:data:coverage:check": "node scripts/qa-map-dynamics-coverage.mjs",
+    "hosting:manifest:check": "node scripts/qa-hosting-manifest.mjs",
     "map:data:ingest": "node scripts/ingest-map-dynamics-overpass.mjs",
     "map:data:extract:pmtiles": "node scripts/extract-national-pmtiles.mjs",
     "map:data:ingest:check": "node scripts/qa-map-dynamics-ingest.mjs",
@@ -60,6 +61,7 @@
     "leaflet-rotate": "^0.2.8",
     "mapbox-gl-leaflet": "^0.0.16",
     "maplibre-gl": "^5.24.0",
+    "puppeteer-core": "^24.16.0",
     "qrcode": "^1.5.4",
     "sharp": "^0.35.3",
     "typescript": "^5.9.3",
@@ -177,6 +179,7 @@
     "katex": "^0.17.0",
     "pdfjs-dist": "4.10.38",
     "pmtiles": "^4.4.1",
+    "pyodide": "^0.29.3",
     "three": "^0.185.1"
   }
 }

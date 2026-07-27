@@ -6,6 +6,7 @@ import { EvidenceStore } from "./EvidenceStore";
 import { evidenceRanker } from "./EvidenceRanker";
 import { groundedAnswerGenerator } from "./GroundedAnswerGenerator";
 import { htmlSourceReader } from "./HtmlSourceReader";
+import { githubRepositoryReader } from "./GitHubRepositoryReader";
 import { pdfSourceReader } from "./PdfSourceReader";
 import { queryGenerator } from "./QueryGenerator";
 import {
@@ -370,6 +371,12 @@ function renderResult(
       <small>${escapeHtml(source.status)}${source.license ? ` - ${escapeHtml(source.license)}` : ""}</small>
       <div class="its-ai-actions"><a href="${escapeHtml(source.url)}" target="_blank" rel="noopener">Sumber</a>${source.pdfUrl ? `<a href="${escapeHtml(source.pdfUrl)}" target="_blank" rel="noopener">PDF</a>` : ""}</div>
     </li>`).join("");
+  const codeHtml = documents.flatMap((documentNode) => documentNode.blocks
+    .filter((block) => block.type === "code")
+    .slice(0, 4)
+    .map((block) => `<article class="its-ai-code-evidence"><h4>${escapeHtml(documentNode.title)}</h4>${block.html || `<pre><code>${escapeHtml(block.text)}</code></pre>`}</article>`))
+    .slice(0, 8)
+    .join("");
   const otherHtml = otherSources.length ? `<details class="its-ai-other-sources"><summary>Sumber lain yang ditemukan (${otherSources.length})</summary><ul>${otherSources.map((source) => {
     let favicon = "";
     try { favicon = `${new URL(source.url).origin}/favicon.ico`; } catch { /* Keep text fallback. */ }
@@ -383,7 +390,7 @@ function renderResult(
   const limitationCount = answer.limitations.length + accessLimitations.length;
   const html = `<section class="its-ai-research-support" aria-label="Jawaban dan bukti riset publik">
     <p class="its-ai-grounded-summary">${escapeHtml(answer.summary)} ${summaryCitationLinks}</p>
-    ${sectionsHtml}${formulasHtml}${imagesHtml ? `<div class="its-ai-research-images">${imagesHtml}</div>` : ""}
+    ${sectionsHtml}${formulasHtml}${codeHtml}${imagesHtml ? `<div class="its-ai-research-images">${imagesHtml}</div>` : ""}
     ${limitationsHtml ? `<details class="its-ai-source-notes"><summary>Catatan akses sumber (${limitationCount})</summary><ul>${limitationsHtml}</ul></details>` : ""}
     ${referencesHtml ? `<section class="its-ai-references"><h4>Daftar pustaka (${bibliography.length})</h4><ol class="its-ai-reference-list">${referencesHtml}</ol></section>` : ""}
     ${otherHtml}
@@ -529,7 +536,11 @@ export class ResearchOrchestrator {
           const shouldReadHtml = source.provider === "direct"
             || plan.requiredCapabilities.includes("read_public_html")
             || plan.requiredCapabilities.includes("discover_official_source");
-          if (plan.needsPdf && source.pdfUrl && sourceIndex < 2) {
+          if (source.provider === "github") {
+            agentLiveActivity.emit(sessionId, { type: "skill-start", title: `Mengunduh ZIP dan mencari kode lokal di ${source.title}`, payload: { capability: "search_public_sources", progress: 36 + sourceIndex } });
+            documentNode = await githubRepositoryReader.read(source, question, controller.signal);
+            agentLiveActivity.emit(sessionId, { type: "skill-complete", title: `${documentNode.blocks.length} potongan kode ditemukan`, payload: { capability: "search_public_sources", progress: 39 + sourceIndex } });
+          } else if (plan.needsPdf && source.pdfUrl && sourceIndex < 2) {
             const tab = sourceTab(source, "pdf");
             agentLiveActivity.emit(sessionId, { type: "pdf-open", title: `Membuka PDF ${source.title}`, payload: { tab, source: activitySource(source), progress: 36 + sourceIndex } });
             agentLiveActivity.emit(sessionId, { type: "tab-activate", title: `Tab PDF ${source.title} aktif`, payload: { tabId: tab.id, progress: 37 + sourceIndex } });
