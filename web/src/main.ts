@@ -14593,10 +14593,9 @@ async function notifyLatestPublicUpdate(registration: ServiceWorkerRegistration)
 
 if ('serviceWorker' in navigator && !isAndroidApkRuntime()) {
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    const reloadKey = "its-sw-controller-reload:v31";
-    if (sessionStorage.getItem(reloadKey) === "1") return;
-    sessionStorage.setItem(reloadKey, "1");
-    window.location.reload();
+    // The newly activated worker controls the next navigation. Reloading here
+    // produced two page_view events and a visible flash on every SW upgrade.
+    window.dispatchEvent(new CustomEvent("its:service-worker-controllerchange"));
   });
   window.addEventListener('load', async () => {
     try {

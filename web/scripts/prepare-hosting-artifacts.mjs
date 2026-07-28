@@ -10,7 +10,7 @@ const distDir = path.join(webRoot, "dist");
 const analyticsConfig = readJson(path.join(webRoot, "analytics.config.json"));
 const SITE_ORIGIN = "https://itstelkom.web.app";
 const CLOUDFLARE_WEB_ANALYTICS_TOKEN = String(
-  process.env.CLOUDFLARE_WEB_ANALYTICS_TOKEN || "",
+  process.env.CLOUDFLARE_WEB_ANALYTICS_TOKEN || analyticsConfig.cloudflareWebAnalyticsToken || "",
 ).trim();
 const GOOGLE_MEASUREMENT_ID = String(
   process.env.GOOGLE_MEASUREMENT_ID || analyticsConfig.googleMeasurementId || "",
@@ -128,16 +128,18 @@ function analyticsScript() {
   return `(() => {
   "use strict";
   const config = ${config};
-  const consentKey = "its:consent:v1";
-  const readConsent = () => {
-    try {
-      const value = JSON.parse(localStorage.getItem(consentKey) || "null");
-      return value && typeof value.analytics === "boolean" && typeof value.advertising === "boolean"
-        ? value
-        : { analytics: false, advertising: false };
-    } catch {
-      return { analytics: false, advertising: false };
-    }
+  const acceptedConsent = Object.freeze({ analytics: true, advertising: false });
+  const providerStatus = {
+    google: config.googleMeasurementId ? "pending" : "not-configured",
+    clarity: config.microsoftClarityProjectId ? "pending" : "not-configured",
+    cloudflare: config.cloudflareWebAnalyticsToken ? "pending" : "not-configured"
+  };
+  const publishStatus = (provider, status) => {
+    providerStatus[provider] = status;
+    document.documentElement.dataset["analytics" + provider[0].toUpperCase() + provider.slice(1)] = status;
+    document.dispatchEvent(new CustomEvent("its:analytics-status", {
+      detail: { provider, status, providers: { ...providerStatus } }
+    }));
   };
   window.dataLayer = window.dataLayer || [];
   window.gtag = window.gtag || function(){ window.dataLayer.push(arguments); };
@@ -160,17 +162,21 @@ function analyticsScript() {
 
   const loadGoogle = () => {
     const id = String(config.googleMeasurementId || "");
-    if (!readConsent().analytics || !/^(?:G|GT|AW)-[A-Z0-9-]+$/i.test(id) || document.querySelector("script[data-its-google-tag]")) return;
+    if (!/^(?:G|GT|AW)-[A-Z0-9-]+$/i.test(id) || document.querySelector("script[data-its-google-tag]")) return;
     const script = document.createElement("script");
     script.async = true;
     script.dataset.itsGoogleTag = "true";
+    script.addEventListener("load", () => publishStatus("google", "active"), { once: true });
+    script.addEventListener("error", () => publishStatus("google", "blocked"), { once: true });
     script.src = "https://www.googletagmanager.com/gtag/js?id=" + encodeURIComponent(id);
     document.head.appendChild(script);
     window.gtag("js", new Date());
     window.gtag("config", id, {
       send_page_view: false,
       allow_google_signals: false,
-      allow_ad_personalization_signals: false
+      allow_ad_personalization_signals: false,
+      page_location: sanitizedUrl(location.href),
+      page_referrer: document.referrer ? sanitizedUrl(document.referrer) : ""
     });
     window.gtag("event", "page_view", {
       page_location: sanitizedUrl(location.href),
@@ -180,10 +186,12 @@ function analyticsScript() {
 
   const loadCloudflare = () => {
     const token = String(config.cloudflareWebAnalyticsToken || "");
-    if (!readConsent().analytics || !/^[a-f0-9]{32}$/i.test(token) || document.querySelector("script[data-cf-beacon]")) return;
+    if (!/^[a-f0-9]{32}$/i.test(token) || document.querySelector("script[data-cf-beacon]")) return;
     const script = document.createElement("script");
     script.defer = true;
     script.dataset.cfBeacon = JSON.stringify({ token, spa: false });
+    script.addEventListener("load", () => publishStatus("cloudflare", "active"), { once: true });
+    script.addEventListener("error", () => publishStatus("cloudflare", "blocked"), { once: true });
     script.src = "https://static.cloudflareinsights.com/beacon.min.js";
     document.head.appendChild(script);
   };
@@ -198,7 +206,7 @@ function analyticsScript() {
 
   const loadClarity = () => {
     const id = String(config.microsoftClarityProjectId || "");
-    if (!readConsent().analytics || !/^[a-z0-9-]{4,64}$/i.test(id) || document.querySelector("script[data-its-clarity]")) return;
+    if (!/^[a-z0-9-]{4,64}$/i.test(id) || document.querySelector("script[data-its-clarity]")) return;
     const measuredPath = /^(?:\\/|\\/documentation|\\/method(?:\\/[^/]*)?|\\/privacy|\\/roadmap|\\/licence|\\/license|\\/pdf-preview(?:\\/[^/]*)?)\\/?$/i.test(location.pathname);
     if (!measuredPath) return;
     maskSensitiveContent(document);
@@ -207,6 +215,8 @@ function analyticsScript() {
     const script = document.createElement("script");
     script.async = true;
     script.dataset.itsClarity = "true";
+    script.addEventListener("load", () => publishStatus("clarity", "active"), { once: true });
+    script.addEventListener("error", () => publishStatus("clarity", "blocked"), { once: true });
     script.src = "https://www.clarity.ms/tag/" + encodeURIComponent(id);
     document.head.appendChild(script);
   };
@@ -221,7 +231,11 @@ function analyticsScript() {
       else if (typeof value === "boolean") safe[key] = value;
       else if (typeof value === "string") safe[key] = value.slice(0, 80);
     });
-    window.gtag("event", name, safe);
+    window.gtag("event", name, {
+      ...safe,
+      page_location: sanitizedUrl(location.href),
+      page_referrer: document.referrer ? sanitizedUrl(document.referrer) : ""
+    });
     return true;
   };
 
@@ -261,16 +275,19 @@ function analyticsScript() {
     }
   };
 
-  window.ITSAnalytics = { track, updateConsent };
-  window.addEventListener("its:consent-change", (event) => updateConsent(event.detail || {}));
+  window.ITSAnalytics = {
+    track,
+    updateConsent,
+    status: () => ({ ...providerStatus })
+  };
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => {
       installPrivacyGuards();
-      updateConsent(readConsent());
+      updateConsent(acceptedConsent);
     }, { once: true });
   } else {
     installPrivacyGuards();
-    updateConsent(readConsent());
+    updateConsent(acceptedConsent);
   }
 })();\n`;
 }
