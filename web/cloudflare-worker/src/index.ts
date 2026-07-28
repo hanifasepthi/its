@@ -116,6 +116,33 @@ async function nationalArchive(request: Request, env: Env): Promise<Response> {
   });
 }
 
+async function publicGitHubArchive(request: Request): Promise<Response> {
+  const url = new URL(request.url);
+  const owner = (url.searchParams.get("owner") || "").trim();
+  const repo = (url.searchParams.get("repo") || "").trim().replace(/\.git$/i, "");
+  if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(owner)
+    || !/^[A-Za-z0-9._-]{1,100}$/.test(repo)) {
+    throw new HttpError(400, "invalid_github_repository", "Owner atau nama repositori GitHub tidak valid.");
+  }
+  // This deliberately cannot proxy an arbitrary URL: only GitHub's public
+  // codeload archive for validated owner/repository coordinates is reachable.
+  const upstream = `https://codeload.github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/zip/HEAD`;
+  const response = await fetch(upstream, {
+    headers: { Accept: "application/zip", "User-Agent": "ITS-Maps-public-research/1.0" },
+    redirect: "follow",
+  });
+  if (!response.ok) throw new HttpError(502, "github_archive_failed", `GitHub archive merespons HTTP ${response.status}.`);
+  const declared = Number(response.headers.get("Content-Length") || 0);
+  if (declared > 25_000_000) throw new HttpError(413, "github_archive_too_large", "ZIP repositori melebihi batas pembaca lokal 25 MB.");
+  const headers = new Headers({
+    "Content-Type": "application/zip",
+    "Cache-Control": "public, max-age=900",
+    "Content-Disposition": `attachment; filename="${repo}-HEAD.zip"`,
+  });
+  if (declared) headers.set("Content-Length", String(declared));
+  return new Response(response.body, { status: 200, headers });
+}
+
 async function health(env: Env): Promise<Response> {
   const [ai, push] = await Promise.all([aiHealth(env), pushHealth(env)]);
   return json({
@@ -136,6 +163,7 @@ async function health(env: Env): Promise<Response> {
       mapViewport: "/v1/map/deltas?bbox=minLng,minLat,maxLng,maxLat",
       mapObservations: "/v1/map/observations",
       mapArchive: "/v1/map/archive/indonesia.pmtiles",
+      githubArchive: "/v1/research/github/archive?owner=OWNER&repo=REPOSITORY",
     },
     capabilities: { ai, push, mapData: mapDataHealth(env), mcp: { protocol: "2025-06-18", stateless: true } },
     freeTierMode: true,
@@ -165,6 +193,10 @@ async function apiRouter(context: ApiContext): Promise<Response> {
   if (routeMatches(path, "/api/map/archive/indonesia.pmtiles", "/v1/map/archive/indonesia.pmtiles")
     && (request.method === "GET" || request.method === "HEAD")) {
     return nationalArchive(request, env);
+  }
+  if (routeMatches(path, "/api/research/github/archive", "/v1/research/github/archive")
+    && request.method === "GET") {
+    return publicGitHubArchive(request);
   }
   if (routeMatches(path, "/api/map/deltas", "/v1/map/deltas") && request.method === "GET") {
     return handleMapDeltas(request, env);

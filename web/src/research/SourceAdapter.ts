@@ -62,6 +62,17 @@ async function fetchJson(url: URL, signal?: AbortSignal): Promise<JsonRecord> {
   throw new Error(`${url.hostname} tidak mengembalikan JSON.`);
 }
 
+async function fetchText(url: URL, accept: string, signal?: AbortSignal): Promise<string> {
+  const linked = linkedSignal(signal);
+  try {
+    const response = await fetch(url, { headers: { Accept: accept }, signal: linked.signal });
+    if (!response.ok) throw new Error(`${url.hostname} HTTP ${response.status}`);
+    return await response.text();
+  } finally {
+    linked.cleanup();
+  }
+}
+
 function baseSource(provider: string, values: Partial<ResearchSource> & Pick<ResearchSource, "title" | "url">): ResearchSource {
   const key = values.doi || values.url || values.title;
   return {
@@ -341,6 +352,84 @@ async function searchGithub(query: string, signal?: AbortSignal): Promise<Resear
   })).filter((source: ResearchSource) => Boolean(source.title && source.url));
 }
 
+function youtubeVideoId(value: string): string {
+  try {
+    const url = new URL(value.replaceAll("&amp;", "&"));
+    if (/^(?:www\.)?youtu\.be$/i.test(url.hostname)) return url.pathname.split("/").filter(Boolean)[0] || "";
+    if (/^(?:www\.)?youtube(?:-nocookie)?\.com$/i.test(url.hostname)) {
+      if (url.pathname === "/watch") return url.searchParams.get("v") || "";
+      const parts = url.pathname.split("/").filter(Boolean);
+      if (["embed", "shorts", "live"].includes(parts[0] || "")) return parts[1] || "";
+    }
+  } catch {
+    return "";
+  }
+  return "";
+}
+
+async function searchGithubReadmeVideos(query: string, signal?: AbortSignal): Promise<ResearchSource[]> {
+  const repositories = await searchGithub(`${query} in:name,description`, signal);
+  const anchor = technicalSearchTopic(query).toLocaleLowerCase();
+  const ranked = [...repositories].sort((left, right) => {
+    const score = (source: ResearchSource) => {
+      const name = source.title.toLocaleLowerCase();
+      if (name.endsWith(`/${anchor}`)) return 3;
+      if (name.includes(anchor)) return 2;
+      return source.abstract.toLocaleLowerCase().includes(anchor) ? 1 : 0;
+    };
+    return score(right) - score(left) || right.citationCount - left.citationCount;
+  });
+  for (const repository of ranked.slice(0, 3)) {
+    const match = repository.url.match(/^https:\/\/github\.com\/([^/]+)\/([^/#?]+)/i);
+    if (!match) continue;
+    const readmeUrl = new URL(`https://api.github.com/repos/${encodeURIComponent(match[1])}/${encodeURIComponent(match[2])}/readme`);
+    try {
+      const markdown = await fetchText(readmeUrl, "application/vnd.github.raw+json", signal);
+      // Parse every Markdown URL first, then let the URL parser decide whether
+      // it is a supported YouTube form. This handles image-link wrappers and
+      // query-string ordering without an increasingly brittle mega-regex.
+      const links = [...markdown.matchAll(/https?:\/\/[^\s)"'<]+/gi)]
+        .filter((entry) => Boolean(youtubeVideoId(entry[0].replace(/[.,;]+$/, ""))));
+      const seen = new Set<string>();
+      const videos: ResearchSource[] = [];
+      links.forEach((entry) => {
+        const id = youtubeVideoId(entry[0].replace(/[.,;]+$/, ""));
+        if (!/^[A-Za-z0-9_-]{6,20}$/.test(id) || seen.has(id)) return;
+        seen.add(id);
+        const contextStart = Math.max(0, (entry.index || 0) - 180);
+        const contextEnd = Math.min(markdown.length, (entry.index || 0) + entry[0].length + 180);
+        const context = compactText(markdown.slice(contextStart, contextEnd), 500);
+        videos.push(baseSource("youtube", {
+          title: context.match(/\[!\[([^\]]+)/)?.[1]?.replace(/[-_]+/g, " ") || `Video ${anchor || repository.title}`,
+          url: `https://www.youtube.com/watch?v=${id}`,
+          venue: `YouTube · ditemukan di README ${repository.title}`,
+          abstract: `README repository publik ${repository.title} menautkan video ini. ${context}`,
+          license: repository.license,
+          accessNote: "Video diputar melalui YouTube IFrame Player resmi. Ringkasan hanya memakai deskripsi README; audio atau transkrip tidak diklaim telah dibaca.",
+        }));
+      });
+      if (videos.length) return videos.slice(0, 4);
+    } catch {
+      // Continue to the next public repository. A provider failure is not
+      // converted into synthetic media evidence.
+    }
+  }
+  return [];
+}
+
+function technicalSearchTopic(value: string): string {
+  const candidates = value.match(/\b[A-Za-z][A-Za-z0-9]*(?:[-_.][A-Za-z0-9]+)+\b/g) || [];
+  const acronym = value.match(/\b[A-Z][A-Z0-9]{2,}\b/g) || [];
+  return [...new Set([...candidates, ...acronym])]
+    .sort((left, right) => right.length - left.length)[0]
+    || value.replace(/\b(?:cari|jelaskan|implementasi|github|paper|video|tentang|tampilkan|putar|sumber|yang|ditemukan|dan|di)\b/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .split(" ")
+      .slice(0, 4)
+      .join(" ");
+}
+
 async function searchInternetArchive(query: string, signal?: AbortSignal): Promise<ResearchSource[]> {
   const url = new URL("https://archive.org/advancedsearch.php");
   url.searchParams.set("q", query);
@@ -527,6 +616,12 @@ function dedupe(plan: ResearchPlan, sources: ResearchSource[]): ResearchSource[]
     selectedIds.add(source.id);
     selected.push(source);
   };
+  if (ranked.some((source) => source.provider === "youtube")) {
+    ranked
+      .filter((source) => source.provider === "youtube" || source.provider === "internet-archive")
+      .slice(0, 3)
+      .forEach(add);
+  }
   technicalAnchors(`${(plan.queries || []).join(" ")} ${(plan.entities || []).map(entityText).join(" ")}`)
     .slice(0, 6)
     .forEach((anchor) => add(primaryAnchorSource(ranked, anchor)));
@@ -583,18 +678,26 @@ export class SourceAdapter {
     const primaryQuery = querySpecs[0]?.text || question;
     if (/\b(?:github|repository|repo|implementasi|source\s*code|kode sumber)\b/i.test(question)) {
       try {
-        discovered.push(...await searchGithub(`${primaryQuery} in:name,description`, signal));
+        const topic = technicalSearchTopic(`${question} ${primaryQuery}`);
+        discovered.push(...await searchGithub(`${topic} in:name,description`, signal));
       } catch {
         // Other providers remain usable; failed providers are reported by the
         // research activity and never converted into invented evidence.
       }
     }
     if (/\b(?:video|watch|youtube|rekaman|putar|transkrip)\b/i.test(question)) {
+      const topic = technicalSearchTopic(`${question} ${primaryQuery}`);
       try {
-        discovered.push(...await searchInternetArchive(`${primaryQuery} mediatype:movies`, signal));
+        discovered.push(...await searchInternetArchive(`${topic} mediatype:movies`, signal));
       } catch {
         // A missing public media result is an explicit limitation, not a fake
         // player or synthetic transcript.
+      }
+      try {
+        discovered.push(...await searchGithubReadmeVideos(topic, signal));
+      } catch {
+        // GitHub README discovery is an independent public fallback. Its
+        // failure must not erase valid results from another media provider.
       }
     }
     return dedupe(plan, [...direct, ...discovered]);

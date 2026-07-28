@@ -16833,8 +16833,8 @@ function itsDelay(ms: number): Promise<void> {
 }
 
 function itsSetChatStatus(text = ""): void {
-  const form = document.querySelector<HTMLFormElement>("#its-ai-chat-modal [data-ai-chat-form]");
-  const status = form?.querySelector<HTMLElement>("[data-ai-chat-status]");
+  const form = document.querySelector<HTMLFormElement>('form[toolname="ask_its_maps_assistant"]');
+  const status = form?.querySelector<HTMLElement>('[role="status"]');
   if (!form || !status) return;
   form.classList.toggle("agent-thinking", Boolean(text));
   status.hidden = !text;
@@ -16843,7 +16843,8 @@ function itsSetChatStatus(text = ""): void {
 }
 
 function itsSetAgentWorking(isWorking: boolean): void {
-  document.getElementById("its-ai-chat-modal")?.classList.toggle("agent-working", isWorking);
+  document.querySelector<HTMLElement>('[role="dialog"][aria-labelledby="its-ai-chat-title"]')
+    ?.classList.toggle("agent-working", isWorking);
 }
 
 function itsEnsureAgentCursor(): HTMLElement {
@@ -18108,7 +18109,7 @@ function itsOpenChatDetectionDetail(detail: ItsAssistantDetectionDetail): void {
 }
 
 function itsShowAiChatModal(): void {
-  document.getElementById("its-ai-chat-modal")?.remove();
+  document.querySelector<HTMLElement>('[role="dialog"][aria-labelledby="its-ai-chat-title"]')?.remove();
   closeFloatingMapPanels();
   const modal = document.createElement("section");
   modal.id = "its-ai-chat-modal";
@@ -18127,8 +18128,8 @@ function itsShowAiChatModal(): void {
         </div>
         <button type="button" data-ai-chat-close aria-label="Tutup chat AI">${closeIconSvg()}</button>
       </header>
-      <div class="its-ai-chat-log" data-ai-chat-log>
-        <article class="its-ai-chat-msg assistant">
+      <div class="its-ai-chat-log" data-ai-chat-log role="log" aria-label="Percakapan ITS Assistant">
+        <article class="its-ai-chat-msg assistant" aria-label="Jawaban ITS Assistant">
           <strong>ITS Assistant</strong>
           <p>Saya siap membantu. Tanyakan kondisi ITS Maps, data perangkat, sumber ilmiah, formula, atau topik lain.</p>
         </article>
@@ -18164,10 +18165,10 @@ function itsShowAiChatModal(): void {
   document.body.appendChild(modal);
   requestAnimationFrame(() => modal.classList.add("open"));
   const sheet = modal.querySelector<HTMLElement>(".its-ai-chat-sheet");
-  const log = modal.querySelector<HTMLElement>("[data-ai-chat-log]");
+  const log = modal.querySelector<HTMLElement>('[role="log"]');
   const input = modal.querySelector<HTMLInputElement>("input[name='question']");
-  const form = modal.querySelector<HTMLFormElement>("[data-ai-chat-form]");
-  const sendButton = modal.querySelector<HTMLButtonElement>("[data-ai-chat-send]");
+  const form = modal.querySelector<HTMLFormElement>('form[toolname="ask_its_maps_assistant"]');
+  const sendButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]') || null;
   const sendLabel = sendButton?.querySelector<HTMLElement>("[data-ai-send-label]");
   const cloudStatus = modal.querySelector<HTMLElement>("[data-ai-cloud-status]");
   if (cloudStatus) {
@@ -18214,6 +18215,7 @@ function itsShowAiChatModal(): void {
     if (!log) return null;
     const item = document.createElement("article");
     item.className = `its-ai-chat-msg ${role}`;
+    item.setAttribute("aria-label", role === "user" ? "Pertanyaan pengguna" : role === "assistant" ? "Jawaban ITS Assistant" : "Status riset");
     item.innerHTML = role === "status"
       ? `<span class="typing-dot"></span><p>${escapeHtml(text)}</p><div class="its-ai-working-bars" aria-hidden="true"><i></i><i></i><i></i></div>`
       : `<strong>${role === "user" ? "Anda" : "ITS Assistant"}</strong><p>${escapeHtml(text)}</p>${html}`;
@@ -18386,7 +18388,7 @@ function itsShowAiChatModal(): void {
     itsSetChatStatus(itsAgentModeEnabled ? "Agent in-page aktif; aksi tetap terbatas pada halaman ITS Maps" : "Agent in-page dimatikan");
     window.setTimeout(() => itsSetChatStatus(), 1600);
   });
-  modal.querySelector<HTMLFormElement>("[data-ai-chat-form]")?.addEventListener("submit", (event) => {
+  form?.addEventListener("submit", (event) => {
     event.preventDefault();
     const value = input?.value || "";
     if (input) input.value = "";
