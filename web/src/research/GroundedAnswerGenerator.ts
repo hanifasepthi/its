@@ -355,6 +355,13 @@ function evidenceSentence(item: ResearchEvidence, question: string, anchor = "")
 
 function requestedEvidenceAspects(question: string): Array<{ label: string; terms: RegExp }> {
   const requested: Array<{ label: string; terms: RegExp }> = [];
+  if (/\b(?:apa itu|jelaskan|explain|what is)\b/i.test(question)) {
+    requested.push(
+      { label: "Tujuan", terms: /\b(?:introduce|approach|method|model|detector|detect|detection)\b/i },
+      { label: "Cara kerja", terms: /\b(?:architecture|backbone|decoder|query|feature|search|training|inference)\b/i },
+      { label: "Hasil yang dilaporkan", terms: /\b(?:achieve|outperform|performance|accuracy|latency|real-time|AP)\b/i },
+    );
+  }
   if (/\b(?:pencocokan|matching|assignment|korespondensi)\b/i.test(question)) {
     requested.push({ label: "Prinsip pencocokan", terms: /\b(?:bipartite|hungarian|matching|assignment|correspondence)\b/i });
   }
@@ -362,6 +369,33 @@ function requestedEvidenceAspects(question: string): Array<{ label: string; term
     requested.push({ label: "Keterbatasan praktis", terms: /\b(?:limitation|limited|cost|latency|trade[ -]?off|practical|practicality|compute|computational|memory|nms)\b/i });
   }
   return requested;
+}
+
+function derivedLossFormula(
+  question: string,
+  evidence: ResearchEvidence[],
+): GroundedAnswer["formulaSteps"] {
+  if (!/\b(?:rumus|formula|equation|loss|objective)\b/i.test(question)) return [];
+  const layerwise = evidenceForAspect(
+    question,
+    /\b(?:loss|decoder layers?|detection|segmentation|regression)\b/i,
+    evidence,
+  );
+  if (!layerwise) return [];
+  const lower = layerwise.sentence.toLowerCase();
+  const hasDetection = /detection|regression/.test(lower);
+  const hasSegmentation = /segmentation/.test(lower);
+  const component = hasDetection && hasSegmentation
+    ? String.raw`\mathcal{L}_{\mathrm{det}}^{(l)}+\mathcal{L}_{\mathrm{seg}}^{(l)}`
+    : hasSegmentation
+      ? String.raw`\mathcal{L}_{\mathrm{seg}}^{(l)}`
+      : String.raw`\mathcal{L}_{\mathrm{det}}^{(l)}`;
+  return [{
+    title: "Struktur loss yang dapat diverifikasi",
+    latex: String.raw`\mathcal{L}_{\mathrm{train}}=\sum_{l=1}^{D}\left(${component}\right)`,
+    explanation: `Notasi ini merangkum pernyataan sumber bahwa loss diterapkan pada keluaran setiap layer decoder: ${boundedExcerpt(layerwise.sentence)} Ini adalah representasi struktural dari teks sumber, bukan persamaan bernomor yang diklaim berasal dari paper; bobot dan rincian tiap komponen tidak ditambahkan bila tidak terbaca.`,
+    evidenceIds: [layerwise.item.id],
+  }];
 }
 
 function evidenceForAspect(
@@ -430,13 +464,15 @@ function auditedExtractiveAnswer(
   const summary = named.length > 1
     ? `${named.join(" dan ")} dibandingkan memakai evidence publik yang benar-benar dibaca dan setiap poin dibatasi pada klaim sumber.`
     : paragraphs[0]?.text || "Tidak ada evidence yang cukup untuk menyusun jawaban.";
+  const formulaSteps = derivedLossFormula(question, evidence);
+  formulaSteps.forEach((step) => step.evidenceIds.forEach((id) => selectedIds.add(id)));
   return {
     summary,
     sections: paragraphs.length ? [{
       heading: anchors.length > 1 ? "Perbandingan berbasis evidence" : "Sintesis ekstraktif tervalidasi",
       paragraphs,
     }] : [],
-    formulaSteps: [],
+    formulaSteps,
     limitations: [
       "Pada runtime tanpa WebGPU generatif yang kompatibel, aplikasi memakai ekstraksi kalimat dan audit sitasi agar antarmuka tetap responsif serta tidak menambahkan klaim di luar sumber.",
     ],

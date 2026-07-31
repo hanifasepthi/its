@@ -213,7 +213,13 @@ function modeFields(): string {
 
 function applicationHtml(): string {
   return `
-    <div class="nav3d-launcher">
+    <form class="nav3d-launcher"
+          data-nav3d-quick-search-form
+          method="get"
+          action="/"
+          toolname="search_its_maps_places_and_routes"
+          tooldescription="Search a place, address, or route destination and open the ITS Maps navigation planner."
+          toolautosubmit>
       <input
         type="search"
         id="its-nav3d-quick-search"
@@ -228,7 +234,7 @@ function applicationHtml(): string {
         autocomplete="off"
       >
       <button
-        type="button"
+        type="submit"
         class="nav3d-launcher-search"
         data-nav3d-launcher
         aria-label="Buka pencarian rute"
@@ -236,7 +242,7 @@ function applicationHtml(): string {
         aria-expanded="false"
         aria-haspopup="dialog"
       >⌕</button>
-    </div>
+    </form>
 
     <section
       id="its-nav3d-search-panel"
@@ -258,6 +264,8 @@ function applicationHtml(): string {
       <form
         class="nav3d-route-form"
         data-nav3d-search-form
+        method="get"
+        action="/"
         toolname="search_its_maps_navigation_route"
         tooldescription="Search a destination in ITS Maps, choose a travel mode, and preview an accessible 3D navigation route."
         toolautosubmit
@@ -520,7 +528,10 @@ export class Navigation3D {
   private bindEvents(): void {
     const quickSearch = this.element<HTMLInputElement>("[data-nav3d-quick-search]");
     const launchSearch = (): void => this.openSearch(quickSearch.value);
-    this.element<HTMLButtonElement>("[data-nav3d-launcher]").addEventListener("click", launchSearch);
+    this.element<HTMLFormElement>("[data-nav3d-quick-search-form]").addEventListener("submit", (event) => {
+      event.preventDefault();
+      launchSearch();
+    });
     quickSearch.addEventListener("focus", launchSearch);
     quickSearch.addEventListener("keydown", (event) => {
       if (event.key !== "Enter") return;

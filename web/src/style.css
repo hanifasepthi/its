@@ -3561,7 +3561,7 @@ body.its-sheet-open .leaflet-control-attribution {
 .mode-control {
   position: relative;
   display: flex;
-  gap: 4px;
+  gap: 12px;
   padding: 4px;
   border-radius: 14px;
   background: #ffffff;
@@ -3570,8 +3570,8 @@ body.its-sheet-open .leaflet-control-attribution {
 }
 
 .mode-control .mode-btn {
-  min-width: 48px;
-  min-height: 48px;
+  min-width: 60px;
+  min-height: 60px;
   border: 0;
   background: transparent;
   color: #334155;
@@ -3606,7 +3606,7 @@ body.its-sheet-open .leaflet-control-attribution {
 }
 
 .mode-legend-btn {
-  width: 48px;
+  width: 60px;
   padding-inline: 0 !important;
   border-left: 1px solid #e2e8f0 !important;
   border-radius: 9px !important;
@@ -5099,6 +5099,40 @@ body.its-sheet-open .leaflet-control-attribution {
 
 .its-ai-video-frame {
   aspect-ratio: 16 / 9;
+}
+
+.its-ai-research-videos {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.its-ai-research-video {
+  margin: 0;
+}
+
+.its-ai-research-video .its-ai-video-frame {
+  overflow: hidden;
+  border: 1px solid #dbe5f1;
+  border-radius: 14px;
+  background: #0f172a;
+}
+
+.its-ai-research-video iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.its-ai-research-video figcaption {
+  display: grid;
+  gap: 3px;
+  padding: 8px 2px 0;
+}
+
+.its-ai-research-video figcaption small {
+  color: #64748b;
+  line-height: 1.4;
 }
 
 .its-ai-formula code {
@@ -6626,16 +6660,16 @@ body.its-agent-cursor-active * {
   background: transparent !important;
   border: 0 !important;
   pointer-events: auto !important;
-  min-width: 48px !important;
-  min-height: 48px !important;
+  min-width: 56px !important;
+  min-height: 56px !important;
   overflow: visible !important;
 }
 
 .road-guide-structure-icon {
   background: transparent !important;
   border: 0 !important;
-  min-width: 48px !important;
-  min-height: 48px !important;
+  min-width: 56px !important;
+  min-height: 56px !important;
   overflow: visible !important;
   pointer-events: auto !important;
   touch-action: manipulation;
@@ -7019,16 +7053,16 @@ body.its-agent-cursor-active * {
   pointer-events: auto !important;
   opacity: 1 !important;
   z-index: 760 !important;
-  min-width: 56px !important;
-  min-height: 56px !important;
+  min-width: 64px !important;
+  min-height: 64px !important;
   overflow: visible !important;
   touch-action: manipulation;
 }
 
 .poi-cluster-icon,
 .poi-dominant-cluster-icon {
-  min-width: 56px !important;
-  min-height: 56px !important;
+  min-width: 64px !important;
+  min-height: 64px !important;
   overflow: visible !important;
   border: 0 !important;
   background: transparent !important;

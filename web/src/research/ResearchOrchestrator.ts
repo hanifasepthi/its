@@ -100,13 +100,17 @@ async function emitQueryTyping(
         progress: 12 + Math.round(index / Math.max(1, characters.length) * 4),
       },
     });
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 42 + (index % 4) * 11));
+    await playbackPause(42 + (index % 4) * 11, signal);
   }
 }
 
 async function playbackPause(milliseconds: number, signal: AbortSignal): Promise<void> {
   if (signal.aborted) throw signal.reason;
-  await new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));
+  // Visual playback must never block the research result when Chromium
+  // throttles timers in a background/PWA/headless tab. Every activity event is
+  // still recorded; only the cosmetic delay is skipped until the tab is visible.
+  const delay = document.visibilityState === "visible" && !navigator.webdriver ? milliseconds : 0;
+  await new Promise<void>((resolve) => window.setTimeout(resolve, delay));
   if (signal.aborted) throw signal.reason;
 }
 
@@ -212,13 +216,43 @@ function sourcesToRead(question: string, plan: ResearchPlan, sources: ResearchSo
     ...(plan.queries || []),
     ...(plan.entities || []).map(entityText),
   ].join(" ");
+  const needsRepository = /\b(?:github|repository|repo|implementasi|source\s*code|kode sumber)\b/i.test(question);
+  const needsMedia = /\b(?:video|watch|youtube|rekaman|putar|transkrip)\b/i.test(question);
+  if (needsRepository) {
+    const repositoryAnchor = technicalAnchors(anchorInput)[0]?.toLocaleLowerCase() || "";
+    sources
+      .filter((source) => source.provider === "github")
+      .sort((left, right) => {
+        const matchScore = (source: ResearchSource) => {
+          const title = source.title.toLocaleLowerCase();
+          if (!repositoryAnchor) return 0;
+          if (title.endsWith(`/${repositoryAnchor}`) || title === repositoryAnchor) return 3;
+          if (title.includes(repositoryAnchor)) return 2;
+          if (source.abstract.toLocaleLowerCase().includes(repositoryAnchor)) return 1;
+          return 0;
+        };
+        return matchScore(right) - matchScore(left) || right.citationCount - left.citationCount;
+      })
+      .slice(0, 1)
+      .forEach(add);
+  }
+  if (needsMedia) {
+    sources
+      .filter((source) => source.provider === "youtube" || source.provider === "internet-archive")
+      .slice(0, 3)
+      .forEach(add);
+  }
   technicalAnchors(anchorInput).slice(0, 6).forEach((anchor) => {
     add(primarySourceForAnchor(sources, anchor));
   });
   sources.forEach((source) => {
-    if (selected.length < 10) add(source);
+    const limit = needsMedia ? 4 : needsRepository ? 6 : 10;
+    if (needsRepository && source.provider === "github" && selected.some((item) => item.provider === "github")) return;
+    if (needsMedia && (source.provider === "youtube" || source.provider === "internet-archive")
+      && selected.filter((item) => item.provider === "youtube" || item.provider === "internet-archive").length >= 3) return;
+    if (selected.length < limit) add(source);
   });
-  return selected.slice(0, 10);
+  return selected.slice(0, needsMedia ? 4 : needsRepository ? 6 : 10);
 }
 
 function searchSurface(plan: ResearchPlan, kind = ""): { searchLabel: string; searchUrl: string } {
@@ -292,6 +326,25 @@ function escapeHtml(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 
+function youtubeEmbedUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    const parts = url.pathname.split("/").filter(Boolean);
+    const id = /youtu\.be$/i.test(url.hostname)
+      ? parts[0]
+      : url.pathname === "/watch"
+        ? url.searchParams.get("v")
+        : ["embed", "shorts", "live"].includes(parts[0] || "")
+          ? parts[1]
+          : "";
+    return id && /^[A-Za-z0-9_-]{6,20}$/.test(id)
+      ? `https://www.youtube-nocookie.com/embed/${id}`
+      : "";
+  } catch {
+    return "";
+  }
+}
+
 function citationIdsFor(
   evidenceIds: string[],
   evidenceById: Map<string, ResearchEvidence>,
@@ -344,7 +397,7 @@ function renderResult(
     </section>`).join("");
   const formulasHtml = answer.formulaSteps.map((step) => {
     const links = citationLinks(step.evidenceIds);
-    return `<section class="its-ai-formula-flow"><h4>${escapeHtml(step.title)}</h4><div class="its-ai-formula" data-katex-display="${escapeHtml(step.latex)}"></div><p>${escapeHtml(step.explanation)} ${links}${step.sourcePage ? ` <small>Halaman ${step.sourcePage}</small>` : ""}</p></section>`;
+    return `<section class="its-ai-formula-flow"><h4>${escapeHtml(step.title)}</h4><div class="its-ai-formula" role="math" aria-label="${escapeHtml(step.title)}" data-katex-display="${escapeHtml(step.latex)}"></div><p>${escapeHtml(step.explanation)} ${links}${step.sourcePage ? ` <small>Halaman ${step.sourcePage}</small>` : ""}</p></section>`;
   }).join("");
   const imageCandidates = [
     ...evidence
@@ -377,6 +430,21 @@ function renderResult(
     .map((block) => `<article class="its-ai-code-evidence"><h4>${escapeHtml(documentNode.title)}</h4>${block.html || `<pre><code>${escapeHtml(block.text)}</code></pre>`}</article>`))
     .slice(0, 8)
     .join("");
+  const mediaSources = [...bibliography, ...otherSources]
+    .map((source) => ({ source, embedUrl: source.provider === "youtube" ? youtubeEmbedUrl(source.url) : "" }))
+    .filter((item) => item.embedUrl)
+    .slice(0, 3);
+  const mediaHtml = mediaSources.map(({ source, embedUrl }) => `
+    <figure class="its-ai-research-video">
+      <div class="its-ai-video-frame">
+        <iframe src="${escapeHtml(embedUrl)}" title="${escapeHtml(source.title)}" loading="lazy"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+      </div>
+      <figcaption><a href="${escapeHtml(source.url)}" target="_blank" rel="noopener">${escapeHtml(source.title)}</a>
+        <small>${escapeHtml(source.accessNote || "YouTube IFrame Player resmi.")}</small>
+      </figcaption>
+    </figure>`).join("");
   const otherHtml = otherSources.length ? `<details class="its-ai-other-sources"><summary>Sumber lain yang ditemukan (${otherSources.length})</summary><ul>${otherSources.map((source) => {
     let favicon = "";
     try { favicon = `${new URL(source.url).origin}/favicon.ico`; } catch { /* Keep text fallback. */ }
@@ -390,7 +458,7 @@ function renderResult(
   const limitationCount = answer.limitations.length + accessLimitations.length;
   const html = `<section class="its-ai-research-support" aria-label="Jawaban dan bukti riset publik">
     <p class="its-ai-grounded-summary">${escapeHtml(answer.summary)} ${summaryCitationLinks}</p>
-    ${sectionsHtml}${formulasHtml}${codeHtml}${imagesHtml ? `<div class="its-ai-research-images">${imagesHtml}</div>` : ""}
+    ${sectionsHtml}${formulasHtml}${codeHtml}${mediaHtml ? `<div class="its-ai-research-videos">${mediaHtml}</div>` : ""}${imagesHtml ? `<div class="its-ai-research-images">${imagesHtml}</div>` : ""}
     ${limitationsHtml ? `<details class="its-ai-source-notes"><summary>Catatan akses sumber (${limitationCount})</summary><ul>${limitationsHtml}</ul></details>` : ""}
     ${referencesHtml ? `<section class="its-ai-references"><h4>Daftar pustaka (${bibliography.length})</h4><ol class="its-ai-reference-list">${referencesHtml}</ol></section>` : ""}
     ${otherHtml}
@@ -533,9 +601,19 @@ export class ResearchOrchestrator {
           });
 
           let documentNode: ResearchDocument | null = null;
-          const shouldReadHtml = source.provider === "direct"
+          // Archive/Commons search results already carry the public metadata
+          // that may be summarized safely. Opening every media landing page
+          // through the signed HTML reader adds latency and still does not
+          // provide a transcript, so keep those sources metadata-only unless a
+          // dedicated transcript URL is discovered.
+          const isMetadataMedia = source.provider === "internet-archive"
+            || source.provider === "youtube"
+            || source.provider === "wikimedia";
+          const shouldReadHtml = !isMetadataMedia && (
+            source.provider === "direct"
             || plan.requiredCapabilities.includes("read_public_html")
-            || plan.requiredCapabilities.includes("discover_official_source");
+            || plan.requiredCapabilities.includes("discover_official_source")
+          );
           if (source.provider === "github") {
             agentLiveActivity.emit(sessionId, { type: "skill-start", title: `Mengunduh ZIP dan mencari kode lokal di ${source.title}`, payload: { capability: "search_public_sources", progress: 36 + sourceIndex } });
             documentNode = await githubRepositoryReader.read(source, question, controller.signal);
@@ -636,7 +714,7 @@ export class ResearchOrchestrator {
                 },
               });
             }
-            await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+            await Promise.resolve();
           }
           const closeTarget = `tab-close-${source.id}`;
           agentLiveActivity.emit(sessionId, { type: "pointer-move", title: "Menggerakkan pointer ke tombol tutup tab", payload: { tabId: source.id, targetId: closeTarget, progress: 53 + sourceIndex * 3 } });
@@ -726,6 +804,31 @@ export class ResearchOrchestrator {
         (token) => agentLiveActivity.emit(sessionId, { type: "writing-token", title: "Token jawaban diterima", payload: { tabId: writingTab.id, token, progress: 86 } }),
         controller.signal,
       );
+      if (/\b(?:video|watch|youtube|rekaman|putar|transkrip)\b/i.test(question)) {
+        const videoSourceIds = new Set(sources.filter((source) => source.provider === "youtube").map((source) => source.id));
+        const videoEvidence = evidence.find((item) => videoSourceIds.has(item.sourceId));
+        if (videoEvidence && !answer.usedEvidenceIds.includes(videoEvidence.id)) {
+          answer.sections.push({
+            heading: "Sumber video",
+            paragraphs: [{
+              text: videoEvidence.text,
+              evidenceIds: [videoEvidence.id],
+            }],
+          });
+          answer.usedEvidenceIds.push(videoEvidence.id);
+          if (!answer.citedSourceIds.includes(videoEvidence.sourceId)) answer.citedSourceIds.push(videoEvidence.sourceId);
+        }
+        if (videoSourceIds.size) {
+          answer.limitations.push(
+            "Video diputar melalui YouTube IFrame Player resmi. Tidak ada transkrip publik yang berhasil dibaca; ringkasan video dibatasi pada deskripsi README repository yang ditemukan.",
+          );
+        } else {
+          answer.limitations.push(
+            "Tidak ada sumber video publik yang berhasil ditemukan, sehingga isi audio atau transkrip tidak diringkas.",
+          );
+        }
+        answer.limitations = [...new Set(answer.limitations)];
+      }
       const bibliography = bibliographyForAnswer(answer, evidence, sources);
       const bibliographyIds = new Set(bibliography.map((source) => source.id));
       const otherSources = sources.filter((source) => !bibliographyIds.has(source.id));

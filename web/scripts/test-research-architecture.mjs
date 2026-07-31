@@ -187,14 +187,20 @@ await check("Qwen3 local model cascade is configured", async () => {
   expected.forEach((id) => assert.ok(models.includes(id), `${id} tidak dikonfigurasi`));
 });
 
-await check("GitHub public repository reader uses browser-safe Tree and Raw APIs", async () => {
+await check("GitHub public repository reader downloads a bounded ZIP, greps locally, and keeps API fallback", async () => {
   const reader = await read("src/research/GitHubRepositoryReader.ts");
+  const edge = await read("cloudflare-worker/src/index.ts");
   const orchestrator = await read("src/research/ResearchOrchestrator.ts");
-  assert.doesNotMatch(reader, /fetch\(archiveUrl/);
+  assert.match(reader, /JSZip\.loadAsync/);
+  assert.match(reader, /fetchBytesBounded\(archiveUrl/);
+  assert.match(reader, /MAX_ARCHIVE_BYTES/);
   assert.match(reader, /api\.github\.com\/repos/);
   assert.match(reader, /raw\.githubusercontent\.com/);
   assert.match(reader, /MAX_FILE_BYTES/);
   assert.match(reader, /Lisensi repositori/);
+  assert.match(edge, /publicGitHubArchive/);
+  assert.match(edge, /codeload\.github\.com/);
+  assert.match(edge, /invalid_github_repository/);
   assert.match(orchestrator, /githubRepositoryReader\.read/);
 });
 
