@@ -1097,6 +1097,8 @@ export class ItsCctvTrafficFeed extends HTMLElement {
       this.analysisRefreshTimer
     );
 
+    window.clearTimeout(this.analysisPrewarmTimer);
+
 
     /* CAROUSEL */
     window.clearInterval(
@@ -1829,15 +1831,31 @@ export class ItsCctvTrafficFeed extends HTMLElement {
   }
 
   private scheduleObserverSync(): void {
+    this.scheduleLoadedCardPrewarm();
+    window.cancelAnimationFrame(this.observerSyncFrame);
+    this.observerSyncFrame = window.requestAnimationFrame(() => this.syncObservers());
+  }
+
+  private scheduleLoadedCardPrewarm(delayMs = 1_200): void {
     window.clearTimeout(this.analysisPrewarmTimer);
     this.analysisPrewarmTimer = window.setTimeout(() => {
       if (!this.connected || document.visibilityState === "hidden") return;
-      this.querySelectorAll<HTMLElement>("[data-cctv-card]").forEach((card, index) => {
-        if (index < 12) this.requestCardAnalysis(card, 520 - index * 8);
+      const now = Date.now();
+      const pendingCards = [...this.querySelectorAll<HTMLElement>("[data-cctv-card]")]
+        .filter((card) => {
+          const id = cleanText(card.dataset.cctvCard);
+          return Boolean(id)
+            && !this.requestedAnalysis.has(id)
+            && now >= (this.nextAnalysisAt.get(id) || 0);
+        });
+      pendingCards.slice(0, 8).forEach((card, index) => {
+        this.requestCardAnalysis(card, 520 - index * 8);
       });
-    }, 1_200);
-    window.cancelAnimationFrame(this.observerSyncFrame);
-    this.observerSyncFrame = window.requestAnimationFrame(() => this.syncObservers());
+      // Continue across every card already loaded into the feed. The central
+      // analyzer enforces queue, visibility, Save-Data, and 2G guardrails, so
+      // this remains staged instead of starting every stream at once.
+      if (pendingCards.length > 8) this.scheduleLoadedCardPrewarm(3_500);
+    }, delayMs);
   }
 
   private syncObservers(): void {
