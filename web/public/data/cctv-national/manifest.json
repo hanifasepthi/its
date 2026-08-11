@@ -1,42 +1,43 @@
 {
   "schemaVersion": "1.0",
   "dataset": "its-cctv-indonesia",
-  "generatedAt": "2026-08-11T15:28:48.680Z",
-  "featureCount": 2553,
+  "generatedAt": "2026-08-11T15:35:40.581Z",
+  "featureCount": 3777,
   "pageSize": 250,
   "byType": {
     "jpeg": 46,
     "youtube": 51,
-    "hls": 155,
+    "hls": 1141,
     "mp4": 20,
-    "html-page": 2281
+    "html-page": 2453,
+    "mjpeg": 66
   },
   "regions": [
     {
       "region": "Bali",
       "slug": "bali",
-      "featureCount": 21,
-      "verifiedLiveCount": 4,
+      "featureCount": 126,
+      "verifiedLiveCount": 107,
       "pageCount": 1
     },
     {
       "region": "Banten",
       "slug": "banten",
-      "featureCount": 118,
-      "verifiedLiveCount": 118,
+      "featureCount": 136,
+      "verifiedLiveCount": 135,
       "pageCount": 1
     },
     {
       "region": "DI Yogyakarta",
       "slug": "di-yogyakarta",
-      "featureCount": 738,
-      "verifiedLiveCount": 737,
-      "pageCount": 3
+      "featureCount": 809,
+      "verifiedLiveCount": 806,
+      "pageCount": 4
     },
     {
       "region": "DKI Jakarta",
       "slug": "dki-jakarta",
-      "featureCount": 612,
+      "featureCount": 615,
       "verifiedLiveCount": 608,
       "pageCount": 3
     },
@@ -55,6 +56,13 @@
       "pageCount": 1
     },
     {
+      "region": "Indonesia",
+      "slug": "indonesia",
+      "featureCount": 6,
+      "verifiedLiveCount": 0,
+      "pageCount": 1
+    },
+    {
       "region": "Jalan tol Indonesia",
       "slug": "jalan-tol-indonesia",
       "featureCount": 3,
@@ -64,43 +72,43 @@
     {
       "region": "Jambi",
       "slug": "jambi",
-      "featureCount": 3,
-      "verifiedLiveCount": 3,
+      "featureCount": 10,
+      "verifiedLiveCount": 10,
       "pageCount": 1
     },
     {
       "region": "Jawa Barat",
       "slug": "jawa-barat",
-      "featureCount": 515,
-      "verifiedLiveCount": 513,
-      "pageCount": 3
+      "featureCount": 757,
+      "verifiedLiveCount": 728,
+      "pageCount": 4
     },
     {
       "region": "Jawa Tengah",
       "slug": "jawa-tengah",
-      "featureCount": 97,
-      "verifiedLiveCount": 42,
-      "pageCount": 1
+      "featureCount": 337,
+      "verifiedLiveCount": 265,
+      "pageCount": 2
     },
     {
       "region": "Jawa Timur",
       "slug": "jawa-timur",
-      "featureCount": 248,
-      "verifiedLiveCount": 247,
-      "pageCount": 1
+      "featureCount": 537,
+      "verifiedLiveCount": 272,
+      "pageCount": 3
     },
     {
       "region": "Kalimantan Barat",
       "slug": "kalimantan-barat",
-      "featureCount": 5,
+      "featureCount": 8,
       "verifiedLiveCount": 0,
       "pageCount": 1
     },
     {
       "region": "Kalimantan Selatan",
       "slug": "kalimantan-selatan",
-      "featureCount": 70,
-      "verifiedLiveCount": 53,
+      "featureCount": 117,
+      "verifiedLiveCount": 101,
       "pageCount": 1
     },
     {
@@ -113,8 +121,8 @@
     {
       "region": "Kalimantan Timur",
       "slug": "kalimantan-timur",
-      "featureCount": 3,
-      "verifiedLiveCount": 0,
+      "featureCount": 31,
+      "verifiedLiveCount": 28,
       "pageCount": 1
     },
     {
@@ -146,10 +154,24 @@
       "pageCount": 1
     },
     {
+      "region": "Sulawesi Tengah",
+      "slug": "sulawesi-tengah",
+      "featureCount": 68,
+      "verifiedLiveCount": 66,
+      "pageCount": 1
+    },
+    {
+      "region": "Sulawesi Tenggara",
+      "slug": "sulawesi-tenggara",
+      "featureCount": 1,
+      "verifiedLiveCount": 0,
+      "pageCount": 1
+    },
+    {
       "region": "Sulawesi Utara",
       "slug": "sulawesi-utara",
-      "featureCount": 19,
-      "verifiedLiveCount": 16,
+      "featureCount": 35,
+      "verifiedLiveCount": 31,
       "pageCount": 1
     },
     {
@@ -162,15 +184,15 @@
     {
       "region": "Sumatera Selatan",
       "slug": "sumatera-selatan",
-      "featureCount": 23,
-      "verifiedLiveCount": 23,
+      "featureCount": 53,
+      "verifiedLiveCount": 52,
       "pageCount": 1
     },
     {
       "region": "Sumatera Utara",
       "slug": "sumatera-utara",
-      "featureCount": 20,
-      "verifiedLiveCount": 19,
+      "featureCount": 70,
+      "verifiedLiveCount": 69,
       "pageCount": 1
     }
   ]

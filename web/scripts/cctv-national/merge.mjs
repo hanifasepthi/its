@@ -28,6 +28,16 @@ const REGION_ALIASES = new Map(Object.entries({
   "kota banjarbaru": "Kalimantan Selatan", "kota kediri": "Jawa Timur", "kota magelang": "Jawa Tengah",
   "kota surakarta": "Jawa Tengah", "kota tasikmalaya": "Jawa Barat",
 }));
+const CANONICAL_PROVINCES = new Set([
+  "Aceh", "Sumatera Utara", "Sumatera Barat", "Riau", "Kepulauan Riau", "Jambi",
+  "Sumatera Selatan", "Kepulauan Bangka Belitung", "Bengkulu", "Lampung", "Banten",
+  "DKI Jakarta", "Jawa Barat", "Jawa Tengah", "DI Yogyakarta", "Jawa Timur", "Bali",
+  "Nusa Tenggara Barat", "Nusa Tenggara Timur", "Kalimantan Barat", "Kalimantan Tengah",
+  "Kalimantan Selatan", "Kalimantan Timur", "Kalimantan Utara", "Sulawesi Utara",
+  "Gorontalo", "Sulawesi Tengah", "Sulawesi Barat", "Sulawesi Selatan", "Sulawesi Tenggara",
+  "Maluku", "Maluku Utara", "Papua", "Papua Barat", "Papua Barat Daya", "Papua Selatan",
+  "Papua Tengah", "Papua Pegunungan",
+]);
 
 function normalizeRegion(row) {
   const original = String(row.region || "Indonesia").trim();
@@ -37,7 +47,7 @@ function normalizeRegion(row) {
 
 function accepted(row) {
   if (!row?.streamUrl || !mediaTypes.has(row.streamType) || junk.test(row.streamUrl)) return false;
-  if (row.streamType === "html-page" && !/(?:cctv|camera|stream|atcs|pantau|monitor|opencctv)/i.test(row.streamUrl)) return false;
+  if (row.streamType === "html-page" && !/(?:cctv|camera|stream|atcs|pantau|monitor|opencctv|play-hls|player)/i.test(row.streamUrl)) return false;
   return row.browserPlayable !== false;
 }
 
@@ -55,7 +65,21 @@ for (const input of inputs) {
     if (!accepted(row)) { rejected += 1; continue; }
     const id = key(row);
     const prior = records.get(id);
-    if (!prior || (row.coordinates && !prior.coordinates) || row.streamStatus === "live") records.set(id, row);
+    if (!prior) {
+      records.set(id, row);
+      continue;
+    }
+    const rowHasBetterRegion = CANONICAL_PROVINCES.has(row.region) && !CANONICAL_PROVINCES.has(prior.region);
+    const rowHasBetterCoordinates = row.coordinates && !prior.coordinates;
+    if (rowHasBetterRegion || rowHasBetterCoordinates || row.streamStatus === "live") {
+      const priorIsLive = ["live", "reachable"].includes(prior.streamStatus);
+      records.set(id, {
+        ...prior,
+        ...row,
+        streamStatus: priorIsLive ? prior.streamStatus : row.streamStatus,
+        lastCheckedAt: prior.lastCheckedAt || row.lastCheckedAt,
+      });
+    }
   }
 }
 await writeFile(output, `${[...records.values()].map((row) => JSON.stringify(row)).join("\n")}\n`, "utf8");
