@@ -1,18 +1,25 @@
 {
   "schemaVersion": "1.0",
   "dataset": "its-cctv-indonesia",
-  "generatedAt": "2026-08-11T15:43:35.174Z",
-  "featureCount": 3768,
+  "generatedAt": "2026-08-11T15:53:26.781Z",
+  "featureCount": 4205,
   "pageSize": 250,
   "byType": {
     "jpeg": 46,
-    "hls": 1141,
+    "hls": 1537,
     "youtube": 42,
     "mp4": 20,
-    "html-page": 2453,
+    "html-page": 2494,
     "mjpeg": 66
   },
   "regions": [
+    {
+      "region": "Aceh",
+      "slug": "aceh",
+      "featureCount": 14,
+      "verifiedLiveCount": 14,
+      "pageCount": 1
+    },
     {
       "region": "Bali",
       "slug": "bali",
@@ -23,8 +30,15 @@
     {
       "region": "Banten",
       "slug": "banten",
-      "featureCount": 136,
-      "verifiedLiveCount": 135,
+      "featureCount": 221,
+      "verifiedLiveCount": 220,
+      "pageCount": 1
+    },
+    {
+      "region": "Bengkulu",
+      "slug": "bengkulu",
+      "featureCount": 19,
+      "verifiedLiveCount": 19,
       "pageCount": 1
     },
     {
@@ -37,8 +51,8 @@
     {
       "region": "DKI Jakarta",
       "slug": "dki-jakarta",
-      "featureCount": 615,
-      "verifiedLiveCount": 608,
+      "featureCount": 714,
+      "verifiedLiveCount": 707,
       "pageCount": 3
     },
     {
@@ -79,22 +93,22 @@
     {
       "region": "Jawa Barat",
       "slug": "jawa-barat",
-      "featureCount": 755,
-      "verifiedLiveCount": 728,
+      "featureCount": 804,
+      "verifiedLiveCount": 777,
       "pageCount": 4
     },
     {
       "region": "Jawa Tengah",
       "slug": "jawa-tengah",
-      "featureCount": 333,
-      "verifiedLiveCount": 265,
+      "featureCount": 373,
+      "verifiedLiveCount": 305,
       "pageCount": 2
     },
     {
       "region": "Jawa Timur",
       "slug": "jawa-timur",
-      "featureCount": 536,
-      "verifiedLiveCount": 272,
+      "featureCount": 543,
+      "verifiedLiveCount": 279,
       "pageCount": 3
     },
     {
@@ -156,15 +170,15 @@
     {
       "region": "Riau",
       "slug": "riau",
-      "featureCount": 1,
-      "verifiedLiveCount": 1,
+      "featureCount": 45,
+      "verifiedLiveCount": 45,
       "pageCount": 1
     },
     {
       "region": "Sulawesi Selatan",
       "slug": "sulawesi-selatan",
-      "featureCount": 1,
-      "verifiedLiveCount": 0,
+      "featureCount": 24,
+      "verifiedLiveCount": 23,
       "pageCount": 1
     },
     {
@@ -191,22 +205,22 @@
     {
       "region": "Sumatera Barat",
       "slug": "sumatera-barat",
-      "featureCount": 28,
-      "verifiedLiveCount": 28,
+      "featureCount": 41,
+      "verifiedLiveCount": 41,
       "pageCount": 1
     },
     {
       "region": "Sumatera Selatan",
       "slug": "sumatera-selatan",
-      "featureCount": 53,
-      "verifiedLiveCount": 52,
+      "featureCount": 70,
+      "verifiedLiveCount": 69,
       "pageCount": 1
     },
     {
       "region": "Sumatera Utara",
       "slug": "sumatera-utara",
-      "featureCount": 70,
-      "verifiedLiveCount": 69,
+      "featureCount": 97,
+      "verifiedLiveCount": 96,
       "pageCount": 1
     }
   ]

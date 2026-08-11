@@ -1,11 +1,11 @@
 {
-  "generatedAt": "2026-08-11T15:43:35.254Z",
-  "featureCount": 3768,
+  "generatedAt": "2026-08-11T15:53:28.421Z",
+  "featureCount": 4205,
   "provinceCount": 38,
-  "coveredProvinceCount": 24,
+  "coveredProvinceCount": 26,
   "sufficientlyCoveredCount": 8,
-  "missingProvinceCount": 14,
-  "lowProvinceCount": 16,
+  "missingProvinceCount": 12,
+  "lowProvinceCount": 18,
   "targetPerProvince": 100,
   "nonProvinceBuckets": [
     {
@@ -40,35 +40,35 @@
   "provinces": [
     {
       "province": "Aceh",
-      "count": 0,
-      "verifiedLiveCount": 0,
-      "status": "missing",
+      "count": 14,
+      "verifiedLiveCount": 14,
+      "status": "low",
       "target": 100,
-      "gap": 100
+      "gap": 86
     },
     {
       "province": "Sumatera Utara",
-      "count": 70,
-      "verifiedLiveCount": 69,
+      "count": 97,
+      "verifiedLiveCount": 96,
       "status": "low",
       "target": 100,
-      "gap": 30
+      "gap": 3
     },
     {
       "province": "Sumatera Barat",
-      "count": 28,
-      "verifiedLiveCount": 28,
+      "count": 41,
+      "verifiedLiveCount": 41,
       "status": "low",
       "target": 100,
-      "gap": 72
+      "gap": 59
     },
     {
       "province": "Riau",
-      "count": 1,
-      "verifiedLiveCount": 1,
+      "count": 45,
+      "verifiedLiveCount": 45,
       "status": "low",
       "target": 100,
-      "gap": 99
+      "gap": 55
     },
     {
       "province": "Kepulauan Riau",
@@ -88,11 +88,11 @@
     },
     {
       "province": "Sumatera Selatan",
-      "count": 53,
-      "verifiedLiveCount": 52,
+      "count": 70,
+      "verifiedLiveCount": 69,
       "status": "low",
       "target": 100,
-      "gap": 47
+      "gap": 30
     },
     {
       "province": "Kepulauan Bangka Belitung",
@@ -104,11 +104,11 @@
     },
     {
       "province": "Bengkulu",
-      "count": 0,
-      "verifiedLiveCount": 0,
-      "status": "missing",
+      "count": 19,
+      "verifiedLiveCount": 19,
+      "status": "low",
       "target": 100,
-      "gap": 100
+      "gap": 81
     },
     {
       "province": "Lampung",
@@ -120,32 +120,32 @@
     },
     {
       "province": "DKI Jakarta",
-      "count": 615,
-      "verifiedLiveCount": 608,
+      "count": 714,
+      "verifiedLiveCount": 707,
       "status": "covered",
       "target": 100,
       "gap": 0
     },
     {
       "province": "Banten",
-      "count": 136,
-      "verifiedLiveCount": 135,
+      "count": 221,
+      "verifiedLiveCount": 220,
       "status": "covered",
       "target": 100,
       "gap": 0
     },
     {
       "province": "Jawa Barat",
-      "count": 755,
-      "verifiedLiveCount": 728,
+      "count": 804,
+      "verifiedLiveCount": 777,
       "status": "covered",
       "target": 100,
       "gap": 0
     },
     {
       "province": "Jawa Tengah",
-      "count": 333,
-      "verifiedLiveCount": 265,
+      "count": 373,
+      "verifiedLiveCount": 305,
       "status": "covered",
       "target": 100,
       "gap": 0
@@ -160,8 +160,8 @@
     },
     {
       "province": "Jawa Timur",
-      "count": 536,
-      "verifiedLiveCount": 272,
+      "count": 543,
+      "verifiedLiveCount": 279,
       "status": "covered",
       "target": 100,
       "gap": 0
@@ -264,11 +264,11 @@
     },
     {
       "province": "Sulawesi Selatan",
-      "count": 1,
-      "verifiedLiveCount": 0,
+      "count": 24,
+      "verifiedLiveCount": 23,
       "status": "low",
       "target": 100,
-      "gap": 99
+      "gap": 76
     },
     {
       "province": "Sulawesi Tenggara",

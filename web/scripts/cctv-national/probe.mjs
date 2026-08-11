@@ -9,6 +9,7 @@ const arg = (name, fallback) => {
 };
 const input = path.resolve(arg("--in", ".cctv-ingest/merged.ndjson"));
 const output = path.resolve(arg("--out", input));
+const dropUnreachable = process.argv.includes("--drop-unreachable");
 const concurrency = Math.max(1, Math.min(24, Number(arg("--concurrency", "12")) || 12));
 const rows = (await readFile(input, "utf8")).split(/\r?\n/).filter(Boolean).map(JSON.parse);
 let cursor = 0;
@@ -45,7 +46,10 @@ await Promise.all(Array.from({ length: concurrency }, async () => {
     results[index] = await inspect(rows[index]);
   }
 }));
-await writeFile(output, `${results.map((row) => JSON.stringify(row)).join("\n")}\n`, "utf8");
 const statuses = {};
 results.forEach((row) => { statuses[row.streamStatus || "unknown"] = (statuses[row.streamStatus || "unknown"] || 0) + 1; });
-console.log(JSON.stringify({ records: results.length, statuses }, null, 2));
+const kept = dropUnreachable
+  ? results.filter((row) => ["live", "reachable", "discovered"].includes(row.streamStatus))
+  : results;
+await writeFile(output, `${kept.map((row) => JSON.stringify(row)).join("\n")}\n`, "utf8");
+console.log(JSON.stringify({ records: results.length, kept: kept.length, dropped: results.length - kept.length, statuses }, null, 2));
