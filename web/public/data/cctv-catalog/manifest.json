@@ -1,0 +1,5338 @@
+{
+  "dataset": {
+    "bbox": [
+      95.4464904106,
+      -10.1772,
+      140.7181,
+      5.513709
+    ],
+    "canonicalSha256": "4b8a8914e87cf207f8660e117095b37bcaf3dd5b72714b4c7c9deb548de0dc84",
+    "featureCount": 3980,
+    "featureIdSetSha256": "00fc3aa0e76c2488b1e17a29e0e28f27900cfd446b1ea2bf6f9ebc5fd994535e",
+    "id": "its-public-cctv-catalog",
+    "latestFeatureUpdatedAt": "2026-08-11T16:09:57.255Z",
+    "sourcePath": "../public-cctv.geojson",
+    "sourceSha256": "bbb1389ae21cfdbeaef80fcbb6554396d1924cf8f46fd89280ef080e19ad38da"
+  },
+  "dimensions": {
+    "mediaFormats": {
+      "assignedFeatureCount": 3980,
+      "entries": [
+        {
+          "featureCount": 1391,
+          "key": "hls"
+        },
+        {
+          "featureCount": 2511,
+          "key": "iframe"
+        },
+        {
+          "featureCount": 66,
+          "key": "mjpeg"
+        },
+        {
+          "featureCount": 12,
+          "key": "mp4"
+        }
+      ],
+      "unassignedFeatureCount": 0
+    },
+    "streamStatuses": {
+      "assignedFeatureCount": 3980,
+      "entries": [
+        {
+          "featureCount": 2777,
+          "key": "public-page"
+        },
+        {
+          "featureCount": 1203,
+          "key": "verified-live"
+        }
+      ],
+      "unassignedFeatureCount": 0
+    },
+    "verifications": {
+      "assignedFeatureCount": 3980,
+      "entries": [
+        {
+          "featureCount": 72,
+          "key": "directory-verified"
+        },
+        {
+          "featureCount": 1,
+          "key": "metadata-verified-stream-offline"
+        },
+        {
+          "featureCount": 26,
+          "key": "official-badilag-public-player"
+        },
+        {
+          "featureCount": 374,
+          "key": "official-bpjt-online-directory"
+        },
+        {
+          "featureCount": 10,
+          "key": "official-magma-public-camera-directory"
+        },
+        {
+          "featureCount": 3,
+          "key": "official-published-unavailable"
+        },
+        {
+          "featureCount": 2262,
+          "key": "public-directory-live"
+        },
+        {
+          "featureCount": 1232,
+          "key": "verified"
+        }
+      ],
+      "unassignedFeatureCount": 0
+    }
+  },
+  "facets": {
+    "provinces": {
+      "assignedFeatureCount": 3980,
+      "entries": [
+        {
+          "bbox": [
+            95.4464904106,
+            5.459529,
+            95.47235,
+            5.513709
+          ],
+          "featureCount": 14,
+          "key": "Aceh",
+          "shardIds": [
+            "w0gz:0000"
+          ]
+        },
+        {
+          "bbox": [
+            110.7103611,
+            -8.81478,
+            115.269318,
+            -8.093357
+          ],
+          "featureCount": 120,
+          "key": "Bali",
+          "shardIds": [
+            "qqw9:0000",
+            "qw3v:0000",
+            "qw3y:0000",
+            "qw93:0000",
+            "qw99:0000",
+            "qw9b:0000",
+            "qw9c:0000"
+          ]
+        },
+        {
+          "bbox": [
+            105.995105,
+            -6.352358,
+            106.708718670375,
+            -5.928191
+          ],
+          "featureCount": 194,
+          "key": "Banten",
+          "shardIds": [
+            "qqg7:0000",
+            "qqge:0000",
+            "qqgg:0000",
+            "qqgm:0000",
+            "qqgq:0000",
+            "qqgs:0000",
+            "qqgt:0000",
+            "qqgu:0000",
+            "qqgu:0001",
+            "qqgv:0000"
+          ]
+        },
+        {
+          "bbox": [
+            102.3668956,
+            -3.8564331,
+            102.4233436,
+            -3.8036322
+          ],
+          "featureCount": 19,
+          "key": "Bengkulu",
+          "shardIds": [
+            "qr2f:0000"
+          ]
+        },
+        {
+          "bbox": [
+            110.09243668,
+            -8.189188,
+            110.799262,
+            -7.576855
+          ],
+          "featureCount": 790,
+          "key": "DI Yogyakarta",
+          "shardIds": [
+            "qqw6:0000",
+            "qqw7:0000",
+            "qqw9:0000",
+            "qqwc:0000",
+            "qqwd:0000",
+            "qqwe:0000",
+            "qqwf:0000",
+            "qqwg:0000",
+            "qqwk:0000",
+            "qqws:0000"
+          ]
+        },
+        {
+          "bbox": [
+            106.70061,
+            -6.3556,
+            106.95953,
+            -6.096
+          ],
+          "featureCount": 701,
+          "key": "DKI Jakarta",
+          "shardIds": [
+            "qqgg:0000",
+            "qqgu:0000",
+            "qqgu:0001",
+            "qqgv:0000",
+            "qqu5:0000",
+            "qquh:0000",
+            "qquj:0000"
+          ]
+        },
+        {
+          "bbox": [
+            110.032,
+            -7.0213,
+            110.032,
+            -7.0213
+          ],
+          "featureCount": 1,
+          "key": "Gajahan",
+          "shardIds": [
+            "qqy0:0000"
+          ]
+        },
+        {
+          "bbox": [
+            123.0595,
+            0.5435,
+            123.0595,
+            0.5435
+          ],
+          "featureCount": 2,
+          "key": "Gorontalo",
+          "shardIds": [
+            "w8pe:0000"
+          ]
+        },
+        {
+          "bbox": [
+            110.4009368,
+            -9.172778,
+            116.502778,
+            -7.8206135
+          ],
+          "featureCount": 2,
+          "key": "ID",
+          "shardIds": [
+            "qqwe:0000",
+            "qw6g:0000"
+          ]
+        },
+        {
+          "bbox": [
+            105.85449908,
+            -7.367787,
+            108.54212051,
+            -6.16378566
+          ],
+          "featureCount": 6,
+          "key": "Indonesia",
+          "shardIds": [
+            "qqgk:0000",
+            "qqgu:0000",
+            "qqtn:0000",
+            "qquc:0000"
+          ]
+        },
+        {
+          "bbox": [
+            101.264,
+            -1.697,
+            103.630222,
+            -1.60969
+          ],
+          "featureCount": 11,
+          "key": "Jambi",
+          "shardIds": [
+            "qr8n:0000",
+            "qr9w:0000"
+          ]
+        },
+        {
+          "bbox": [
+            101.447344,
+            -7.47797005,
+            108.882271,
+            -6.18303
+          ],
+          "featureCount": 794,
+          "key": "Jawa Barat",
+          "shardIds": [
+            "qqb5:0000",
+            "qqgc:0000",
+            "qqge:0000",
+            "qqgf:0000",
+            "qqgg:0000",
+            "qqsw:0000",
+            "qqsx:0000",
+            "qqsy:0000",
+            "qqtj:0000",
+            "qqtn:0000",
+            "qqtq:0000",
+            "qqu0:0000",
+            "qqu1:0000",
+            "qqu2:0000",
+            "qqu3:0000",
+            "qqu5:0000",
+            "qqu6:0000",
+            "qqu7:0000",
+            "qqu8:0000",
+            "qqu9:0000",
+            "qquc:0000",
+            "qquh:0000",
+            "qquk:0000",
+            "qqus:0000",
+            "qqv0:0000",
+            "qqv1:0000",
+            "qqv2:0000",
+            "qqv3:0000",
+            "qqv4:0000"
+          ]
+        },
+        {
+          "bbox": [
+            108.8942,
+            -7.85121,
+            111.64053873,
+            -6.70663
+          ],
+          "featureCount": 290,
+          "key": "Jawa Tengah",
+          "shardIds": [
+            "qqtt:0000",
+            "qqtu:0000",
+            "qqtx:0000",
+            "qqv2:0000",
+            "qqv8:0000",
+            "qqvb:0000",
+            "qqwe:0000",
+            "qqwk:0000",
+            "qqwm:0000",
+            "qqws:0000",
+            "qqwu:0000",
+            "qqwv:0000",
+            "qqwx:0000",
+            "qqwz:0000",
+            "qqy0:0000",
+            "qqy2:0000",
+            "qqy8:0000",
+            "qqyb:0000",
+            "qqz1:0000",
+            "qqz3:0000"
+          ]
+        },
+        {
+          "bbox": [
+            111.07760263,
+            -8.31108544,
+            114.242,
+            -6.8818834
+          ],
+          "featureCount": 525,
+          "key": "Jawa Timur",
+          "shardIds": [
+            "qqwc:0000",
+            "qqx1:0000",
+            "qqx3:0000",
+            "qqx7:0000",
+            "qqxd:0000",
+            "qqxe:0000",
+            "qqxh:0000",
+            "qqxk:0000",
+            "qqxs:0000",
+            "qqxt:0000",
+            "qqxv:0000",
+            "qqxx:0000",
+            "qqz2:0000",
+            "qqz8:0000",
+            "qw83:0000",
+            "qw84:0000",
+            "qw85:0000",
+            "qw86:0000",
+            "qw8c:0000",
+            "qw8f:0000",
+            "qw8g:0000",
+            "qw8h:0000",
+            "qw8j:0000",
+            "qw8k:0000",
+            "qw8n:0000",
+            "qw8p:0000",
+            "qw90:0000",
+            "qw94:0000"
+          ]
+        },
+        {
+          "bbox": [
+            109.4037764,
+            -0.0411311,
+            109.4037764,
+            -0.0411311
+          ],
+          "featureCount": 3,
+          "key": "Kalimantan Barat",
+          "shardIds": [
+            "qrvz:0000"
+          ]
+        },
+        {
+          "bbox": [
+            114.579188,
+            -3.784367,
+            116.010343,
+            -2.1641769022537707
+          ],
+          "featureCount": 95,
+          "key": "Kalimantan Selatan",
+          "shardIds": [
+            "qx3k:0000",
+            "qx3m:0000",
+            "qx3s:0000",
+            "qx3t:0000",
+            "qx64:0000",
+            "qx67:0000",
+            "qx6k:0000",
+            "qxd5:0000"
+          ]
+        },
+        {
+          "bbox": [
+            111.63105,
+            -2.67995,
+            114.90426,
+            -0.96079
+          ],
+          "featureCount": 6,
+          "key": "Kalimantan Tengah",
+          "shardIds": [
+            "qrx2:0000",
+            "qx8t:0000",
+            "qxcd:0000"
+          ]
+        },
+        {
+          "bbox": [
+            116.822984,
+            -1.277922,
+            116.949704,
+            -1.211932
+          ],
+          "featureCount": 28,
+          "key": "Kalimantan Timur",
+          "shardIds": [
+            "qxg0:0000",
+            "qxg1:0000"
+          ]
+        },
+        {
+          "bbox": [
+            117.365,
+            2.837,
+            117.365,
+            2.837
+          ],
+          "featureCount": 2,
+          "key": "Kalimantan Utara",
+          "shardIds": [
+            "w8e2:0000"
+          ]
+        },
+        {
+          "bbox": [
+            104.0265,
+            1.12486,
+            104.0265,
+            1.12486
+          ],
+          "featureCount": 1,
+          "key": "Kepulauan Riau",
+          "shardIds": [
+            "w21y:0000"
+          ]
+        },
+        {
+          "bbox": [
+            105.13549,
+            -6.102,
+            105.423,
+            -4.134
+          ],
+          "featureCount": 18,
+          "key": "Lampung",
+          "shardIds": [
+            "qqfv:0000",
+            "qr4y:0000",
+            "qr4z:0000",
+            "qr6b:0000"
+          ]
+        },
+        {
+          "bbox": [
+            128.1814,
+            -3.6954,
+            128.1814,
+            -3.6954
+          ],
+          "featureCount": 2,
+          "key": "Maluku",
+          "shardIds": [
+            "qz74:0000"
+          ]
+        },
+        {
+          "bbox": [
+            127.63,
+            1.488,
+            127.63,
+            1.488
+          ],
+          "featureCount": 1,
+          "key": "Maluku Utara",
+          "shardIds": [
+            "wb6b:0000"
+          ]
+        },
+        {
+          "bbox": [
+            118.72369,
+            -8.46429,
+            118.7534,
+            -8.44106
+          ],
+          "featureCount": 2,
+          "key": "Nusa Tenggara Barat",
+          "shardIds": [
+            "qwkr:0000"
+          ]
+        },
+        {
+          "bbox": [
+            123.607,
+            -10.1772,
+            123.607,
+            -10.1772
+          ],
+          "featureCount": 2,
+          "key": "Nusa Tenggara Timur",
+          "shardIds": [
+            "qwpy:0000"
+          ]
+        },
+        {
+          "bbox": [
+            140.7181,
+            -2.5337,
+            140.7181,
+            -2.5337
+          ],
+          "featureCount": 2,
+          "key": "Papua",
+          "shardIds": [
+            "rps1:0000"
+          ]
+        },
+        {
+          "bbox": [
+            134.062,
+            -0.8615,
+            134.062,
+            -0.8615
+          ],
+          "featureCount": 2,
+          "key": "Papua Barat",
+          "shardIds": [
+            "qzz7:0000"
+          ]
+        },
+        {
+          "bbox": [
+            131.2558,
+            -0.8762,
+            131.2558,
+            -0.8762
+          ],
+          "featureCount": 3,
+          "key": "Papua Barat Daya",
+          "shardIds": [
+            "qzv7:0000"
+          ]
+        },
+        {
+          "bbox": [
+            138.9461,
+            -4.0958,
+            138.9461,
+            -4.0958
+          ],
+          "featureCount": 3,
+          "key": "Papua Pegunungan",
+          "shardIds": [
+            "rp6b:0000"
+          ]
+        },
+        {
+          "bbox": [
+            140.4018,
+            -8.4932,
+            140.4018,
+            -8.4932
+          ],
+          "featureCount": 3,
+          "key": "Papua Selatan",
+          "shardIds": [
+            "rn7z:0000"
+          ]
+        },
+        {
+          "bbox": [
+            135.4833,
+            -3.3667,
+            135.4833,
+            -3.3667
+          ],
+          "featureCount": 3,
+          "key": "Papua Tengah",
+          "shardIds": [
+            "rp2k:0000"
+          ]
+        },
+        {
+          "bbox": [
+            100.8216717,
+            0.3177621,
+            101.314093,
+            1.3931063
+          ],
+          "featureCount": 43,
+          "key": "Riau",
+          "shardIds": [
+            "w0p9:0000",
+            "w0pf:0000",
+            "w0pv:0000",
+            "w204:0000",
+            "w20h:0000",
+            "w20n:0000",
+            "w20p:0000"
+          ]
+        },
+        {
+          "bbox": [
+            118.8867,
+            -2.6806,
+            118.8867,
+            -2.6806
+          ],
+          "featureCount": 2,
+          "key": "Sulawesi Barat",
+          "shardIds": [
+            "qxs8:0000"
+          ]
+        },
+        {
+          "bbox": [
+            119.4269,
+            -5.166906,
+            119.5232371,
+            -5.06951
+          ],
+          "featureCount": 23,
+          "key": "Sulawesi Selatan",
+          "shardIds": [
+            "qxhf:0000",
+            "qxhg:0000"
+          ]
+        },
+        {
+          "bbox": [
+            120.7521088,
+            -1.4143325,
+            122.90799013431837,
+            -0.9193442724073411
+          ],
+          "featureCount": 68,
+          "key": "Sulawesi Tengah",
+          "shardIds": [
+            "qxtz:0000",
+            "qxz6:0000"
+          ]
+        },
+        {
+          "bbox": [
+            121.580699,
+            -4.226379,
+            121.580699,
+            -4.226379
+          ],
+          "featureCount": 1,
+          "key": "Sulawesi Tenggara",
+          "shardIds": [
+            "qxnr:0000"
+          ]
+        },
+        {
+          "bbox": [
+            124.896523,
+            1.39583,
+            125.177081,
+            1.472871
+          ],
+          "featureCount": 16,
+          "key": "Sulawesi Utara",
+          "shardIds": [
+            "wb0z:0000",
+            "wb2b:0000",
+            "wb30:0000"
+          ]
+        },
+        {
+          "bbox": [
+            100.30575,
+            -0.9616575,
+            100.43538925212835,
+            -0.5281584
+          ],
+          "featureCount": 22,
+          "key": "Sumatera Barat",
+          "shardIds": [
+            "qpz6:0000",
+            "qpz7:0000",
+            "qpzk:0000"
+          ]
+        },
+        {
+          "bbox": [
+            103.13,
+            -4.03,
+            104.86316,
+            -2.913313005325259
+          ],
+          "featureCount": 71,
+          "key": "Sumatera Selatan",
+          "shardIds": [
+            "qr33:0000",
+            "qr65:0000",
+            "qr6m:0000",
+            "qr6q:0000",
+            "qr6r:0000",
+            "qr6s:0000",
+            "qr6w:0000",
+            "qr6x:0000"
+          ]
+        },
+        {
+          "bbox": [
+            98.392,
+            2.9090234978581884,
+            99.713694,
+            3.17
+          ],
+          "featureCount": 89,
+          "key": "Sumatera Utara",
+          "shardIds": [
+            "w0tf:0000",
+            "w0w2:0000",
+            "w0w3:0000",
+            "w0w9:0000",
+            "w0wb:0000"
+          ]
+        }
+      ],
+      "unassignedFeatureCount": 0
+    },
+    "regions": {
+      "assignedFeatureCount": 3980,
+      "entries": [
+        {
+          "bbox": [
+            95.4464904106,
+            5.459529,
+            95.47235,
+            5.513709
+          ],
+          "featureCount": 14,
+          "key": "Aceh",
+          "shardIds": [
+            "w0gz:0000"
+          ]
+        },
+        {
+          "bbox": [
+            110.7103611,
+            -8.81478,
+            115.269318,
+            -8.093357
+          ],
+          "featureCount": 120,
+          "key": "Bali",
+          "shardIds": [
+            "qqw9:0000",
+            "qw3v:0000",
+            "qw3y:0000",
+            "qw93:0000",
+            "qw99:0000",
+            "qw9b:0000",
+            "qw9c:0000"
+          ]
+        },
+        {
+          "bbox": [
+            105.995105,
+            -6.352358,
+            106.708718670375,
+            -5.928191
+          ],
+          "featureCount": 194,
+          "key": "Banten",
+          "shardIds": [
+            "qqg7:0000",
+            "qqge:0000",
+            "qqgg:0000",
+            "qqgm:0000",
+            "qqgq:0000",
+            "qqgs:0000",
+            "qqgt:0000",
+            "qqgu:0000",
+            "qqgu:0001",
+            "qqgv:0000"
+          ]
+        },
+        {
+          "bbox": [
+            102.3668956,
+            -3.8564331,
+            102.4233436,
+            -3.8036322
+          ],
+          "featureCount": 19,
+          "key": "Bengkulu",
+          "shardIds": [
+            "qr2f:0000"
+          ]
+        },
+        {
+          "bbox": [
+            110.09243668,
+            -8.189188,
+            110.799262,
+            -7.576855
+          ],
+          "featureCount": 790,
+          "key": "DI Yogyakarta",
+          "shardIds": [
+            "qqw6:0000",
+            "qqw7:0000",
+            "qqw9:0000",
+            "qqwc:0000",
+            "qqwd:0000",
+            "qqwe:0000",
+            "qqwf:0000",
+            "qqwg:0000",
+            "qqwk:0000",
+            "qqws:0000"
+          ]
+        },
+        {
+          "bbox": [
+            106.70061,
+            -6.3556,
+            106.95953,
+            -6.096
+          ],
+          "featureCount": 701,
+          "key": "DKI Jakarta",
+          "shardIds": [
+            "qqgg:0000",
+            "qqgu:0000",
+            "qqgu:0001",
+            "qqgv:0000",
+            "qqu5:0000",
+            "qquh:0000",
+            "qquj:0000"
+          ]
+        },
+        {
+          "bbox": [
+            110.032,
+            -7.0213,
+            110.032,
+            -7.0213
+          ],
+          "featureCount": 1,
+          "key": "Gajahan",
+          "shardIds": [
+            "qqy0:0000"
+          ]
+        },
+        {
+          "bbox": [
+            123.0595,
+            0.5435,
+            123.0595,
+            0.5435
+          ],
+          "featureCount": 2,
+          "key": "Gorontalo",
+          "shardIds": [
+            "w8pe:0000"
+          ]
+        },
+        {
+          "bbox": [
+            110.4009368,
+            -9.172778,
+            116.502778,
+            -7.8206135
+          ],
+          "featureCount": 2,
+          "key": "ID",
+          "shardIds": [
+            "qqwe:0000",
+            "qw6g:0000"
+          ]
+        },
+        {
+          "bbox": [
+            105.85449908,
+            -7.367787,
+            108.54212051,
+            -6.16378566
+          ],
+          "featureCount": 6,
+          "key": "Indonesia",
+          "shardIds": [
+            "qqgk:0000",
+            "qqgu:0000",
+            "qqtn:0000",
+            "qquc:0000"
+          ]
+        },
+        {
+          "bbox": [
+            101.264,
+            -1.697,
+            103.630222,
+            -1.60969
+          ],
+          "featureCount": 11,
+          "key": "Jambi",
+          "shardIds": [
+            "qr8n:0000",
+            "qr9w:0000"
+          ]
+        },
+        {
+          "bbox": [
+            101.447344,
+            -7.47797005,
+            108.882271,
+            -6.18303
+          ],
+          "featureCount": 794,
+          "key": "Jawa Barat",
+          "shardIds": [
+            "qqb5:0000",
+            "qqgc:0000",
+            "qqge:0000",
+            "qqgf:0000",
+            "qqgg:0000",
+            "qqsw:0000",
+            "qqsx:0000",
+            "qqsy:0000",
+            "qqtj:0000",
+            "qqtn:0000",
+            "qqtq:0000",
+            "qqu0:0000",
+            "qqu1:0000",
+            "qqu2:0000",
+            "qqu3:0000",
+            "qqu5:0000",
+            "qqu6:0000",
+            "qqu7:0000",
+            "qqu8:0000",
+            "qqu9:0000",
+            "qquc:0000",
+            "qquh:0000",
+            "qquk:0000",
+            "qqus:0000",
+            "qqv0:0000",
+            "qqv1:0000",
+            "qqv2:0000",
+            "qqv3:0000",
+            "qqv4:0000"
+          ]
+        },
+        {
+          "bbox": [
+            108.8942,
+            -7.85121,
+            111.64053873,
+            -6.70663
+          ],
+          "featureCount": 290,
+          "key": "Jawa Tengah",
+          "shardIds": [
+            "qqtt:0000",
+            "qqtu:0000",
+            "qqtx:0000",
+            "qqv2:0000",
+            "qqv8:0000",
+            "qqvb:0000",
+            "qqwe:0000",
+            "qqwk:0000",
+            "qqwm:0000",
+            "qqws:0000",
+            "qqwu:0000",
+            "qqwv:0000",
+            "qqwx:0000",
+            "qqwz:0000",
+            "qqy0:0000",
+            "qqy2:0000",
+            "qqy8:0000",
+            "qqyb:0000",
+            "qqz1:0000",
+            "qqz3:0000"
+          ]
+        },
+        {
+          "bbox": [
+            111.07760263,
+            -8.31108544,
+            114.242,
+            -6.8818834
+          ],
+          "featureCount": 525,
+          "key": "Jawa Timur",
+          "shardIds": [
+            "qqwc:0000",
+            "qqx1:0000",
+            "qqx3:0000",
+            "qqx7:0000",
+            "qqxd:0000",
+            "qqxe:0000",
+            "qqxh:0000",
+            "qqxk:0000",
+            "qqxs:0000",
+            "qqxt:0000",
+            "qqxv:0000",
+            "qqxx:0000",
+            "qqz2:0000",
+            "qqz8:0000",
+            "qw83:0000",
+            "qw84:0000",
+            "qw85:0000",
+            "qw86:0000",
+            "qw8c:0000",
+            "qw8f:0000",
+            "qw8g:0000",
+            "qw8h:0000",
+            "qw8j:0000",
+            "qw8k:0000",
+            "qw8n:0000",
+            "qw8p:0000",
+            "qw90:0000",
+            "qw94:0000"
+          ]
+        },
+        {
+          "bbox": [
+            109.4037764,
+            -0.0411311,
+            109.4037764,
+            -0.0411311
+          ],
+          "featureCount": 3,
+          "key": "Kalimantan Barat",
+          "shardIds": [
+            "qrvz:0000"
+          ]
+        },
+        {
+          "bbox": [
+            114.579188,
+            -3.784367,
+            116.010343,
+            -2.1641769022537707
+          ],
+          "featureCount": 95,
+          "key": "Kalimantan Selatan",
+          "shardIds": [
+            "qx3k:0000",
+            "qx3m:0000",
+            "qx3s:0000",
+            "qx3t:0000",
+            "qx64:0000",
+            "qx67:0000",
+            "qx6k:0000",
+            "qxd5:0000"
+          ]
+        },
+        {
+          "bbox": [
+            111.63105,
+            -2.67995,
+            114.90426,
+            -0.96079
+          ],
+          "featureCount": 6,
+          "key": "Kalimantan Tengah",
+          "shardIds": [
+            "qrx2:0000",
+            "qx8t:0000",
+            "qxcd:0000"
+          ]
+        },
+        {
+          "bbox": [
+            116.822984,
+            -1.277922,
+            116.949704,
+            -1.211932
+          ],
+          "featureCount": 28,
+          "key": "Kalimantan Timur",
+          "shardIds": [
+            "qxg0:0000",
+            "qxg1:0000"
+          ]
+        },
+        {
+          "bbox": [
+            117.365,
+            2.837,
+            117.365,
+            2.837
+          ],
+          "featureCount": 2,
+          "key": "Kalimantan Utara",
+          "shardIds": [
+            "w8e2:0000"
+          ]
+        },
+        {
+          "bbox": [
+            104.0265,
+            1.12486,
+            104.0265,
+            1.12486
+          ],
+          "featureCount": 1,
+          "key": "Kepulauan Riau",
+          "shardIds": [
+            "w21y:0000"
+          ]
+        },
+        {
+          "bbox": [
+            105.13549,
+            -6.102,
+            105.423,
+            -4.134
+          ],
+          "featureCount": 18,
+          "key": "Lampung",
+          "shardIds": [
+            "qqfv:0000",
+            "qr4y:0000",
+            "qr4z:0000",
+            "qr6b:0000"
+          ]
+        },
+        {
+          "bbox": [
+            128.1814,
+            -3.6954,
+            128.1814,
+            -3.6954
+          ],
+          "featureCount": 2,
+          "key": "Maluku",
+          "shardIds": [
+            "qz74:0000"
+          ]
+        },
+        {
+          "bbox": [
+            127.63,
+            1.488,
+            127.63,
+            1.488
+          ],
+          "featureCount": 1,
+          "key": "Maluku Utara",
+          "shardIds": [
+            "wb6b:0000"
+          ]
+        },
+        {
+          "bbox": [
+            118.72369,
+            -8.46429,
+            118.7534,
+            -8.44106
+          ],
+          "featureCount": 2,
+          "key": "Nusa Tenggara Barat",
+          "shardIds": [
+            "qwkr:0000"
+          ]
+        },
+        {
+          "bbox": [
+            123.607,
+            -10.1772,
+            123.607,
+            -10.1772
+          ],
+          "featureCount": 2,
+          "key": "Nusa Tenggara Timur",
+          "shardIds": [
+            "qwpy:0000"
+          ]
+        },
+        {
+          "bbox": [
+            140.7181,
+            -2.5337,
+            140.7181,
+            -2.5337
+          ],
+          "featureCount": 2,
+          "key": "Papua",
+          "shardIds": [
+            "rps1:0000"
+          ]
+        },
+        {
+          "bbox": [
+            134.062,
+            -0.8615,
+            134.062,
+            -0.8615
+          ],
+          "featureCount": 2,
+          "key": "Papua Barat",
+          "shardIds": [
+            "qzz7:0000"
+          ]
+        },
+        {
+          "bbox": [
+            131.2558,
+            -0.8762,
+            131.2558,
+            -0.8762
+          ],
+          "featureCount": 3,
+          "key": "Papua Barat Daya",
+          "shardIds": [
+            "qzv7:0000"
+          ]
+        },
+        {
+          "bbox": [
+            138.9461,
+            -4.0958,
+            138.9461,
+            -4.0958
+          ],
+          "featureCount": 3,
+          "key": "Papua Pegunungan",
+          "shardIds": [
+            "rp6b:0000"
+          ]
+        },
+        {
+          "bbox": [
+            140.4018,
+            -8.4932,
+            140.4018,
+            -8.4932
+          ],
+          "featureCount": 3,
+          "key": "Papua Selatan",
+          "shardIds": [
+            "rn7z:0000"
+          ]
+        },
+        {
+          "bbox": [
+            135.4833,
+            -3.3667,
+            135.4833,
+            -3.3667
+          ],
+          "featureCount": 3,
+          "key": "Papua Tengah",
+          "shardIds": [
+            "rp2k:0000"
+          ]
+        },
+        {
+          "bbox": [
+            100.8216717,
+            0.3177621,
+            101.314093,
+            1.3931063
+          ],
+          "featureCount": 43,
+          "key": "Riau",
+          "shardIds": [
+            "w0p9:0000",
+            "w0pf:0000",
+            "w0pv:0000",
+            "w204:0000",
+            "w20h:0000",
+            "w20n:0000",
+            "w20p:0000"
+          ]
+        },
+        {
+          "bbox": [
+            118.8867,
+            -2.6806,
+            118.8867,
+            -2.6806
+          ],
+          "featureCount": 2,
+          "key": "Sulawesi Barat",
+          "shardIds": [
+            "qxs8:0000"
+          ]
+        },
+        {
+          "bbox": [
+            119.4269,
+            -5.166906,
+            119.5232371,
+            -5.06951
+          ],
+          "featureCount": 23,
+          "key": "Sulawesi Selatan",
+          "shardIds": [
+            "qxhf:0000",
+            "qxhg:0000"
+          ]
+        },
+        {
+          "bbox": [
+            120.7521088,
+            -1.4143325,
+            122.90799013431837,
+            -0.9193442724073411
+          ],
+          "featureCount": 68,
+          "key": "Sulawesi Tengah",
+          "shardIds": [
+            "qxtz:0000",
+            "qxz6:0000"
+          ]
+        },
+        {
+          "bbox": [
+            121.580699,
+            -4.226379,
+            121.580699,
+            -4.226379
+          ],
+          "featureCount": 1,
+          "key": "Sulawesi Tenggara",
+          "shardIds": [
+            "qxnr:0000"
+          ]
+        },
+        {
+          "bbox": [
+            124.896523,
+            1.39583,
+            125.177081,
+            1.472871
+          ],
+          "featureCount": 16,
+          "key": "Sulawesi Utara",
+          "shardIds": [
+            "wb0z:0000",
+            "wb2b:0000",
+            "wb30:0000"
+          ]
+        },
+        {
+          "bbox": [
+            100.30575,
+            -0.9616575,
+            100.43538925212835,
+            -0.5281584
+          ],
+          "featureCount": 22,
+          "key": "Sumatera Barat",
+          "shardIds": [
+            "qpz6:0000",
+            "qpz7:0000",
+            "qpzk:0000"
+          ]
+        },
+        {
+          "bbox": [
+            103.13,
+            -4.03,
+            104.86316,
+            -2.913313005325259
+          ],
+          "featureCount": 71,
+          "key": "Sumatera Selatan",
+          "shardIds": [
+            "qr33:0000",
+            "qr65:0000",
+            "qr6m:0000",
+            "qr6q:0000",
+            "qr6r:0000",
+            "qr6s:0000",
+            "qr6w:0000",
+            "qr6x:0000"
+          ]
+        },
+        {
+          "bbox": [
+            98.392,
+            2.9090234978581884,
+            99.713694,
+            3.17
+          ],
+          "featureCount": 89,
+          "key": "Sumatera Utara",
+          "shardIds": [
+            "w0tf:0000",
+            "w0w2:0000",
+            "w0w3:0000",
+            "w0w9:0000",
+            "w0wb:0000"
+          ]
+        }
+      ],
+      "unassignedFeatureCount": 0
+    },
+    "sources": {
+      "assignedFeatureCount": 3980,
+      "entries": [
+        {
+          "bbox": [
+            104.6813417,
+            -8.31108544,
+            121.580699,
+            -0.0411311
+          ],
+          "featureCount": 72,
+          "key": "binamarga-national-directory",
+          "labels": [
+            "Direktori CCTV Jalan Non Tol Direktorat Jenderal Bina Marga"
+          ],
+          "shardIds": [
+            "qqgk:0000",
+            "qqgq:0000",
+            "qqgu:0000",
+            "qqtj:0000",
+            "qqtn:0000",
+            "qqtt:0000",
+            "qqtx:0000",
+            "qqu2:0000",
+            "qqu3:0000",
+            "qqu6:0000",
+            "qqu7:0000",
+            "qqu8:0000",
+            "qquc:0000",
+            "qquh:0000",
+            "qquk:0000",
+            "qqus:0000",
+            "qqv1:0000",
+            "qqv4:0000",
+            "qqv8:0000",
+            "qqwc:0000",
+            "qqwe:0000",
+            "qqwu:0000",
+            "qqx1:0000",
+            "qqx3:0000",
+            "qqx7:0000",
+            "qqxd:0000",
+            "qqxe:0000",
+            "qqxx:0000",
+            "qqy8:0000",
+            "qqz1:0000",
+            "qqz3:0000",
+            "qr6r:0000",
+            "qrvz:0000",
+            "qw8c:0000",
+            "qw8n:0000",
+            "qw90:0000",
+            "qw93:0000",
+            "qxnr:0000",
+            "qxtz:0000"
+          ]
+        },
+        {
+          "bbox": [
+            124.896523,
+            1.39583,
+            125.177081,
+            1.472871
+          ],
+          "featureCount": 16,
+          "key": "bpjt-binamarga-manado-bitung",
+          "labels": [
+            "BPJT dan Direktorat Jenderal Bina Marga — CCTV Jalan Tol Manado-Bitung"
+          ],
+          "shardIds": [
+            "wb0z:0000",
+            "wb2b:0000",
+            "wb30:0000"
+          ]
+        },
+        {
+          "bbox": [
+            106.80173,
+            -6.35015,
+            106.82295,
+            -6.17926
+          ],
+          "featureCount": 2,
+          "key": "community-streetside-jakarta",
+          "labels": [
+            "Streetside Jakarta"
+          ],
+          "shardIds": [
+            "qqgg:0000",
+            "qqgu:0001"
+          ]
+        },
+        {
+          "bbox": [
+            116.822984,
+            -1.277922,
+            116.949704,
+            -1.211932
+          ],
+          "featureCount": 28,
+          "key": "dishub-balikpapan-official",
+          "labels": [
+            "Traffic Management Center Kota Balikpapan / B-Connect"
+          ],
+          "shardIds": [
+            "qxg0:0000",
+            "qxg1:0000"
+          ]
+        },
+        {
+          "bbox": [
+            107.457487,
+            -6.951108818432368,
+            107.650079,
+            -6.782605
+          ],
+          "featureCount": 40,
+          "key": "dishub-bandung-barat-official-public-hls",
+          "labels": [
+            "ATCS Dishub Kabupaten Bandung Barat"
+          ],
+          "shardIds": [
+            "qqu2:0000",
+            "qqu3:0000",
+            "qqu9:0000"
+          ]
+        },
+        {
+          "bbox": [
+            108.51961885112381,
+            -7.374103479690305,
+            108.639589,
+            -7.362612
+          ],
+          "featureCount": 9,
+          "key": "dishub-banjar-official",
+          "labels": [
+            "ATCS Kota Banjar"
+          ],
+          "shardIds": [
+            "qqtn:0000",
+            "qqtq:0000"
+          ]
+        },
+        {
+          "bbox": [
+            114.579188,
+            -3.372661018410213,
+            114.625723,
+            -3.277988
+          ],
+          "featureCount": 31,
+          "key": "dishub-banjarmasin-official",
+          "labels": [
+            "ATCS Banjarmasin — Pusat Pantau CCTV Lalu Lintas"
+          ],
+          "shardIds": [
+            "qx3k:0000",
+            "qx3m:0000",
+            "qx3s:0000",
+            "qx3t:0000"
+          ]
+        },
+        {
+          "bbox": [
+            109.080156,
+            -7.464169,
+            109.299249,
+            -7.399235
+          ],
+          "featureCount": 16,
+          "key": "dishub-banyumas-official",
+          "labels": [
+            "ATCS Kabupaten Banyumas"
+          ],
+          "shardIds": [
+            "qqtt:0000"
+          ]
+        },
+        {
+          "bbox": [
+            106.817786,
+            -6.530293,
+            106.855573,
+            -6.465406
+          ],
+          "featureCount": 6,
+          "key": "dishub-bogorkab-official-public-hls",
+          "labels": [
+            "ITS/ATCS Kabupaten Bogor"
+          ],
+          "shardIds": [
+            "qqgf:0000",
+            "qqgg:0000"
+          ]
+        },
+        {
+          "bbox": [
+            107.09708971060626,
+            -6.870633974656227,
+            107.3221740951167,
+            -6.800504584102977
+          ],
+          "featureCount": 27,
+          "key": "dishub-cianjurkab-official-public-hls",
+          "labels": [
+            "ATCS Kabupaten Cianjur"
+          ],
+          "shardIds": [
+            "qqu0:0000",
+            "qqu1:0000",
+            "qqu3:0000"
+          ]
+        },
+        {
+          "bbox": [
+            115.180975,
+            -8.700615,
+            115.269318,
+            -8.617052
+          ],
+          "featureCount": 102,
+          "key": "dishub-denpasar-official",
+          "labels": [
+            "ATCS Kota Denpasar"
+          ],
+          "shardIds": [
+            "qw3y:0000"
+          ]
+        },
+        {
+          "bbox": [
+            106.7698932,
+            -6.446229,
+            106.886423738782,
+            -6.339843
+          ],
+          "featureCount": 38,
+          "key": "dishub-depok-official",
+          "labels": [
+            "Dishub Kota Depok — CCTV Kota Depok"
+          ],
+          "shardIds": [
+            "qqgg:0000",
+            "qqu5:0000"
+          ]
+        },
+        {
+          "bbox": [
+            110.766685,
+            -7.129537,
+            110.918038,
+            -7.020135
+          ],
+          "featureCount": 22,
+          "key": "dishub-grobogan-official",
+          "labels": [
+            "CCTV ATCS Kabupaten Grobogan"
+          ],
+          "shardIds": [
+            "qqwz:0000",
+            "qqyb:0000"
+          ]
+        },
+        {
+          "bbox": [
+            111.98491,
+            -7.837318,
+            112.031125,
+            -7.811744
+          ],
+          "featureCount": 11,
+          "key": "dishub-kediri-official",
+          "labels": [
+            "Pusat Pengendalian Lalu Lintas Terpadu Kota Kediri"
+          ],
+          "shardIds": [
+            "qqxe:0000"
+          ]
+        },
+        {
+          "bbox": [
+            110.7826409,
+            -7.5894249,
+            110.8616848,
+            -7.5390557
+          ],
+          "featureCount": 73,
+          "key": "dishub-surakarta-official",
+          "labels": [
+            "Pantau Lalin Surakarta"
+          ],
+          "shardIds": [
+            "qqwu:0000",
+            "qqwv:0000"
+          ]
+        },
+        {
+          "bbox": [
+            106.37430726664705,
+            -6.340846178429047,
+            106.7086144921616,
+            -6.058173919005431
+          ],
+          "featureCount": 17,
+          "key": "dishub-tangerangkab-official",
+          "labels": [
+            "Dashboard CCTV Lalu Lintas Dinas Perhubungan Kabupaten Tangerang"
+          ],
+          "shardIds": [
+            "qqgg:0000",
+            "qqgs:0000",
+            "qqgt:0000",
+            "qqgu:0001",
+            "qqgv:0000"
+          ]
+        },
+        {
+          "bbox": [
+            108.19348812,
+            -7.34821456,
+            108.22813153,
+            -7.27380239
+          ],
+          "featureCount": 20,
+          "key": "dishub-tasikmalaya-atcs-official",
+          "labels": [
+            "ATCS Kota Tasikmalaya"
+          ],
+          "shardIds": [
+            "qqsy:0000"
+          ]
+        },
+        {
+          "bbox": [
+            99.613578,
+            2.921262,
+            99.713694,
+            2.986221
+          ],
+          "featureCount": 11,
+          "key": "diskominfo-asahan-official",
+          "labels": [
+            "CCTV Kabupaten Asahan"
+          ],
+          "shardIds": [
+            "w0wb:0000"
+          ]
+        },
+        {
+          "bbox": [
+            114.74062353,
+            -3.49491628,
+            114.8528713,
+            -3.43440915
+          ],
+          "featureCount": 47,
+          "key": "diskominfo-banjarbaru-official",
+          "labels": [
+            "CCTV Kota Banjarbaru"
+          ],
+          "shardIds": [
+            "qx3s:0000"
+          ]
+        },
+        {
+          "bbox": [
+            99.03741729675427,
+            2.9090234978581884,
+            99.0852585533,
+            3.0148345268
+          ],
+          "featureCount": 39,
+          "key": "diskominfo-pematangsiantar-pelintas-official",
+          "labels": [
+            "PELINTAS — CCTV Online Kota Pematangsiantar"
+          ],
+          "shardIds": [
+            "w0w2:0000",
+            "w0w3:0000"
+          ]
+        },
+        {
+          "bbox": [
+            115.38014815612101,
+            -2.174791237172263,
+            115.4167158841309,
+            -2.1641769022537707
+          ],
+          "featureCount": 9,
+          "key": "diskominfo-tabalong-atcs-official",
+          "labels": [
+            "CCTV Tabalong · ATCS Dishub"
+          ],
+          "shardIds": [
+            "qxd5:0000"
+          ]
+        },
+        {
+          "bbox": [
+            110.2145639,
+            -7.50324022,
+            110.2281657,
+            -7.43447642
+          ],
+          "featureCount": 15,
+          "key": "diskominsta-magelang-official",
+          "labels": [
+            "Geoportal Kota Magelang — Sebaran CCTV"
+          ],
+          "shardIds": [
+            "qqwm:0000"
+          ]
+        },
+        {
+          "bbox": [
+            106.826701,
+            -6.178582,
+            106.826701,
+            -6.178582
+          ],
+          "featureCount": 1,
+          "key": "national-metadata-verified-stream-offline",
+          "labels": [
+            "Bali Tower public embed directory"
+          ],
+          "shardIds": [
+            "qqgu:0000"
+          ]
+        },
+        {
+          "bbox": [
+            117.365,
+            -10.1772,
+            140.7181,
+            2.837
+          ],
+          "featureCount": 26,
+          "key": "national-official-badilag-public-player",
+          "labels": [
+            "Direktorat Jenderal Badan Peradilan Agama / Mahkamah Agung RI"
+          ],
+          "shardIds": [
+            "qwpy:0000",
+            "qxs8:0000",
+            "qz74:0000",
+            "qzv7:0000",
+            "qzz7:0000",
+            "rn7z:0000",
+            "rp2k:0000",
+            "rp6b:0000",
+            "rps1:0000",
+            "w8e2:0000",
+            "w8pe:0000"
+          ]
+        },
+        {
+          "bbox": [
+            95.4464904106,
+            -7.58479,
+            119.5232371,
+            5.513709
+          ],
+          "featureCount": 374,
+          "key": "national-official-bpjt-online-directory",
+          "labels": [
+            "BPJT / CCT",
+            "BPJT / CMNP",
+            "BPJT / HK",
+            "BPJT / JLB",
+            "BPJT / JTD",
+            "BPJT / MAN",
+            "BPJT / MHI",
+            "BPJT / MLJ",
+            "BPJT / MMS",
+            "BPJT / MTN",
+            "BPJT / MUN",
+            "BPJT / PPTR",
+            "BPJT / SMR",
+            "BPJT / TBS",
+            "BPJT / WBW",
+            "BPJT / WSP"
+          ],
+          "shardIds": [
+            "qpz7:0000",
+            "qpzk:0000",
+            "qqb5:0000",
+            "qqgc:0000",
+            "qqge:0000",
+            "qqgm:0000",
+            "qqgq:0000",
+            "qqgs:0000",
+            "qqgt:0000",
+            "qqgu:0000",
+            "qqgu:0001",
+            "qqgv:0000",
+            "qqu5:0000",
+            "qquh:0000",
+            "qquj:0000",
+            "qqv1:0000",
+            "qqv2:0000",
+            "qqv3:0000",
+            "qqv8:0000",
+            "qqvb:0000",
+            "qqxs:0000",
+            "qqxv:0000",
+            "qr2f:0000",
+            "qr65:0000",
+            "qr6m:0000",
+            "qr6q:0000",
+            "qw8p:0000",
+            "qxhf:0000",
+            "qxhg:0000",
+            "w0gz:0000",
+            "w0p9:0000",
+            "w0pf:0000",
+            "w0pv:0000",
+            "w0w9:0000",
+            "w0wb:0000",
+            "w204:0000",
+            "w20h:0000",
+            "w20n:0000",
+            "w20p:0000"
+          ]
+        },
+        {
+          "bbox": [
+            98.392,
+            -8.108,
+            127.63,
+            3.17
+          ],
+          "featureCount": 10,
+          "key": "national-official-magma-public-camera-directory",
+          "labels": [
+            "PVMBG / Badan Geologi / Kementerian ESDM"
+          ],
+          "shardIds": [
+            "qqfv:0000",
+            "qqsw:0000",
+            "qqsx:0000",
+            "qr33:0000",
+            "qr8n:0000",
+            "qw83:0000",
+            "qw86:0000",
+            "qw94:0000",
+            "w0tf:0000",
+            "wb6b:0000"
+          ]
+        },
+        {
+          "bbox": [
+            99.613578,
+            -9.172778,
+            118.7534,
+            2.986221
+          ],
+          "featureCount": 2262,
+          "key": "national-public-directory-live",
+          "labels": [
+            "Sumber publik terindeks OpenCCTV"
+          ],
+          "shardIds": [
+            "qqg7:0000",
+            "qqge:0000",
+            "qqgg:0000",
+            "qqgs:0000",
+            "qqgt:0000",
+            "qqgu:0000",
+            "qqgu:0001",
+            "qqgv:0000",
+            "qqsy:0000",
+            "qqtn:0000",
+            "qqtq:0000",
+            "qqu2:0000",
+            "qqu5:0000",
+            "qqu7:0000",
+            "qqu8:0000",
+            "qquh:0000",
+            "qquj:0000",
+            "qqvb:0000",
+            "qqw6:0000",
+            "qqw7:0000",
+            "qqw9:0000",
+            "qqwc:0000",
+            "qqwd:0000",
+            "qqwe:0000",
+            "qqwf:0000",
+            "qqwg:0000",
+            "qqwk:0000",
+            "qqws:0000",
+            "qqwu:0000",
+            "qqxh:0000",
+            "qqxk:0000",
+            "qqxs:0000",
+            "qqxt:0000",
+            "qqxv:0000",
+            "qqy0:0000",
+            "qqz1:0000",
+            "qr4y:0000",
+            "qr4z:0000",
+            "qr6b:0000",
+            "qr6m:0000",
+            "qr6q:0000",
+            "qr6s:0000",
+            "qr9w:0000",
+            "qrx2:0000",
+            "qw3v:0000",
+            "qw6g:0000",
+            "qw84:0000",
+            "qw85:0000",
+            "qw8f:0000",
+            "qw8g:0000",
+            "qw8h:0000",
+            "qw8j:0000",
+            "qw8k:0000",
+            "qw8n:0000",
+            "qw8p:0000",
+            "qw9b:0000",
+            "qwkr:0000",
+            "qx3m:0000",
+            "qx8t:0000",
+            "qxcd:0000",
+            "w0wb:0000",
+            "w20h:0000",
+            "w21y:0000"
+          ]
+        },
+        {
+          "bbox": [
+            107.528181,
+            -7.825719943855978,
+            110.40206193956693,
+            -6.892164
+          ],
+          "featureCount": 92,
+          "key": "national-verified",
+          "labels": [
+            "ATCS Dishub Kota Bandung",
+            "CCTV Berbasis Kewilayahan Pemerintah Kota Yogyakarta",
+            "CCTV Dashboard Pemerintah Kabupaten Bandung"
+          ],
+          "shardIds": [
+            "qqsx:0000",
+            "qqu2:0000",
+            "qqu8:0000",
+            "qqw7:0000",
+            "qqwe:0000"
+          ]
+        },
+        {
+          "bbox": [
+            122.7718496043937,
+            -1.0420481230519894,
+            122.90799013431837,
+            -0.9193442724073411
+          ],
+          "featureCount": 66,
+          "key": "pemkab-banggai-pantau-cctv-official",
+          "labels": [
+            "Pantau CCTV Pemerintah Kabupaten Banggai"
+          ],
+          "shardIds": [
+            "qxz6:0000"
+          ]
+        },
+        {
+          "bbox": [
+            114.933679,
+            -8.19305,
+            115.120243,
+            -8.093357
+          ],
+          "featureCount": 12,
+          "key": "pemkab-buleleng-official",
+          "labels": [
+            "Satu Data Buleleng — Pemantauan CCTV"
+          ],
+          "shardIds": [
+            "qw99:0000",
+            "qw9c:0000"
+          ]
+        },
+        {
+          "bbox": [
+            109.650934,
+            -7.670680550168708,
+            109.66064417508508,
+            -7.667575
+          ],
+          "featureCount": 24,
+          "key": "pemkab-kebumen-official-whep",
+          "labels": [
+            "CCTV Pemerintah Kabupaten Kebumen"
+          ],
+          "shardIds": [
+            "qqtu:0000"
+          ]
+        },
+        {
+          "bbox": [
+            108.4546721897343,
+            -7.004740648348832,
+            108.52363591233689,
+            -6.849224
+          ],
+          "featureCount": 43,
+          "key": "pemkab-kuningan-official",
+          "labels": [
+            "CCTV Kabupaten Kuningan"
+          ],
+          "shardIds": [
+            "qqv0:0000",
+            "qqv1:0000"
+          ]
+        },
+        {
+          "bbox": [
+            115.389232,
+            -3.784367,
+            116.010343,
+            -3.40144
+          ],
+          "featureCount": 7,
+          "key": "pemkab-tanahbumbu-official",
+          "labels": [
+            "Portal CCTV Pemerintah Kabupaten Tanah Bumbu"
+          ],
+          "shardIds": [
+            "qx64:0000",
+            "qx67:0000",
+            "qx6k:0000"
+          ]
+        },
+        {
+          "bbox": [
+            111.7738445,
+            -7.0872978,
+            112.0981248,
+            -6.8818834
+          ],
+          "featureCount": 14,
+          "key": "pemkab-tuban-official-tokenized-hls",
+          "labels": [
+            "Peta Sebaran CCTV Pemerintah Kabupaten Tuban"
+          ],
+          "shardIds": [
+            "qqxx:0000",
+            "qqz2:0000",
+            "qqz8:0000"
+          ]
+        },
+        {
+          "bbox": [
+            108.5424166,
+            -6.7419625,
+            108.5632943,
+            -6.6994271
+          ],
+          "featureCount": 10,
+          "key": "pemkot-cirebon-official",
+          "labels": [
+            "Cirebon Matahatiku"
+          ],
+          "shardIds": [
+            "qqv1:0000"
+          ]
+        },
+        {
+          "bbox": [
+            103.58335254847104,
+            -1.632586,
+            103.630222,
+            -1.6097328652774179
+          ],
+          "featureCount": 7,
+          "key": "pemkot-jambi-official-public-hls",
+          "labels": [
+            "CCTV Pemerintah Kota Jambi"
+          ],
+          "shardIds": [
+            "qr9w:0000"
+          ]
+        },
+        {
+          "bbox": [
+            112.59424422085,
+            -8.0326239922323,
+            112.68398991818,
+            -7.9204336552247
+          ],
+          "featureCount": 247,
+          "key": "pemkot-malang-cctv-official",
+          "labels": [
+            "CCTV Kota Malang — Portal Resmi CCTV Lalu Lintas & Publik"
+          ],
+          "shardIds": [
+            "qw84:0000"
+          ]
+        },
+        {
+          "bbox": [
+            100.3533577,
+            -0.9616575,
+            100.43538925212835,
+            -0.8754447
+          ],
+          "featureCount": 9,
+          "key": "pemkot-padang-official",
+          "labels": [
+            "Stream CCTV Pemerintah Kota Padang"
+          ],
+          "shardIds": [
+            "qpz6:0000",
+            "qpz7:0000"
+          ]
+        },
+        {
+          "bbox": [
+            104.68819312611218,
+            -3.065439665748101,
+            104.82961757089058,
+            -2.913313005325259
+          ],
+          "featureCount": 29,
+          "key": "pemkot-palembang-official",
+          "labels": [
+            "Portal CCTV Kota Palembang"
+          ],
+          "shardIds": [
+            "qr6q:0000",
+            "qr6r:0000",
+            "qr6w:0000",
+            "qr6x:0000"
+          ]
+        },
+        {
+          "bbox": [
+            109.64892594282637,
+            -6.903995,
+            109.701729,
+            -6.884588268208483
+          ],
+          "featureCount": 41,
+          "key": "pemkot-pekalongan-official",
+          "labels": [
+            "CCTV Kota Pekalongan — Public Monitoring"
+          ],
+          "shardIds": [
+            "qqvb:0000",
+            "qqy0:0000"
+          ]
+        },
+        {
+          "bbox": [
+            110.31560102777037,
+            -7.074309653496582,
+            110.4896678,
+            -6.956617414460944
+          ],
+          "featureCount": 55,
+          "key": "pemkot-semarang-pantau-semar-official",
+          "labels": [
+            "Pantau Semar — PANTAU LALIN"
+          ],
+          "shardIds": [
+            "qqwx:0000",
+            "qqy2:0000",
+            "qqy8:0000"
+          ]
+        }
+      ],
+      "unassignedFeatureCount": 0
+    }
+  },
+  "generatorVersion": "1.1.0",
+  "integrity": {
+    "canonicalization": "recursive-object-key-sort-and-feature-id-sort",
+    "digestAlgorithm": "sha256",
+    "featureAssignment": "exactly-once"
+  },
+  "partitioning": {
+    "featureOrder": "feature.id-code-unit-ascending",
+    "geohashPrecision": 4,
+    "maxFeaturesPerShard": 500,
+    "strategy": "geohash-with-bounded-id-chunks"
+  },
+  "runtime": {
+    "assetNamespace": "runtime/bbb1389ae21cfdbeaef80fcbb6554396d1924cf8f46fd89280ef080e19ad38da",
+    "feed": {
+      "featureOrder": "name-then-id-code-unit-ascending",
+      "featurePages": {
+        "pageSize": 25
+      },
+      "regionDirectory": {
+        "pageCount": 2,
+        "pageSize": 64,
+        "pathTemplate": "runtime/bbb1389ae21cfdbeaef80fcbb6554396d1924cf8f46fd89280ef080e19ad38da/directory/{page}.json",
+        "regionCount": 68
+      },
+      "regionOrder": "verified-live-count-desc-feature-count-desc-region-code-unit-ascending",
+      "verifiedLiveCount": 1203
+    },
+    "lookup": {
+      "algorithm": "fnv1a-32-high-byte",
+      "bucketCount": 256,
+      "pathTemplate": "runtime/bbb1389ae21cfdbeaef80fcbb6554396d1924cf8f46fd89280ef080e19ad38da/lookup/{bucket}.json"
+    },
+    "schemaVersion": "1.0"
+  },
+  "schemaVersion": "1.0",
+  "shardCount": 166,
+  "shards": [
+    {
+      "bbox": [
+        100.3533577,
+        -0.9616575,
+        100.43538925212835,
+        -0.8964716511733156
+      ],
+      "byteLength": 21380,
+      "contentSha256": "5c77540c43a8dc24f97ccc47c70c1a4726569696ee687755aaebfc6894497e9b",
+      "featureCount": 8,
+      "featureIdSetSha256": "300391a54fb3528296b79293be8028e8bd84365285230f43533d18df609991f6",
+      "firstFeatureId": "pemkot-padang-1-uptd-pasar-alai",
+      "geohash": "qpz6",
+      "id": "qpz6:0000",
+      "lastFeatureId": "pemkot-padang-9-bapenda",
+      "part": 0,
+      "path": "shards/qpz6/0000.5c77540c43a8dc24.geojson"
+    },
+    {
+      "bbox": [
+        100.30575,
+        -0.8754447,
+        100.3878065,
+        -0.7587
+      ],
+      "byteLength": 13108,
+      "contentSha256": "fbb680260746ff8fbadafd6da7fb2b10175ccd3d8f9f01951ad40034d189daee",
+      "featureCount": 13,
+      "featureIdSetSha256": "3023ffeb26be9c756b596b26a5da0be849b2b24a9e2a09639bb6b70199591a9c",
+      "firstFeatureId": "cctv-national-57c030001a825d92471f683c",
+      "geohash": "qpz7",
+      "id": "qpz7:0000",
+      "lastFeatureId": "pemkot-padang-8-balaikota-lapangan-apel",
+      "part": 0,
+      "path": "shards/qpz7/0000.fbb680260746ff8f.geojson"
+    },
+    {
+      "bbox": [
+        100.3060466,
+        -0.5281584,
+        100.3060466,
+        -0.5281584
+      ],
+      "byteLength": 862,
+      "contentSha256": "149bde557a27f7b26e1a671b7101ef77279ce4812a9db91985118f6be1f3896f",
+      "featureCount": 1,
+      "featureIdSetSha256": "039e234d9cba3f687fc7f74645c469a40c1f8c53aa841174ffb4f202dd72f9a8",
+      "firstFeatureId": "cctv-national-62d289f6ee68b1ded53fb8d8",
+      "geohash": "qpzk",
+      "id": "qpzk:0000",
+      "lastFeatureId": "cctv-national-62d289f6ee68b1ded53fb8d8",
+      "part": 0,
+      "path": "shards/qpzk/0000.149bde557a27f7b2.geojson"
+    },
+    {
+      "bbox": [
+        101.447344,
+        -6.44793,
+        101.447344,
+        -6.44793
+      ],
+      "byteLength": 847,
+      "contentSha256": "83f45b690532b3306a2171be6fd760bb804bdeb5625fc9b2be0bf0c5fd7f31e2",
+      "featureCount": 1,
+      "featureIdSetSha256": "0886f5700c05f8d3cc9d70f1dca41b8356fdadf8f1d17796033c1f1fa5dcdea9",
+      "firstFeatureId": "cctv-national-361c76c6ed79df588d66d11c",
+      "geohash": "qqb5",
+      "id": "qqb5:0000",
+      "lastFeatureId": "cctv-national-361c76c6ed79df588d66d11c",
+      "part": 0,
+      "path": "shards/qqb5/0000.83f45b690532b330.geojson"
+    },
+    {
+      "bbox": [
+        105.423,
+        -6.102,
+        105.423,
+        -6.102
+      ],
+      "byteLength": 979,
+      "contentSha256": "5246ee45e1b952123589a05b5aaa20072f372a9fa2a9e4e7b9104b96a655d195",
+      "featureCount": 1,
+      "featureIdSetSha256": "d38647c68be3d5b9534f8ee5fca8e9389d11e01028ae3cc1879f01c93d8d4ee3",
+      "firstFeatureId": "cctv-national-8a2acc2ca8e62819b15656d0",
+      "geohash": "qqfv",
+      "id": "qqfv:0000",
+      "lastFeatureId": "cctv-national-8a2acc2ca8e62819b15656d0",
+      "part": 0,
+      "path": "shards/qqfv/0000.5246ee45e1b95212.geojson"
+    },
+    {
+      "bbox": [
+        106.15,
+        -6.35,
+        106.17,
+        -6.33
+      ],
+      "byteLength": 10019,
+      "contentSha256": "f4c83da0855c6611eb711e96ad2b42604fd3ef741bd9d552b0619d87aae453a2",
+      "featureCount": 11,
+      "featureIdSetSha256": "6f0ea6e3092fdf61b77fced7b11cf4f10aff23882102654957e84cf42aec1447",
+      "firstFeatureId": "cctv-national-161f0b594433b598868d9531",
+      "geohash": "qqg7",
+      "id": "qqg7:0000",
+      "lastFeatureId": "cctv-national-fe3d7724867f02551de955ba",
+      "part": 0,
+      "path": "shards/qqg7/0000.f4c83da0855c6611.geojson"
+    },
+    {
+      "bbox": [
+        106.815062,
+        -6.7118654,
+        106.815062,
+        -6.7118654
+      ],
+      "byteLength": 838,
+      "contentSha256": "fc0c3d6e593738ddee23ff493037694bb78c9126ff11c31f8fad1f19e3fb2329",
+      "featureCount": 1,
+      "featureIdSetSha256": "88ed85d3e11266489b5b59ae11c303740a502c861b8f3bca965afc16973531cd",
+      "firstFeatureId": "cctv-national-971aaaf4264af815ce8702fc",
+      "geohash": "qqgc",
+      "id": "qqgc:0000",
+      "lastFeatureId": "cctv-national-971aaaf4264af815ce8702fc",
+      "part": 0,
+      "path": "shards/qqgc/0000.fc0c3d6e593738dd.geojson"
+    },
+    {
+      "bbox": [
+        106.173,
+        -6.352358,
+        106.4989,
+        -6.329
+      ],
+      "byteLength": 2783,
+      "contentSha256": "f30e9f910253e48187639a32936b5d9817da025af6cf54f97a15cd3f930b87db",
+      "featureCount": 3,
+      "featureIdSetSha256": "5cd98c656aa1e10d729f775843f9a580996916883e29aeeb3b8f28d700608ee3",
+      "firstFeatureId": "cctv-national-07893ef8812803f209ea421a",
+      "geohash": "qqge",
+      "id": "qqge:0000",
+      "lastFeatureId": "cctv-national-f6a7269ff38df1557bf560f1",
+      "part": 0,
+      "path": "shards/qqge/0000.f30e9f910253e481.geojson"
+    },
+    {
+      "bbox": [
+        106.82958,
+        -6.530293,
+        106.836096,
+        -6.518387
+      ],
+      "byteLength": 7719,
+      "contentSha256": "a973c28fbaefceb37f66dc3c903cbcb89b0a2d972c34e4e076111285d543f086",
+      "featureCount": 2,
+      "featureIdSetSha256": "8ef489aa159f07e215a035cb9ad70af1221d5274abbd6468b8118d9167c55bff",
+      "firstFeatureId": "dishub-bogorkab-kantor-dishub",
+      "geohash": "qqgf",
+      "id": "qqgf:0000",
+      "lastFeatureId": "dishub-bogorkab-sentul",
+      "part": 0,
+      "path": "shards/qqgf/0000.a973c28fbaefceb3.geojson"
+    },
+    {
+      "bbox": [
+        106.577116757553,
+        -6.485058,
+        106.8678,
+        -6.328149093930835
+      ],
+      "byteLength": 125324,
+      "contentSha256": "ea69aadc856d848a3dbb991a00e5da5b1cc39fbec20ecdd06b872444ab1658bf",
+      "featureCount": 58,
+      "featureIdSetSha256": "fcf6ee17990cae76ef7fed7aa1881912d38b9d92395ebc9964cd752eb52cf9f5",
+      "firstFeatureId": "cctv-national-061c55fe8c03088759851514",
+      "geohash": "qqgg",
+      "id": "qqgg:0000",
+      "lastFeatureId": "streetside-jakarta-63",
+      "part": 0,
+      "path": "shards/qqgg/0000.ea69aadc856d848a.geojson"
+    },
+    {
+      "bbox": [
+        105.85449908,
+        -6.16524166,
+        105.85449908,
+        -6.16524166
+      ],
+      "byteLength": 1188,
+      "contentSha256": "1edb31a375c2a79852b24f4267a94876f25b695f18bd5f60c2b1ff279a36d78e",
+      "featureCount": 1,
+      "featureIdSetSha256": "d1666c278ee2221b3f7f896e2b65f85f813f9bbebfb51b9ceb5291415160fae6",
+      "firstFeatureId": "binamarga-national-directory-ch-74/ch-jembatan-tawing-cilegon",
+      "geohash": "qqgk",
+      "id": "qqgk:0000",
+      "lastFeatureId": "binamarga-national-directory-ch-74/ch-jembatan-tawing-cilegon",
+      "part": 0,
+      "path": "shards/qqgk/0000.1edb31a375c2a798.geojson"
+    },
+    {
+      "bbox": [
+        106.0206789,
+        -6.023313,
+        106.089168,
+        -5.980932
+      ],
+      "byteLength": 2345,
+      "contentSha256": "cdbea83c3dee793ad33611a3b7ae8899ee0e1cb193a9189c14d5420487ddbef9",
+      "featureCount": 3,
+      "featureIdSetSha256": "e6e4b6ac441a3c5a5f7f2d2ac8e6fcef15cc609748863d36522ee9a851f6a2f9",
+      "firstFeatureId": "cctv-national-968268a47c52f1a441e718eb",
+      "geohash": "qqgm",
+      "id": "qqgm:0000",
+      "lastFeatureId": "cctv-national-b4b4deda8571bb069dc044c4",
+      "part": 0,
+      "path": "shards/qqgm/0000.cdbea83c3dee793a.geojson"
+    },
+    {
+      "bbox": [
+        105.995105,
+        -5.973052,
+        106.008518,
+        -5.928191
+      ],
+      "byteLength": 2765,
+      "contentSha256": "fcae89536c48f4f49e7953eae99b85ff8dc936b2a6824014f94ff361a5a90ff1",
+      "featureCount": 3,
+      "featureIdSetSha256": "ba70d058ad86c2506c7b6a03f27cde8252d864aebb09f2afd9f3b9cd7cb87184",
+      "firstFeatureId": "binamarga-national-directory-kemenhub-107/kemenhub-dermaga-1-2-kota-cilegon-banten",
+      "geohash": "qqgq",
+      "id": "qqgq:0000",
+      "lastFeatureId": "cctv-national-6ac397ae2406033a58d9823b",
+      "part": 0,
+      "path": "shards/qqgq/0000.fcae89536c48f4f4.geojson"
+    },
+    {
+      "bbox": [
+        106.174,
+        -6.32625351245136,
+        106.523394,
+        -6.1594276
+      ],
+      "byteLength": 71549,
+      "contentSha256": "a847c12bc7033a820a9ff4a17d74a9d2dda42318a2c1916b26a1a6bbab332833",
+      "featureCount": 66,
+      "featureIdSetSha256": "a0306655f0da93c41b46aa82fcaa85873ef67a8877bc38c7f19b7da48923105d",
+      "firstFeatureId": "cctv-national-01004693388fd27676acdb07",
+      "geohash": "qqgs",
+      "id": "qqgs:0000",
+      "lastFeatureId": "dishub-tangerangkab-official-01k4mapmw669p23ks3dkpkb066-01k4p20xkjzafpgg5bayy3kj8q-simpang-bugel-tigaraksa",
+      "part": 0,
+      "path": "shards/qqgs/0000.a847c12bc7033a82.geojson"
+    },
+    {
+      "bbox": [
+        106.172,
+        -6.151728,
+        106.512213261412,
+        -6.05810286105984
+      ],
+      "byteLength": 11693,
+      "contentSha256": "d3e4c03f0eceb0125038ca5f737c552c5e90781e8db40a9bc7d7842379db5adf",
+      "featureCount": 11,
+      "featureIdSetSha256": "115522fd1c80756c881f2f5d34b69a5be214f645bbaf3e2dee7aecf3ef71a72b",
+      "firstFeatureId": "cctv-national-672b4e8cce329bf70d2fe35e",
+      "geohash": "qqgt",
+      "id": "qqgt:0000",
+      "lastFeatureId": "dishub-tangerangkab-official-01jzvqg6wswbn9vc37nyyf0qg1-tugu-mauk",
+      "part": 0,
+      "path": "shards/qqgt/0000.d3e4c03f0eceb012.geojson"
+    },
+    {
+      "bbox": [
+        106.5237,
+        -6.32754,
+        106.87498,
+        -6.15422
+      ],
+      "byteLength": 467395,
+      "contentSha256": "92922338cd803161a1ce42f848d8f9332c396908451ba9691b13f98e41cc785e",
+      "featureCount": 500,
+      "featureIdSetSha256": "1a6e9ffa38bd164f42b24852fdfabcde85de76da201165b01696ce6350847e66",
+      "firstFeatureId": "balitower-monas-barat-010-506633",
+      "geohash": "qqgu",
+      "id": "qqgu:0000",
+      "lastFeatureId": "cctv-national-e582e035b691a36b21ba56a8",
+      "part": 0,
+      "path": "shards/qqgu/0000.92922338cd803161.geojson"
+    },
+    {
+      "bbox": [
+        106.53052988545585,
+        -6.32412,
+        106.87169,
+        -6.15535
+      ],
+      "byteLength": 67134,
+      "contentSha256": "55ba4fbb17055fecb819764be19fd37b1abb619b9779631e1c6d6f332da97e86",
+      "featureCount": 67,
+      "featureIdSetSha256": "4b36f0c6f7576f1881c49f46c1a9fc5d532784145d01198cc4bb69a91170228b",
+      "firstFeatureId": "cctv-national-e732b41bc7ea39b14f65ed27",
+      "geohash": "qqgu",
+      "id": "qqgu:0001",
+      "lastFeatureId": "streetside-jakarta-96",
+      "part": 1,
+      "path": "shards/qqgu/0001.55ba4fbb17055fec.geojson"
+    },
+    {
+      "bbox": [
+        106.526636892137,
+        -6.15216,
+        106.87385,
+        -6.09213614542757
+      ],
+      "byteLength": 59147,
+      "contentSha256": "005ad49d1cc4ca96248f53e7922e2de91a48e41cb4edae2aad999fe70036e5e7",
+      "featureCount": 58,
+      "featureIdSetSha256": "4020f9071fe51be0ac929a62c144fa62e12a56fa08dfeeb13c4298f20b2bf3c4",
+      "firstFeatureId": "cctv-national-1537b929051685dde2a6bdca",
+      "geohash": "qqgv",
+      "id": "qqgv:0000",
+      "lastFeatureId": "dishub-tangerangkab-official-01jsrcpqn62mej02bc0h565epz-01jsrctg4pc3xdf5vkjjg4pcfd-simpang-dadap",
+      "part": 0,
+      "path": "shards/qqgv/0000.005ad49d1cc4ca96.geojson"
+    },
+    {
+      "bbox": [
+        107.73,
+        -7.32,
+        107.73,
+        -7.32
+      ],
+      "byteLength": 974,
+      "contentSha256": "39d12d2988cb69732e4c1c0ce803f700d5ffcfa6cf02d03244df1595696f67c4",
+      "featureCount": 1,
+      "featureIdSetSha256": "05853a2abbc9fbe816f8fe88c44bdb00813c9687755cfe1120c99dba80b09935",
+      "firstFeatureId": "cctv-national-34a22add80bf363da2698d87",
+      "geohash": "qqsw",
+      "id": "qqsw:0000",
+      "lastFeatureId": "cctv-national-34a22add80bf363da2698d87",
+      "part": 0,
+      "path": "shards/qqsw/0000.39d12d2988cb6973.geojson"
+    },
+    {
+      "bbox": [
+        107.71325,
+        -7.143,
+        107.84,
+        -7.03564
+      ],
+      "byteLength": 4809,
+      "contentSha256": "a7e1293feb0d32dedfcc7cb30e69e1db17b0faa502454ac09d92b37da8ab602d",
+      "featureCount": 3,
+      "featureIdSetSha256": "64426c6181db90bffa1f8bfe9d6054b5a2a2b24eeda6c387f50212c8cb311083",
+      "firstFeatureId": "cctv-national-143731c4d7db7c9af57dda75",
+      "geohash": "qqsx",
+      "id": "qqsx:0000",
+      "lastFeatureId": "dishub-bandungkab-majalaya",
+      "part": 0,
+      "path": "shards/qqsx/0000.a7e1293feb0d32de.geojson"
+    },
+    {
+      "bbox": [
+        108.19348812,
+        -7.34821456,
+        108.22813153,
+        -7.27380239
+      ],
+      "byteLength": 62905,
+      "contentSha256": "a5c8772600e9817b50fe51d712f88c0c0195a556589159bab6693ca270b28371",
+      "featureCount": 39,
+      "featureIdSetSha256": "48017502e984ca6db9ab427efda0bb84b0ceac8d7b4152f23ec5f6366cf288ff",
+      "firstFeatureId": "cctv-national-02f15b68dc0cfb560d2af67c",
+      "geohash": "qqsy",
+      "id": "qqsy:0000",
+      "lastFeatureId": "dishub-tasikmalaya-simpang-wasita-kusuma",
+      "part": 0,
+      "path": "shards/qqsy/0000.a5c8772600e9817b.geojson"
+    },
+    {
+      "bbox": [
+        108.59778247,
+        -7.47797005,
+        108.59778247,
+        -7.47797005
+      ],
+      "byteLength": 1201,
+      "contentSha256": "5ec28ce80be955f9e9efb17ce7616cb2b32c1697ce34b01d7d2e390dc64a77f4",
+      "featureCount": 1,
+      "featureIdSetSha256": "f65afd0aa755876a0f803ec424b263ae1f72b085525081ff25430190d807bfad",
+      "firstFeatureId": "binamarga-national-directory-ch-51/ch-jembatan-ciputra-haji-ciamis",
+      "geohash": "qqtj",
+      "id": "qqtj:0000",
+      "lastFeatureId": "binamarga-national-directory-ch-51/ch-jembatan-ciputra-haji-ciamis",
+      "part": 0,
+      "path": "shards/qqtj/0000.5ec28ce80be955f9.geojson"
+    },
+    {
+      "bbox": [
+        108.51958,
+        -7.3742,
+        108.54375,
+        -7.363644
+      ],
+      "byteLength": 25089,
+      "contentSha256": "7d467afc83c6866913ffeffdc847636e05da394ecfa403ffbd7fc22bf0efa8c1",
+      "featureCount": 14,
+      "featureIdSetSha256": "bebf15ae8132f39e1403bca60186472c08453388fa26b7af845eac8c767f1f63",
+      "firstFeatureId": "binamarga-national-directory-ch-52/ch-jembatan-citanduy-banjar",
+      "geohash": "qqtn",
+      "id": "qqtn:0000",
+      "lastFeatureId": "dishub-banjar-simpang-pln-2--737224",
+      "part": 0,
+      "path": "shards/qqtn/0000.7d467afc83c68669.geojson"
+    },
+    {
+      "bbox": [
+        108.639589,
+        -7.36263,
+        108.63962,
+        -7.362612
+      ],
+      "byteLength": 3806,
+      "contentSha256": "00d2d83c17332bba842977c254ca361248533e46e179742b3ec1b63c897b347c",
+      "featureCount": 2,
+      "featureIdSetSha256": "af2d954283ad7ca78732ac570415f5c241ca7d72b73fa18e6610bd0851d9e65c",
+      "firstFeatureId": "cctv-national-5510c1deaadbd0946c7d5cf4",
+      "geohash": "qqtq",
+      "id": "qqtq:0000",
+      "lastFeatureId": "dishub-banjar-langensari--736261",
+      "part": 0,
+      "path": "shards/qqtq/0000.00d2d83c17332bba.geojson"
+    },
+    {
+      "bbox": [
+        109.05618334,
+        -7.53840023,
+        109.299249,
+        -7.399235
+      ],
+      "byteLength": 42915,
+      "contentSha256": "b7f71db2948b7d49e32120bdf2c7bcd24f898c36bc6e65e250d65fca270ff307",
+      "featureCount": 19,
+      "featureIdSetSha256": "08109932dde97ee8870c207bc7ac37a1f8550ef8f196337b37e3b579ab4c8d54",
+      "firstFeatureId": "binamarga-national-directory-ch-53/ch-jembatan-karang-bawang-banyumas",
+      "geohash": "qqtt",
+      "id": "qqtt:0000",
+      "lastFeatureId": "dishub-banyumas-underpass--742377-10922347",
+      "part": 0,
+      "path": "shards/qqtt/0000.b7f71db2948b7d49.geojson"
+    },
+    {
+      "bbox": [
+        109.650934,
+        -7.670680550168708,
+        109.66064417508508,
+        -7.667575
+      ],
+      "byteLength": 72018,
+      "contentSha256": "525e74933c79cf3c82297ef86d5c1a0a6d4f8334a08087a3a63f7767e8f5a5f3",
+      "featureCount": 24,
+      "featureIdSetSha256": "6fac55f8dbcb55a6014adb53ada5029d68cc7494ce6993a421239c7906b74b57",
+      "firstFeatureId": "pemkab-kebumen-cam1-soetta",
+      "geohash": "qqtu",
+      "id": "qqtu:0000",
+      "lastFeatureId": "pemkab-kebumen-cam9-alun-alun-selatan-barat",
+      "part": 0,
+      "path": "shards/qqtu/0000.525e74933c79cf3c.geojson"
+    },
+    {
+      "bbox": [
+        108.992992,
+        -7.16315007,
+        108.992992,
+        -7.16315007
+      ],
+      "byteLength": 1188,
+      "contentSha256": "32db60a074b2840608c745e9a3a9ac0a4010c94fef697d72fd44f887d688b076",
+      "featureCount": 1,
+      "featureIdSetSha256": "fa327e160535e55af64d8feb28946c6a9ccb312d5f1f0ec2223493b1b00572c0",
+      "firstFeatureId": "binamarga-national-directory-ch-78/ch-jembatan-pedes-brebes",
+      "geohash": "qqtx",
+      "id": "qqtx:0000",
+      "lastFeatureId": "binamarga-national-directory-ch-78/ch-jembatan-pedes-brebes",
+      "part": 0,
+      "path": "shards/qqtx/0000.32db60a074b28406.geojson"
+    },
+    {
+      "bbox": [
+        107.09708971060626,
+        -6.870633974656227,
+        107.09708971060626,
+        -6.870633974656227
+      ],
+      "byteLength": 3150,
+      "contentSha256": "ac13e564e7d446c151ff4301edd4921ede84766a79b5a32c51263906515f4262",
+      "featureCount": 1,
+      "featureIdSetSha256": "f7abed8af5a569c2c4727a287d0e33df766ddd3a793dec057883592e7824a4d8",
+      "firstFeatureId": "dishub-cianjurkab-simpang-4-warungkondang",
+      "geohash": "qqu0",
+      "id": "qqu0:0000",
+      "lastFeatureId": "dishub-cianjurkab-simpang-4-warungkondang",
+      "part": 0,
+      "path": "shards/qqu0/0000.ac13e564e7d446c1.geojson"
+    },
+    {
+      "bbox": [
+        107.13081583863968,
+        -6.828265534282023,
+        107.17798258189062,
+        -6.800504584102977
+      ],
+      "byteLength": 78872,
+      "contentSha256": "efc15f54da0393a85ecff92e569a2cac52c5cea6fe716f216ad31ea8668e5505",
+      "featureCount": 25,
+      "featureIdSetSha256": "9d99f5d6015b001ea06c4563d45bd4c787365c42f0539d8cf452bc1d88bbbfde",
+      "firstFeatureId": "dishub-cianjurkab-bundaran-lampu-gentur",
+      "geohash": "qqu1",
+      "id": "qqu1:0000",
+      "lastFeatureId": "dishub-cianjurkab-tugu-tauco-arah-ramayana",
+      "part": 0,
+      "path": "shards/qqu1/0000.efc15f54da0393a8.geojson"
+    },
+    {
+      "bbox": [
+        107.457487,
+        -7.029756,
+        107.5778066,
+        -6.880703
+      ],
+      "byteLength": 80426,
+      "contentSha256": "7fddc57fa52b9dad84f433a56116ba5974409b1e6828a94e0f83b8c2bc95d324",
+      "featureCount": 44,
+      "featureIdSetSha256": "acb87b0d383a33e3551f4349c7827bdcbe512b17fb6d9500709fe300e981617a",
+      "firstFeatureId": "binamarga-national-directory-ch-85/ch-jembatan-batujajar-bandung-barat",
+      "geohash": "qqu2",
+      "id": "qqu2:0000",
+      "lastFeatureId": "dishub-bandungkab-tol-soroja",
+      "part": 0,
+      "path": "shards/qqu2/0000.7fddc57fa52b9dad.geojson"
+    },
+    {
+      "bbox": [
+        107.3221740951167,
+        -6.850531,
+        107.55546751094498,
+        -6.70054404
+      ],
+      "byteLength": 84092,
+      "contentSha256": "bab3db85e353bdcf5ade1d421aa9a331931ae6f80d80aa3d928e4008016f3d8e",
+      "featureCount": 22,
+      "featureIdSetSha256": "cb2dfce1c41a741afe563ab2b67044ec686e3e63de7f3915024ba296a9fbce4e",
+      "firstFeatureId": "binamarga-national-directory-ch-84/ch-jembatan-cisomang-purwakarta",
+      "geohash": "qqu3",
+      "id": "qqu3:0000",
+      "lastFeatureId": "dishub-cianjurkab-sp-3-ciranjang-arah-bandung",
+      "part": 0,
+      "path": "shards/qqu3/0000.bab3db85e353bdcf.geojson"
+    },
+    {
+      "bbox": [
+        106.8827,
+        -6.432147591723,
+        107.033873,
+        -6.3338
+      ],
+      "byteLength": 55917,
+      "contentSha256": "4f237841409fddb4fcceb3c5615d34652ac6f70a108052d12aec98151cc8a3ed",
+      "featureCount": 57,
+      "featureIdSetSha256": "f1e4db54514c345afdbff5e80150caf32799d27afcb511788e8c9745b7d444cc",
+      "firstFeatureId": "cctv-national-0194ab4f386cafcef86210f1",
+      "geohash": "qqu5",
+      "id": "qqu5:0000",
+      "lastFeatureId": "dishub-depok-10301877-taman-tapos-2",
+      "part": 0,
+      "path": "shards/qqu5/0000.4f237841409fddb4.geojson"
+    },
+    {
+      "bbox": [
+        107.43358546,
+        -6.56135916,
+        107.43358546,
+        -6.56135916
+      ],
+      "byteLength": 1195,
+      "contentSha256": "40092af8de10fac3d797ec35ae47e06bb8314d408e5b2f32c2d77fad20bdafe9",
+      "featureCount": 1,
+      "featureIdSetSha256": "a1cc5906aa6777cd98b1554cf71f99e9adb3071370f57d0ccb368ae092307764",
+      "firstFeatureId": "binamarga-national-directory-ch-71/ch-jembatan-cikao-purwakarta",
+      "geohash": "qqu6",
+      "id": "qqu6:0000",
+      "lastFeatureId": "binamarga-national-directory-ch-71/ch-jembatan-cikao-purwakarta",
+      "part": 0,
+      "path": "shards/qqu6/0000.40092af8de10fac3.geojson"
+    },
+    {
+      "bbox": [
+        107.3444886,
+        -6.43413207692439,
+        107.54910637,
+        -6.35050184
+      ],
+      "byteLength": 6293,
+      "contentSha256": "7e24fc7c30fcb84005cc3014d56e5242306a5d468ae345e74196ec2fe45bc952",
+      "featureCount": 6,
+      "featureIdSetSha256": "c1079eb90e9023425b7c790c00ba58b1e2b25e161ec835099c27ea4a9d29790c",
+      "firstFeatureId": "binamarga-national-directory-ch-80/ch-jembatan-cilamaya-karawang",
+      "geohash": "qqu7",
+      "id": "qqu7:0000",
+      "lastFeatureId": "cctv-national-cf9af49a37bd2f6961e3ac2b",
+      "part": 0,
+      "path": "shards/qqu7/0000.7e24fc7c30fcb840.geojson"
+    },
+    {
+      "bbox": [
+        107.578661,
+        -6.985117,
+        107.81623,
+        -6.85572
+      ],
+      "byteLength": 444031,
+      "contentSha256": "e68af22c57fbe79280e38daf7dba9d1ac221d62c7fd79efb0c3a64d00c8e1337",
+      "featureCount": 422,
+      "featureIdSetSha256": "8b5587595f6b5297c2736c0ca6f2a649f9c95bb29bddaf3cd5dfe68df2939c61",
+      "firstFeatureId": "atcs-bandung-aceh-merdeka",
+      "geohash": "qqu8",
+      "id": "qqu8:0000",
+      "lastFeatureId": "dishub-bandungkab-rancamanyar",
+      "part": 0,
+      "path": "shards/qqu8/0000.e68af22c57fbe792.geojson"
+    },
+    {
+      "bbox": [
+        107.57853668156966,
+        -6.832358026689465,
+        107.650079,
+        -6.782605
+      ],
+      "byteLength": 46610,
+      "contentSha256": "a55735eb9e68267b6e9ebde7322223439ccc89863113ca293cdd8a073ae37ba8",
+      "featureCount": 11,
+      "featureIdSetSha256": "8a664c186228e0c5371a811e86d5b0df46e1a5e85f02f2978aaa2de9b45cde57",
+      "firstFeatureId": "dishub-bandung-barat-farmhouse-17",
+      "geohash": "qqu9",
+      "id": "qqu9:0000",
+      "lastFeatureId": "dishub-bandung-barat-lembang-unai-55",
+      "part": 0,
+      "path": "shards/qqu9/0000.a55735eb9e68267b.geojson"
+    },
+    {
+      "bbox": [
+        108.13398153,
+        -6.76602496,
+        108.28079173,
+        -6.72395726
+      ],
+      "byteLength": 3504,
+      "contentSha256": "d9f6cc68f50ea2b9526856377c7730eecd30d48796deec6f1a6d1e99c321e7a6",
+      "featureCount": 3,
+      "featureIdSetSha256": "2f54a5ff3f73b99d93b6af5c122d20880ac1e4c7d9cd588dc0a959b9fa8cf4bc",
+      "firstFeatureId": "binamarga-national-directory-ch-48/ch-jembatan-cimanuk-sumedang",
+      "geohash": "qquc",
+      "id": "qquc:0000",
+      "lastFeatureId": "binamarga-national-directory-ch-72/ch-jembatan-cikeruh-majalengka",
+      "part": 0,
+      "path": "shards/qquc/0000.d9f6cc68f50ea2b9.geojson"
+    },
+    {
+      "bbox": [
+        106.87521,
+        -6.32659,
+        107.2034934,
+        -6.154
+      ],
+      "byteLength": 116063,
+      "contentSha256": "aef72659d8551523c0a16c3952dd36b52af5b6eaabb954a5654a1c0c9389c98a",
+      "featureCount": 123,
+      "featureIdSetSha256": "6f34d8ddccae4c483ee3c1b571cc02cb98887d309bff7bd1d23022c641cc79d1",
+      "firstFeatureId": "binamarga-national-directory-its-33/its-tambun-selatan-bekasi",
+      "geohash": "qquh",
+      "id": "qquh:0000",
+      "lastFeatureId": "cctv-national-fe38b0d0feae79baeb36861b",
+      "part": 0,
+      "path": "shards/qquh/0000.aef72659d8551523.geojson"
+    },
+    {
+      "bbox": [
+        106.87939,
+        -6.15186,
+        106.940081,
+        -6.096
+      ],
+      "byteLength": 37559,
+      "contentSha256": "3d68f947193436560f3f952c6e9b61c55839ca6c3184d3bb5f3018bac8cda8bc",
+      "featureCount": 44,
+      "featureIdSetSha256": "e620d93220cce519eb6469cad98993cf81c2c8d57c152d3a0a4564008296155c",
+      "firstFeatureId": "cctv-national-033ff4cf2a23929fcdd8e87e",
+      "geohash": "qquj",
+      "id": "qquj:0000",
+      "lastFeatureId": "cctv-national-fa8c0609fcae8dbf7ebe64b0",
+      "part": 0,
+      "path": "shards/qquj/0000.3d68f94719343656.geojson"
+    },
+    {
+      "bbox": [
+        107.2344488,
+        -6.28815227,
+        107.3144482,
+        -6.26697691
+      ],
+      "byteLength": 3496,
+      "contentSha256": "d03c6b51938944caaefd6cb809450940576a95137c585371f32f5a8889d1c835",
+      "featureCount": 3,
+      "featureIdSetSha256": "6bbb693599e7d55c4599d79ae648cda939db878090e11a6e62d083189ed1074c",
+      "firstFeatureId": "binamarga-national-directory-its-38/its-cakung-timur-2-bekasi",
+      "geohash": "qquk",
+      "id": "qquk:0000",
+      "lastFeatureId": "binamarga-national-directory-its-40/its-karawang-barat-karawang",
+      "part": 0,
+      "path": "shards/qquk/0000.d03c6b51938944ca.geojson"
+    },
+    {
+      "bbox": [
+        107.69816354,
+        -6.31650638,
+        107.822028,
+        -6.28293772
+      ],
+      "byteLength": 3494,
+      "contentSha256": "f629d12d028ee2670103607b6dcd07590a3770cb17ec034f0c3d13738faa64da",
+      "featureCount": 3,
+      "featureIdSetSha256": "a1f015deb23160c8223e44fd7898302fddeebf2a3689a6929918fd29feb74065",
+      "firstFeatureId": "binamarga-national-directory-ch-70/ch-jembatan-ciasem-subang",
+      "geohash": "qqus",
+      "id": "qqus:0000",
+      "lastFeatureId": "binamarga-national-directory-ch-83/ch-jembatan-cipangaritan-subang",
+      "part": 0,
+      "path": "shards/qqus/0000.f629d12d028ee267.geojson"
+    },
+    {
+      "bbox": [
+        108.4546721897343,
+        -7.004740648348832,
+        108.52363591233689,
+        -6.866342274326277
+      ],
+      "byteLength": 107314,
+      "contentSha256": "67c72c844ed331fbf342dd41b37e640c14413be70d63ba13fc149c454888491c",
+      "featureCount": 42,
+      "featureIdSetSha256": "b7a73dd92afeadacaeba0cbc2a857aa694bb8c7c38e6631a3d0b6e723cb884b9",
+      "firstFeatureId": "pemkab-kuningan-10-taman-dahlia",
+      "geohash": "qqv0",
+      "id": "qqv0:0000",
+      "lastFeatureId": "pemkab-kuningan-9-depan-pendopo",
+      "part": 0,
+      "path": "shards/qqv0/0000.67c72c844ed331fb.geojson"
+    },
+    {
+      "bbox": [
+        108.508124,
+        -6.849224,
+        108.632636,
+        -6.6994271
+      ],
+      "byteLength": 24484,
+      "contentSha256": "16cbd615d9c8f47b7a0c3e681dc2e953208897087b245eb55fcade5752850ced",
+      "featureCount": 16,
+      "featureIdSetSha256": "2d385230c0888cdf98253049549695effaf3afc20fd3040a4493705f49a09a00",
+      "firstFeatureId": "binamarga-national-directory-ch-68/ch-jembatan-kalijaga-cirebon",
+      "geohash": "qqv1",
+      "id": "qqv1:0000",
+      "lastFeatureId": "pemkot-cirebon-sudarsono",
+      "part": 0,
+      "path": "shards/qqv1/0000.16cbd615d9c8f47b.geojson"
+    },
+    {
+      "bbox": [
+        108.679843,
+        -6.907336,
+        108.9833,
+        -6.864157
+      ],
+      "byteLength": 20992,
+      "contentSha256": "a5f3ebc61f547672139a5e6bba54acf5df7b2ab0da2e8dac0c1a980b09e32171",
+      "featureCount": 27,
+      "featureIdSetSha256": "4fa1b35add3000627d5b29c35e9b81f5bfbe2e705b64d4697c8549711389b768",
+      "firstFeatureId": "cctv-national-0e0f92745a0bf31c11fa81d4",
+      "geohash": "qqv2",
+      "id": "qqv2:0000",
+      "lastFeatureId": "cctv-national-f707697a902b2371ed5663f4",
+      "part": 0,
+      "path": "shards/qqv2/0000.a5f3ebc61f547672.geojson"
+    },
+    {
+      "bbox": [
+        108.639121,
+        -6.829455,
+        108.639121,
+        -6.829455
+      ],
+      "byteLength": 1586,
+      "contentSha256": "7db25147348db71da6da40f476680783f9d7e50278117d65e47b9ddac167a567",
+      "featureCount": 2,
+      "featureIdSetSha256": "6e20433a84ff5d317ec75a8cf4cfdd0dd0b9dcbb2e78181699dcede935f2962b",
+      "firstFeatureId": "cctv-national-5a48edd76292a7181eb84b6e",
+      "geohash": "qqv3",
+      "id": "qqv3:0000",
+      "lastFeatureId": "cctv-national-8931d1a1920fab727ca3c506",
+      "part": 0,
+      "path": "shards/qqv3/0000.7db25147348db71d.geojson"
+    },
+    {
+      "bbox": [
+        108.514194,
+        -6.6286279,
+        108.52517254,
+        -6.59654615
+      ],
+      "byteLength": 2359,
+      "contentSha256": "84cf8f66b762992005a967555b75264ed909ea4c5cffc572dcfffe46122ba4ff",
+      "featureCount": 2,
+      "featureIdSetSha256": "bb2ad0bda7da7d1e6fcf27413a7ea2182d3c3828e710a2c45dce20d7cefa69df",
+      "firstFeatureId": "binamarga-national-directory-ch-66/ch-jembatan-karang-sembung-cirebon",
+      "geohash": "qqv4",
+      "id": "qqv4:0000",
+      "lastFeatureId": "binamarga-national-directory-ch-67/ch-jembatan-sigranela-cirebon",
+      "part": 0,
+      "path": "shards/qqv4/0000.84cf8f66b7629920.geojson"
+    },
+    {
+      "bbox": [
+        108.9926,
+        -6.943613,
+        109.3233,
+        -6.86920524
+      ],
+      "byteLength": 11666,
+      "contentSha256": "ffd8a893172a1e8f0d2779c5947ae1ce82aa319e940c79dba233a8f680d1cc55",
+      "featureCount": 14,
+      "featureIdSetSha256": "580753d0280a8c6d2bc76487ffa256aaf06435e69c203d834427e34fb61c6648",
+      "firstFeatureId": "binamarga-national-directory-ch-60/ch-jembatan-pemali-brebes",
+      "geohash": "qqv8",
+      "id": "qqv8:0000",
+      "lastFeatureId": "cctv-national-ff8352755389a7ad9cd4d013",
+      "part": 0,
+      "path": "shards/qqv8/0000.ffd8a893172a1e8f.geojson"
+    },
+    {
+      "bbox": [
+        109.3408,
+        -6.935761,
+        109.683868,
+        -6.884588268208483
+      ],
+      "byteLength": 84539,
+      "contentSha256": "78c3aca5526965bbb83973b2b075e04af7831b276e78d678e4d7ca4609d7afb1",
+      "featureCount": 41,
+      "featureIdSetSha256": "911ea2c9ce01bbef80999b3888502ca05485ab633c8a1a058126032fb892def6",
+      "firstFeatureId": "cctv-national-1f660ed5ebff7bd4eccf9d56",
+      "geohash": "qqvb",
+      "id": "qqvb:0000",
+      "lastFeatureId": "pemkot-pekalongan-b05ef4db-a7a7-4622-8b64-fd0085dabe4a-2-atcs-simpang-pusri-barat",
+      "part": 0,
+      "path": "shards/qqvb/0000.78c3aca5526965bb.geojson"
+    },
+    {
+      "bbox": [
+        110.23407447,
+        -8.02517587,
+        110.38200785,
+        -7.93064802
+      ],
+      "byteLength": 14707,
+      "contentSha256": "950362af8eb1ff5fe7b718d139ee51323a3f73cff2d344e6c6cf9af5a75107de",
+      "featureCount": 15,
+      "featureIdSetSha256": "88b348587901389bcf3b1608b2a496179ff9272b7a2ec273a3e16d97dc584b1d",
+      "firstFeatureId": "cctv-national-159a7752185e1aa2d244ab17",
+      "geohash": "qqw6",
+      "id": "qqw6:0000",
+      "lastFeatureId": "cctv-national-f10d2b1419b3458cef0ca0f6",
+      "part": 0,
+      "path": "shards/qqw6/0000.950362af8eb1ff5f.geojson"
+    },
+    {
+      "bbox": [
+        110.09243668,
+        -7.905539,
+        110.39061269,
+        -7.73721408
+      ],
+      "byteLength": 498745,
+      "contentSha256": "75a656b7985ada6ec6b83765a758a201ef4e8f385f5ecf692c310d6c3149883c",
+      "featureCount": 422,
+      "featureIdSetSha256": "297123dc2544d6d8fe39ba82988dbaa24bf76e53b0314021ee78d39934722498",
+      "firstFeatureId": "cctv-national-0192776ae079539ae70fd1a5",
+      "geohash": "qqw7",
+      "id": "qqw7:0000",
+      "lastFeatureId": "pemkot-jogja-9-simpang-jokteng-kulon-ptz",
+      "part": 0,
+      "path": "shards/qqw7/0000.75a656b7985ada6e.geojson"
+    },
+    {
+      "bbox": [
+        110.546025712306,
+        -8.1890214,
+        110.71050318,
+        -8.093654
+      ],
+      "byteLength": 18086,
+      "contentSha256": "9a56e5fcfda279c93d47e532d31d587efad94a155dd6516ff9c5ed28fa418e62",
+      "featureCount": 18,
+      "featureIdSetSha256": "957fcb712aa1d2acd24cf8f94dc76264315d94842149d7ea99ebc0f3c53d2d96",
+      "firstFeatureId": "cctv-national-04b23e8ef975131cfbd1559d",
+      "geohash": "qqw9",
+      "id": "qqw9:0000",
+      "lastFeatureId": "cctv-national-ffd0c20ee510f0542eeec0a7",
+      "part": 0,
+      "path": "shards/qqw9/0000.9a56e5fcfda279c9.geojson"
+    },
+    {
+      "bbox": [
+        110.799262,
+        -8.2142717,
+        111.07760263,
+        -8.189188
+      ],
+      "byteLength": 2198,
+      "contentSha256": "04360d0856a5d46354a53381a6b21bad8280e45bb5863974ece7cae609c4a915",
+      "featureCount": 2,
+      "featureIdSetSha256": "97c17c119e63b619279e48f486222ea83a855b9001874cdcadfa7c764c3691aa",
+      "firstFeatureId": "binamarga-national-directory-ch-54/ch-jembatan-teleng-pacitan",
+      "geohash": "qqwc",
+      "id": "qqwc:0000",
+      "lastFeatureId": "cctv-national-109654ebe99b83ad5431d960",
+      "part": 0,
+      "path": "shards/qqwc/0000.04360d0856a5d463.geojson"
+    },
+    {
+      "bbox": [
+        110.3922,
+        -8.066446,
+        110.7357,
+        -7.914201
+      ],
+      "byteLength": 62604,
+      "contentSha256": "cf97061e79ddaa978c5ef592c69a0b81be04dc60bd073548e02762700035b058",
+      "featureCount": 63,
+      "featureIdSetSha256": "ea515d92937ee74b611bda989a9d1b247ab389f5fd5d7af51db091870a871710",
+      "firstFeatureId": "cctv-national-075d6641e423f666c584c2af",
+      "geohash": "qqwd",
+      "id": "qqwd:0000",
+      "lastFeatureId": "cctv-national-f71ff6e447803b24376c081f",
+      "part": 0,
+      "path": "shards/qqwd/0000.cf97061e79ddaa97.geojson"
+    },
+    {
+      "bbox": [
+        110.3906556,
+        -7.88569,
+        110.73267102,
+        -7.74958222
+      ],
+      "byteLength": 172329,
+      "contentSha256": "131b9294d0b28c8d94d33380253953a3bc54d00bc851a33c787ab926a9153ef1",
+      "featureCount": 159,
+      "featureIdSetSha256": "11e95ea40dd3e8a72fef2aafb8b517782f435064ae12be15056a8622312b3281",
+      "firstFeatureId": "binamarga-national-directory-kemenhub-112/kemenhub-pintu-keluar-kota-yogyakarta-di-yogyakarta",
+      "geohash": "qqwe",
+      "id": "qqwe:0000",
+      "lastFeatureId": "pemkot-jogja-398-399-simpang-gambiran",
+      "part": 0,
+      "path": "shards/qqwe/0000.131b9294d0b28c8d.geojson"
+    },
+    {
+      "bbox": [
+        110.76341987,
+        -8.083147,
+        110.77686,
+        -8.08261
+      ],
+      "byteLength": 2998,
+      "contentSha256": "4592390ada12553472d16726eab69a3fa70331a6ef3bc16a49488210f66eef55",
+      "featureCount": 3,
+      "featureIdSetSha256": "c29910187c9f65280b6d312136974361c298b874eb35ced4de051dc9c55e3878",
+      "firstFeatureId": "cctv-national-1bf8b285f4960813cd30bf08",
+      "geohash": "qqwf",
+      "id": "qqwf:0000",
+      "lastFeatureId": "cctv-national-96e90be67156c962d961a679",
+      "part": 0,
+      "path": "shards/qqwf/0000.4592390ada125534.geojson"
+    },
+    {
+      "bbox": [
+        110.747201,
+        -7.859739,
+        110.77636,
+        -7.838408
+      ],
+      "byteLength": 2015,
+      "contentSha256": "984e720f1dcda8fa35d948d56a59917cc11ce3e03efcd59277d014c442952a5c",
+      "featureCount": 2,
+      "featureIdSetSha256": "d4ff0f0666bcf3f4b7805155dee18928f9b804be9ffe70a28736de07743b91a6",
+      "firstFeatureId": "cctv-national-b923e075fd351cd751281f22",
+      "geohash": "qqwg",
+      "id": "qqwg:0000",
+      "lastFeatureId": "cctv-national-defff72edca46dab8a8f8066",
+      "part": 0,
+      "path": "shards/qqwg/0000.984e720f1dcda8fa.geojson"
+    },
+    {
+      "bbox": [
+        110.23497172,
+        -7.73118,
+        110.389263375615,
+        -7.645823
+      ],
+      "byteLength": 99110,
+      "contentSha256": "cf0f8d4a81c0191af50d09a45ecf7291749e215de6e60a55dddd7442262985f0",
+      "featureCount": 97,
+      "featureIdSetSha256": "dce0e351f6efd7b3052b9dd046cdde07babd7cf131fcbecb00ffe08e12463f4a",
+      "firstFeatureId": "cctv-national-013ce95bfcc5b86feeefa634",
+      "geohash": "qqwk",
+      "id": "qqwk:0000",
+      "lastFeatureId": "cctv-national-fae7f4b83cecc4bfab4e5a45",
+      "part": 0,
+      "path": "shards/qqwk/0000.cf0f8d4a81c0191a.geojson"
+    },
+    {
+      "bbox": [
+        110.2145639,
+        -7.50324022,
+        110.2281657,
+        -7.43447642
+      ],
+      "byteLength": 45533,
+      "contentSha256": "fbf602a7303a12e29dd260ee13e84e38522a22f09ac2246b2d3d6d7254bca14f",
+      "featureCount": 15,
+      "featureIdSetSha256": "e4fde819bfee9423a3de275e23d84d595a9b8aa6181080256fe0b5d6cbf1c02d",
+      "firstFeatureId": "diskominsta-magelang-0e575a53-cdc1-421c-9563-6fc3395abd10",
+      "geohash": "qqwm",
+      "id": "qqwm:0000",
+      "lastFeatureId": "diskominsta-magelang-d5400625-14f3-4787-8d57-80ea84b77154",
+      "part": 0,
+      "path": "shards/qqwm/0000.fbf602a7303a12e2.geojson"
+    },
+    {
+      "bbox": [
+        110.41018431,
+        -7.73213792,
+        110.61607,
+        -7.576855
+      ],
+      "byteLength": 23005,
+      "contentSha256": "a8629d67e76d2da0e467f39e1ec112a82a1b2cf542f2360d5e7aa3447b5f19ef",
+      "featureCount": 23,
+      "featureIdSetSha256": "9af5a648e9c99c6ab9547a57a97f1110917ca42546dd6d1703f54e4dfc85034e",
+      "firstFeatureId": "cctv-national-0a0dbb2a91804f968c302374",
+      "geohash": "qqws",
+      "id": "qqws:0000",
+      "lastFeatureId": "cctv-national-f44258634effd6a304bd6c21",
+      "part": 0,
+      "path": "shards/qqws/0000.a8629d67e76d2da0.geojson"
+    },
+    {
+      "bbox": [
+        110.7837678,
+        -7.72252,
+        110.86536,
+        -7.5591166
+      ],
+      "byteLength": 110177,
+      "contentSha256": "e00a9676966e6b068660d461f53e6195d684a600fd5ebdf6007c2c88c2c7eaad",
+      "featureCount": 51,
+      "featureIdSetSha256": "14c7530427a23b7c6dc6030d5941a522fa534a8b82c4c4fbc0ed431ae13c50e4",
+      "firstFeatureId": "binamarga-national-directory-ch-65/ch-jembatan-jurug-surakarta",
+      "geohash": "qqwu",
+      "id": "qqwu:0000",
+      "lastFeatureId": "dishub-surakarta-official-96-widuran",
+      "part": 0,
+      "path": "shards/qqwu/0000.e00a9676966e6b06.geojson"
+    },
+    {
+      "bbox": [
+        110.7826409,
+        -7.5584349,
+        110.8577144,
+        -7.5390557
+      ],
+      "byteLength": 53240,
+      "contentSha256": "d8228908bf4441edbddd0567214b4a77f3c8a6d6723a2b73ca4a19686cd5b8c0",
+      "featureCount": 24,
+      "featureIdSetSha256": "cee076867de7f9366db3f3445f37c3a5c6a91b55f501c7fc03dd729674b735c6",
+      "firstFeatureId": "dishub-surakarta-official-10-bundaran-joglo",
+      "geohash": "qqwv",
+      "id": "qqwv:0000",
+      "lastFeatureId": "dishub-surakarta-official-94-ursulin",
+      "part": 0,
+      "path": "shards/qqwv/0000.d8228908bf4441ed.geojson"
+    },
+    {
+      "bbox": [
+        110.41115190419555,
+        -7.074309653496582,
+        110.42157761119759,
+        -7.031379565095236
+      ],
+      "byteLength": 23673,
+      "contentSha256": "000a7a5a39c99bed006afb6c3dc8e42cc1a82730126b164ea7845e70e43a75b1",
+      "featureCount": 7,
+      "featureIdSetSha256": "817e2e4433528a488060d0672f6acbce7b0c308866b72f2afe875a9fa10d0c27",
+      "firstFeatureId": "pemkot-semarang-18525445d3e63f1769eab334-fly-over-jatingaleh-wide",
+      "geohash": "qqwx",
+      "id": "qqwx:0000",
+      "lastFeatureId": "pemkot-semarang-d4a2a8ee2de82c7c9c30e594-patung-diponegoro-360",
+      "part": 0,
+      "path": "shards/qqwx/0000.000a7a5a39c99bed.geojson"
+    },
+    {
+      "bbox": [
+        110.781591,
+        -7.129537,
+        110.918038,
+        -7.071143
+      ],
+      "byteLength": 43525,
+      "contentSha256": "5b601b0a7d03d2559d4d4a50cb0e022034723d8848fecbd88b30b97401e4fac0",
+      "featureCount": 20,
+      "featureIdSetSha256": "3e3edb65e3749d1cfc08cffc0ef2ccb866a8d62ac4416ce66de5c9fd03a37de5",
+      "firstFeatureId": "dishub-grobogan-01",
+      "geohash": "qqwz",
+      "id": "qqwz:0000",
+      "lastFeatureId": "dishub-grobogan-31",
+      "part": 0,
+      "path": "shards/qqwz/0000.5b601b0a7d03d255.geojson"
+    },
+    {
+      "bbox": [
+        111.30917254,
+        -8.24781128,
+        111.30917254,
+        -8.24781128
+      ],
+      "byteLength": 1195,
+      "contentSha256": "5be3d29b2feabe6eb65d6b0e04b93257db5004b7283fd4a76f310f7834972312",
+      "featureCount": 1,
+      "featureIdSetSha256": "af6461be0b3e855bc4b181839f8aa30c5a18e7d6f45dad6f8adcb96a9ae52449",
+      "firstFeatureId": "binamarga-national-directory-ch-55/ch-jembatan-kangkung-pacitan",
+      "geohash": "qqx1",
+      "id": "qqx1:0000",
+      "lastFeatureId": "binamarga-national-directory-ch-55/ch-jembatan-kangkung-pacitan",
+      "part": 0,
+      "path": "shards/qqx1/0000.5be3d29b2feabe6e.geojson"
+    },
+    {
+      "bbox": [
+        111.74495446,
+        -8.09480414,
+        111.74495446,
+        -8.09480414
+      ],
+      "byteLength": 1203,
+      "contentSha256": "0f026bf5a38e19c9af3b61085a2ed5da557f518ccec63178620e484080a036e5",
+      "featureCount": 1,
+      "featureIdSetSha256": "1f34edb7ae5487115d1a61883d6ec7e5125b661d87beaa0ebaa84980c3c41f75",
+      "firstFeatureId": "binamarga-national-directory-ch-76/ch-jembatan-munjungan-trenggalek",
+      "geohash": "qqx3",
+      "id": "qqx3:0000",
+      "lastFeatureId": "binamarga-national-directory-ch-76/ch-jembatan-munjungan-trenggalek",
+      "part": 0,
+      "path": "shards/qqx3/0000.0f026bf5a38e19c9.geojson"
+    },
+    {
+      "bbox": [
+        111.48656994,
+        -7.83648428,
+        111.48656994,
+        -7.83648428
+      ],
+      "byteLength": 3712,
+      "contentSha256": "30f0b79423ffe880434669ea3f7e93c10994a2111378f9ee6dba5c24bbaecea3",
+      "featureCount": 3,
+      "featureIdSetSha256": "52e76067585549fb2da82d52485177374ec5f81567cf0b5411ecfaa6c83062e4",
+      "firstFeatureId": "binamarga-national-directory-kemenhub-122/kemenhub-pintu-masuk-kab-ponorogo-jawa-timur",
+      "geohash": "qqx7",
+      "id": "qqx7:0000",
+      "lastFeatureId": "binamarga-national-directory-kemenhub-124/kemenhub-pintu-keluar-kab-ponorogo-jawa-timur",
+      "part": 0,
+      "path": "shards/qqx7/0000.30f0b79423ffe880.geojson"
+    },
+    {
+      "bbox": [
+        111.924817,
+        -8.01743509,
+        111.924817,
+        -8.01743509
+      ],
+      "byteLength": 1199,
+      "contentSha256": "e6e3f947a684ddfd365c5640d1e84e4ed3ce196ffb9f7c343add048ef8118990",
+      "featureCount": 1,
+      "featureIdSetSha256": "6f7031b0f2d3eee34747c75767457b211226567a0be84eb61334a8ec5d49c50a",
+      "firstFeatureId": "binamarga-national-directory-ch-56/ch-jembatan-ngujang-tulungagung",
+      "geohash": "qqxd",
+      "id": "qqxd:0000",
+      "lastFeatureId": "binamarga-national-directory-ch-56/ch-jembatan-ngujang-tulungagung",
+      "part": 0,
+      "path": "shards/qqxd/0000.e6e3f947a684ddfd.geojson"
+    },
+    {
+      "bbox": [
+        111.98491,
+        -7.837318,
+        112.031125,
+        -7.811744
+      ],
+      "byteLength": 25485,
+      "contentSha256": "aeefb15499de2d837a31ecb6e6690d47ef90bfe6ce867ae5c23d23489b06c14c",
+      "featureCount": 12,
+      "featureIdSetSha256": "39d03f087b4e4080fb3056ff81478a91f03c763edff717d4ee20379670848ee1",
+      "firstFeatureId": "binamarga-national-directory-ch-57/ch-jembatan-bandarngalim-kediri",
+      "geohash": "qqxe",
+      "id": "qqxe:0000",
+      "lastFeatureId": "dishub-kediri-4-simpang-tamanan",
+      "part": 0,
+      "path": "shards/qqxe/0000.aeefb15499de2d83.geojson"
+    },
+    {
+      "bbox": [
+        111.32812,
+        -7.65602,
+        111.32812,
+        -7.65602
+      ],
+      "byteLength": 1007,
+      "contentSha256": "f06ba2aa0fc172bb7fb1ac8965466d72594f236e3e1d7d209dab64adbe9830d7",
+      "featureCount": 1,
+      "featureIdSetSha256": "a8feb923daa32ac53e5bbe6dda355b8bd2a09b6ad0b29adb79b54b17e8800aba",
+      "firstFeatureId": "cctv-national-4a653204276d0f016055ec09",
+      "geohash": "qqxh",
+      "id": "qqxh:0000",
+      "lastFeatureId": "cctv-national-4a653204276d0f016055ec09",
+      "part": 0,
+      "path": "shards/qqxh/0000.f06ba2aa0fc172bb.geojson"
+    },
+    {
+      "bbox": [
+        111.51688,
+        -7.72033,
+        111.79276,
+        -7.59953
+      ],
+      "byteLength": 7566,
+      "contentSha256": "2ea1dae014888d62b47954d008da58d5a951594fe46d919c68c74c57b6196741",
+      "featureCount": 8,
+      "featureIdSetSha256": "90c04afc85c2f438d791de0c6a6f662aa44babba4dc7d1d8d5805211e9c07017",
+      "firstFeatureId": "cctv-national-26aef3a40ad8976f898e3807",
+      "geohash": "qqxk",
+      "id": "qqxk:0000",
+      "lastFeatureId": "cctv-national-d9c1c109ee8b69f776f40373",
+      "part": 0,
+      "path": "shards/qqxk/0000.2ea1dae014888d62.geojson"
+    },
+    {
+      "bbox": [
+        111.80237,
+        -7.7159,
+        112.1391212,
+        -7.55869
+      ],
+      "byteLength": 87623,
+      "contentSha256": "c9443e2f3d4403224015177f28427e49cc4e60fb5aa84258fc4597ab0787ecf3",
+      "featureCount": 92,
+      "featureIdSetSha256": "ac621bb2b39f2ad0aa14f68448c02735c641bb6f32a9beadb0fed88e7fa23b48",
+      "firstFeatureId": "cctv-national-07ae676099a9226661076fc6",
+      "geohash": "qqxs",
+      "id": "qqxs:0000",
+      "lastFeatureId": "cctv-national-fc109461139bead8fec3406d",
+      "part": 0,
+      "path": "shards/qqxs/0000.c9443e2f3d440322.geojson"
+    },
+    {
+      "bbox": [
+        111.89541,
+        -7.53589,
+        112.00699,
+        -7.44262
+      ],
+      "byteLength": 18016,
+      "contentSha256": "de547695c7b7a669676fccec3876aebe5aecafc257811a3f764ebbc1dc27a35d",
+      "featureCount": 19,
+      "featureIdSetSha256": "70954a96a32c4fe73188f2e813a063ff035ac9785d3d1f3701513abe3b4f07cd",
+      "firstFeatureId": "cctv-national-0a306943e9604e8b143f2009",
+      "geohash": "qqxt",
+      "id": "qqxt:0000",
+      "lastFeatureId": "cctv-national-f03b1f9b514cdd4818fae86e",
+      "part": 0,
+      "path": "shards/qqxt/0000.de547695c7b7a669.geojson"
+    },
+    {
+      "bbox": [
+        112.16217,
+        -7.53540259,
+        112.239125,
+        -7.48994
+      ],
+      "byteLength": 5332,
+      "contentSha256": "eaf9132e00e94949744db5446db7beb654ea7db2a3d17d74a6d3126b40596201",
+      "featureCount": 6,
+      "featureIdSetSha256": "aadbb0de5333d164d27666c30d6f97009ebb02c7df7eba08d5f9ab0641b27db7",
+      "firstFeatureId": "cctv-national-0202898a1889ffda8ee39041",
+      "geohash": "qqxv",
+      "id": "qqxv:0000",
+      "lastFeatureId": "cctv-national-8ca233160019a3c7a575f403",
+      "part": 0,
+      "path": "shards/qqxv/0000.eaf9132e00e94949.geojson"
+    },
+    {
+      "bbox": [
+        111.86806319,
+        -7.16364136,
+        111.9701411,
+        -7.0872978
+      ],
+      "byteLength": 3564,
+      "contentSha256": "87a20f22129145b1b7ef443d43f4a47f85b0a24c6a5bce0da7ab1934033fd9da",
+      "featureCount": 2,
+      "featureIdSetSha256": "da65dabac05189f8447fe3d89c534330d181bf07eabc9264ce59352f71e88114",
+      "firstFeatureId": "binamarga-national-directory-ch-59/ch-jembatan-jetak-bojonegoro",
+      "geohash": "qqxx",
+      "id": "qqxx:0000",
+      "lastFeatureId": "pemkab-tuban-9-sp4-butoh-rengel-timur",
+      "part": 0,
+      "path": "shards/qqxx/0000.87a20f22129145b1.geojson"
+    },
+    {
+      "bbox": [
+        109.690038,
+        -7.0213,
+        110.032,
+        -6.902975
+      ],
+      "byteLength": 9639,
+      "contentSha256": "9af6f77164b3ecca7c453376e7f804023260dc0bb02baf2f41de0463e7e012ab",
+      "featureCount": 5,
+      "featureIdSetSha256": "df99eceb5bf4346aef1fe81261d4f3c1ade3030ee1b52d095e17d578b190b55e",
+      "firstFeatureId": "cctv-national-e1ee49f6a4e1121f8d166399",
+      "geohash": "qqy0",
+      "id": "qqy0:0000",
+      "lastFeatureId": "pemkot-pekalongan-204f7718-e20c-4229-8ebc-3c5b7470febb-4-atcs-setono-counting-arah-timur",
+      "part": 0,
+      "path": "shards/qqy0/0000.9af6f77164b3ecca.geojson"
+    },
+    {
+      "bbox": [
+        110.31560102777037,
+        -6.987905205244879,
+        110.38351440522527,
+        -6.974747423836861
+      ],
+      "byteLength": 24263,
+      "contentSha256": "5b1a79eeb6c863b0c0b65e1187437331974e605a266227b5da74a1cdcd9e1ef1",
+      "featureCount": 7,
+      "featureIdSetSha256": "9798f8571dbc53c3be7f11742d7e8d573a84f4aa291455992d39d6cda3cc8db1",
+      "firstFeatureId": "pemkot-semarang-1ef57798f848fbcab0a0dde1-counting-krapyak",
+      "geohash": "qqy2",
+      "id": "qqy2:0000",
+      "lastFeatureId": "pemkot-semarang-fa84bff1f1b2a649cecbc8e5-kalibanteng",
+      "part": 0,
+      "path": "shards/qqy2/0000.5b1a79eeb6c863b0.geojson"
+    },
+    {
+      "bbox": [
+        110.39435494849369,
+        -7.030798827358735,
+        110.57368637,
+        -6.92339566
+      ],
+      "byteLength": 143120,
+      "contentSha256": "086228271fa65df4bd739afc0763cf9b33d9f9e93ce8b9be7dd6c73e243ac599",
+      "featureCount": 43,
+      "featureIdSetSha256": "26db1d485163e46b69ccb80cae80fe402f52aec020a894e8c4a51cf5c6ccfd14",
+      "firstFeatureId": "binamarga-national-directory-ch-62/ch-jembatan-wonokerto-demak",
+      "geohash": "qqy8",
+      "id": "qqy8:0000",
+      "lastFeatureId": "pemkot-semarang-fc3298c61d3bd1d031ba8bba-bundaran-diponegoro",
+      "part": 0,
+      "path": "shards/qqy8/0000.086228271fa65df4.geojson"
+    },
+    {
+      "bbox": [
+        110.766685,
+        -7.020332,
+        110.76714,
+        -7.020135
+      ],
+      "byteLength": 4267,
+      "contentSha256": "7ea1f5831cfe9db9bfa11735bcf63c35f06886b3dabef943531ab7e4a261cedb",
+      "featureCount": 2,
+      "featureIdSetSha256": "6a3cdaafe24cc2d5379ffbfe8724a4c31510385d4eb5ad1f92d3fdccd1fb824f",
+      "firstFeatureId": "dishub-grobogan-27",
+      "geohash": "qqyb",
+      "id": "qqyb:0000",
+      "lastFeatureId": "dishub-grobogan-28",
+      "part": 0,
+      "path": "shards/qqyb/0000.7ea1f5831cfe9db9.geojson"
+    },
+    {
+      "bbox": [
+        111.14779281,
+        -6.71942057,
+        111.3424,
+        -6.70663
+      ],
+      "byteLength": 2199,
+      "contentSha256": "ddb57f52141efa7d467de3a54662896050ddbd420591260b7ddc5fd0e563c3c5",
+      "featureCount": 2,
+      "featureIdSetSha256": "24c344c97eda8f36b7dd521dbf6f324b5a1a424e118cbfb24bf80ad1d7c3653a",
+      "firstFeatureId": "binamarga-national-directory-ch-63/ch-jembatan-juana-pati",
+      "geohash": "qqz1",
+      "id": "qqz1:0000",
+      "lastFeatureId": "cctv-national-8fa65466bf9ea9dec7a5dfcf",
+      "part": 0,
+      "path": "shards/qqz1/0000.ddb57f52141efa7d.geojson"
+    },
+    {
+      "bbox": [
+        111.7738445,
+        -6.9684471,
+        111.7739458,
+        -6.9684345
+      ],
+      "byteLength": 5043,
+      "contentSha256": "329c790aa3dd22e26dd4ec0d9a6d8d8e45d530ab916cd3f6e84f10dfdaf1c459",
+      "featureCount": 2,
+      "featureIdSetSha256": "c65b3d9c4ee3a30445279b9515844da4a80146af7862d0fec97979be1f1f287a",
+      "firstFeatureId": "pemkab-tuban-3-raya-rth-singgahan-timur",
+      "geohash": "qqz2",
+      "id": "qqz2:0000",
+      "lastFeatureId": "pemkab-tuban-4-raya-rth-singgahan-barat",
+      "part": 0,
+      "path": "shards/qqz2/0000.329c790aa3dd22e2.geojson"
+    },
+    {
+      "bbox": [
+        111.64053873,
+        -6.7149315,
+        111.64053873,
+        -6.7149315
+      ],
+      "byteLength": 1189,
+      "contentSha256": "f90d021464b3e2a78f20d8ee260ec97f141349b3d2493d5157321fa9ecfbe4f2",
+      "featureCount": 1,
+      "featureIdSetSha256": "891fa069e927f325c944451c174723079189b14069e7df575b2cb9e0b8075477",
+      "firstFeatureId": "binamarga-national-directory-ch-64/ch-jembatan-pang-rembang",
+      "geohash": "qqz3",
+      "id": "qqz3:0000",
+      "lastFeatureId": "binamarga-national-directory-ch-64/ch-jembatan-pang-rembang",
+      "part": 0,
+      "path": "shards/qqz3/0000.f90d021464b3e2a7.geojson"
+    },
+    {
+      "bbox": [
+        112.0400845,
+        -7.0279527,
+        112.0981248,
+        -6.8818834
+      ],
+      "byteLength": 26549,
+      "contentSha256": "e899cf2dccc3b5cefcb910131af32eb95cc8e293b927bf2155d87095b003a651",
+      "featureCount": 11,
+      "featureIdSetSha256": "0ab96d5b216744f6f525d195599f9089efece30955d878ebcaad3ce51ac751e3",
+      "firstFeatureId": "pemkab-tuban-2-sp3-tugu-plumpang-utara",
+      "geohash": "qqz8",
+      "id": "qqz8:0000",
+      "lastFeatureId": "pemkab-tuban-8-sp2-abipraya-timur",
+      "part": 0,
+      "path": "shards/qqz8/0000.e899cf2dccc3b5ce.geojson"
+    },
+    {
+      "bbox": [
+        102.3668956,
+        -3.8564331,
+        102.4233436,
+        -3.8036322
+      ],
+      "byteLength": 15426,
+      "contentSha256": "e6e7998948cbb43efde39ae61e607a73ff08f24b524fd6ac6f7207697e91a6c3",
+      "featureCount": 19,
+      "featureIdSetSha256": "296676a66894339d1a523876df3b09d389d5ea0792be5aef797328ae5df26245",
+      "firstFeatureId": "cctv-national-041464a259ca50f16a7ad536",
+      "geohash": "qr2f",
+      "id": "qr2f:0000",
+      "lastFeatureId": "cctv-national-f489f712a67db411f983b3f6",
+      "part": 0,
+      "path": "shards/qr2f/0000.e6e7998948cbb43e.geojson"
+    },
+    {
+      "bbox": [
+        103.13,
+        -4.03,
+        103.13,
+        -4.03
+      ],
+      "byteLength": 971,
+      "contentSha256": "348a2b5096a614e3974e94c0ea04d2bc1355ca8b4d1ead87e0265825265f0f3b",
+      "featureCount": 1,
+      "featureIdSetSha256": "d93e2a341182982f3cb75c56ca38c3b856a3c7c34b4c6b1bf1919a998a1da76a",
+      "firstFeatureId": "cctv-national-f6fd2a4cf94cbbacc08ff98f",
+      "geohash": "qr33",
+      "id": "qr33:0000",
+      "lastFeatureId": "cctv-national-f6fd2a4cf94cbbacc08ff98f",
+      "part": 0,
+      "path": "shards/qr33/0000.348a2b5096a614e3.geojson"
+    },
+    {
+      "bbox": [
+        105.1773,
+        -4.56529,
+        105.18439,
+        -4.53013
+      ],
+      "byteLength": 7857,
+      "contentSha256": "8025b194787dcadc88d3b42d035047e7e3182bf882b1cc525b9881b788222687",
+      "featureCount": 7,
+      "featureIdSetSha256": "94f11f7ef2d453c2c4ca6bcb560018888aea334b243e759173c9808aa154f58c",
+      "firstFeatureId": "cctv-national-094775b9b7a49d96e4e8d833",
+      "geohash": "qr4y",
+      "id": "qr4y:0000",
+      "lastFeatureId": "cctv-national-af45ee4bd2faf07b1dfabfda",
+      "part": 0,
+      "path": "shards/qr4y/0000.8025b194787dcadc.geojson"
+    },
+    {
+      "bbox": [
+        105.13549,
+        -4.29298,
+        105.15426,
+        -4.25727
+      ],
+      "byteLength": 2002,
+      "contentSha256": "e755388bf7c8423a8cd002363b92e05399eac9426d5d69b25055d505e8ca6621",
+      "featureCount": 2,
+      "featureIdSetSha256": "dd4e17cd305a003f667b4159817d69fbfc3fb354132243029bce8b1d133d5874",
+      "firstFeatureId": "cctv-national-51a884d969ca35a306c6c4fc",
+      "geohash": "qr4z",
+      "id": "qr4z:0000",
+      "lastFeatureId": "cctv-national-852999dcf964fa917436b387",
+      "part": 0,
+      "path": "shards/qr4z/0000.e755388bf7c8423a.geojson"
+    },
+    {
+      "bbox": [
+        104.2620786,
+        -3.5209602,
+        104.2620786,
+        -3.5209602
+      ],
+      "byteLength": 876,
+      "contentSha256": "aa07974a8a86ac19d55bad20e95b2f71b41c20dc18cf1493d626220a8faab8b5",
+      "featureCount": 1,
+      "featureIdSetSha256": "a48279307ebadd51f07e6ea2f1f2ad6476f298b23166d0b4bfe1884ef2c297cc",
+      "firstFeatureId": "cctv-national-5a4a58c0b32d0f96a22a9b9d",
+      "geohash": "qr65",
+      "id": "qr65:0000",
+      "lastFeatureId": "cctv-national-5a4a58c0b32d0f96a22a9b9d",
+      "part": 0,
+      "path": "shards/qr65/0000.aa07974a8a86ac19.geojson"
+    },
+    {
+      "bbox": [
+        105.15,
+        -4.15,
+        105.166,
+        -4.134
+      ],
+      "byteLength": 7286,
+      "contentSha256": "cb14d6388c43d9ec0839a7aebeb163419231789ba060724d38f0a6b5bf78f758",
+      "featureCount": 8,
+      "featureIdSetSha256": "8fcb96cf7641bca093ee5dfcbcb362a5ff32ba13851c3587bccf70f856e5f1ea",
+      "firstFeatureId": "cctv-national-07f298805e224fba1292b52d",
+      "geohash": "qr6b",
+      "id": "qr6b:0000",
+      "lastFeatureId": "cctv-national-e6d47f423340141739b22ec7",
+      "part": 0,
+      "path": "shards/qr6b/0000.cb14d6388c43d9ec.geojson"
+    },
+    {
+      "bbox": [
+        104.67976,
+        -3.212218,
+        104.703374,
+        -3.171757
+      ],
+      "byteLength": 5166,
+      "contentSha256": "915ba921939d08f4b0d9af88029901056a7cda5dc490aa541a4a384b256a93e0",
+      "featureCount": 6,
+      "featureIdSetSha256": "80287efbf8a033e41690f1883c89979edc4b37f9b456b5619dd9379e5b74dc31",
+      "firstFeatureId": "cctv-national-0994c2e3dc735b1c57655506",
+      "geohash": "qr6m",
+      "id": "qr6m:0000",
+      "lastFeatureId": "cctv-national-e07192b13907ba4262ceb47f",
+      "part": 0,
+      "path": "shards/qr6m/0000.915ba921939d08f4.geojson"
+    },
+    {
+      "bbox": [
+        104.70392,
+        -3.14871,
+        104.764032,
+        -2.989552
+      ],
+      "byteLength": 55561,
+      "contentSha256": "d8758cef7f29a76904f0c2107ce8d0deb6e3bc51925b1f66e903a21d69efa483",
+      "featureCount": 44,
+      "featureIdSetSha256": "41be303d68ac1c545a2e8f3d8a13f38eed835c952522e8b48f751ded8bd4bf26",
+      "firstFeatureId": "cctv-national-06f7b6a1bfffdecc4d9901ae",
+      "geohash": "qr6q",
+      "id": "qr6q:0000",
+      "lastFeatureId": "pemkot-palembang-cctv-tj-23",
+      "part": 0,
+      "path": "shards/qr6q/0000.d8758cef7f29a769.geojson"
+    },
+    {
+      "bbox": [
+        104.6813417,
+        -2.98819,
+        104.760447,
+        -2.913313005325259
+      ],
+      "byteLength": 30929,
+      "contentSha256": "899f64b9d5177512c438d5d623fecfb82b18ddbd855f6b9d33235d6ff1478550",
+      "featureCount": 15,
+      "featureIdSetSha256": "a1a6c989a60a28e5d8651269fe24f09771fc55269a37f7087230808a804ea1c6",
+      "firstFeatureId": "binamarga-national-directory-kemenhub-111/kemenhub-gerbang-pintu-masuk-terminal-kota-palembang-sumatera-selatan",
+      "geohash": "qr6r",
+      "id": "qr6r:0000",
+      "lastFeatureId": "pemkot-palembang-cctv-spsamsat-21",
+      "part": 0,
+      "path": "shards/qr6r/0000.899f64b9d5177512.geojson"
+    },
+    {
+      "bbox": [
+        104.86316,
+        -3.41399,
+        104.86316,
+        -3.41399
+      ],
+      "byteLength": 1007,
+      "contentSha256": "83098936040d17cb491003f7b9c091c331c1b20e6e42f3cfc4ea8dbd2df2206f",
+      "featureCount": 1,
+      "featureIdSetSha256": "4aedc3cf29751ef0d5c93a0962179477ab358cefbc8ecda1f18238a23a860f39",
+      "firstFeatureId": "cctv-national-ee2e758ce2fa93ce6df7fca7",
+      "geohash": "qr6s",
+      "id": "qr6s:0000",
+      "lastFeatureId": "cctv-national-ee2e758ce2fa93ce6df7fca7",
+      "part": 0,
+      "path": "shards/qr6s/0000.83098936040d17cb.geojson"
+    },
+    {
+      "bbox": [
+        104.82961757089058,
+        -3.0184312300547567,
+        104.82961757089058,
+        -3.0184312300547567
+      ],
+      "byteLength": 2372,
+      "contentSha256": "283db9988796d68437f483813ec4ed768cadacdfc404e3c5271f708d2ef9bf86",
+      "featureCount": 1,
+      "featureIdSetSha256": "1d143dc80af5e9b0e0ddea3754a6a5a9f49fd8324524bba1bff79434d88b4098",
+      "firstFeatureId": "pemkot-palembang-cctv-plaju-jembatan1-18",
+      "geohash": "qr6w",
+      "id": "qr6w:0000",
+      "lastFeatureId": "pemkot-palembang-cctv-plaju-jembatan1-18",
+      "part": 0,
+      "path": "shards/qr6w/0000.283db9988796d684.geojson"
+    },
+    {
+      "bbox": [
+        104.770925,
+        -2.988188789541928,
+        104.7890342010666,
+        -2.918054
+      ],
+      "byteLength": 4990,
+      "contentSha256": "999bb88d0a040fc3f79a184383654b71b74734c9536d39068cb6c8f0c4bfbabc",
+      "featureCount": 2,
+      "featureIdSetSha256": "57445f65fd5e07e2abacf1e53999aeebd2ae55e921428af7850a1b2891b7257e",
+      "firstFeatureId": "pemkot-palembang-cctv-kebunsayur-16",
+      "geohash": "qr6x",
+      "id": "qr6x:0000",
+      "lastFeatureId": "pemkot-palembang-cctv-tangga-takat-11",
+      "part": 0,
+      "path": "shards/qr6x/0000.999bb88d0a040fc3.geojson"
+    },
+    {
+      "bbox": [
+        101.264,
+        -1.697,
+        101.264,
+        -1.697
+      ],
+      "byteLength": 957,
+      "contentSha256": "b12ac5fc4ded6be8c3745d106e91438a442ebbd812fd48df0f3f10f33b2d11be",
+      "featureCount": 1,
+      "featureIdSetSha256": "f662332497a676eff69bd59cac2e3caa77d8747ba4a0f73c5ca692c98d9c5eaa",
+      "firstFeatureId": "cctv-national-1dab9ac1b83b2694a33fa03e",
+      "geohash": "qr8n",
+      "id": "qr8n:0000",
+      "lastFeatureId": "cctv-national-1dab9ac1b83b2694a33fa03e",
+      "part": 0,
+      "path": "shards/qr8n/0000.b12ac5fc4ded6be8.geojson"
+    },
+    {
+      "bbox": [
+        103.58335254847104,
+        -1.632586,
+        103.630222,
+        -1.60969
+      ],
+      "byteLength": 35080,
+      "contentSha256": "ba7c717dac6ea503385192b70236c3f29e1c23c6b5a93ff0a5322889b4a1053c",
+      "featureCount": 10,
+      "featureIdSetSha256": "334c18c2ecaf6c012f6ae0afa3c667bc1b519d54147c4a84dbc777e89c94c978",
+      "firstFeatureId": "cctv-national-712b1a137b2c287a02bdf76f",
+      "geohash": "qr9w",
+      "id": "qr9w:0000",
+      "lastFeatureId": "pemkot-jambi-cctv-tugu-keris",
+      "part": 0,
+      "path": "shards/qr9w/0000.ba7c717dac6ea503.geojson"
+    },
+    {
+      "bbox": [
+        109.4037764,
+        -0.0411311,
+        109.4037764,
+        -0.0411311
+      ],
+      "byteLength": 3758,
+      "contentSha256": "89f21e1a024c748b7b6ed33e7da3e91e1bddbf08679860b82b2d146d7393ebd3",
+      "featureCount": 3,
+      "featureIdSetSha256": "05074ba46a113d084cedd36a0d112bbcf97a351542632ce717771ebd5ccfc55a",
+      "firstFeatureId": "binamarga-national-directory-kemenhub-108/kemenhub-camera-6-kab-kubu-raya-kalimantan-barat",
+      "geohash": "qrvz",
+      "id": "qrvz:0000",
+      "lastFeatureId": "binamarga-national-directory-kemenhub-110/kemenhub-camera-11-kab-kubu-raya-kalimantan-barat",
+      "part": 0,
+      "path": "shards/qrvz/0000.89f21e1a024c748b.geojson"
+    },
+    {
+      "bbox": [
+        111.63105,
+        -2.67995,
+        111.63105,
+        -2.67995
+      ],
+      "byteLength": 1020,
+      "contentSha256": "afadc5baad28e4cc739fa956c79bd79bf55bdab052d3fa1d6a21ecc6a531108b",
+      "featureCount": 1,
+      "featureIdSetSha256": "fc5584d7dd9fe281ff274b1769dc98088a8a508ad95b69fc9ef1fc947a2a7f10",
+      "firstFeatureId": "cctv-national-27f39b227436d24e3d8107ec",
+      "geohash": "qrx2",
+      "id": "qrx2:0000",
+      "lastFeatureId": "cctv-national-27f39b227436d24e3d8107ec",
+      "part": 0,
+      "path": "shards/qrx2/0000.afadc5baad28e4cc.geojson"
+    },
+    {
+      "bbox": [
+        115.08862,
+        -8.81478,
+        115.08862,
+        -8.81478
+      ],
+      "byteLength": 1033,
+      "contentSha256": "529e856a0971179425fdfa83fafbb74349ab520dc696924546a7a75d4d9569a8",
+      "featureCount": 1,
+      "featureIdSetSha256": "efa420b56f10f99804929ee8dc99ec8fae7b6ec9a091c35b472f7b4e43b0aacb",
+      "firstFeatureId": "cctv-national-928c95eb4757effd3f727c65",
+      "geohash": "qw3v",
+      "id": "qw3v:0000",
+      "lastFeatureId": "cctv-national-928c95eb4757effd3f727c65",
+      "part": 0,
+      "path": "shards/qw3v/0000.529e856a09711794.geojson"
+    },
+    {
+      "bbox": [
+        115.180975,
+        -8.700615,
+        115.269318,
+        -8.617052
+      ],
+      "byteLength": 234797,
+      "contentSha256": "bfebc22133257db82f66e5ef961d905baedce569689a9d8750bb1f7b8bd1a1a8",
+      "featureCount": 102,
+      "featureIdSetSha256": "a3b534e8b441a20c1b96435e5151b30b30d71031e6988ea1b9faf85326f72993",
+      "firstFeatureId": "dishub-denpasar-1-gunung-agung",
+      "geohash": "qw3y",
+      "id": "qw3y:0000",
+      "lastFeatureId": "dishub-denpasar-99-rsad-udayana",
+      "part": 0,
+      "path": "shards/qw3y/0000.bfebc22133257db8.geojson"
+    },
+    {
+      "bbox": [
+        116.502778,
+        -9.172778,
+        116.502778,
+        -9.172778
+      ],
+      "byteLength": 890,
+      "contentSha256": "f89af163d66bcc90d546213688de7743f661243062912f2c2b03f5b0643e26f8",
+      "featureCount": 1,
+      "featureIdSetSha256": "640accefe9f9a11b62456bb208131cb5134690db6c8c3b492a240158c76e62e6",
+      "firstFeatureId": "cctv-national-39f8df44737142b520ebe41b",
+      "geohash": "qw6g",
+      "id": "qw6g:0000",
+      "lastFeatureId": "cctv-national-39f8df44737142b520ebe41b",
+      "part": 0,
+      "path": "shards/qw6g/0000.f89af163d66bcc90.geojson"
+    },
+    {
+      "bbox": [
+        112.922,
+        -8.108,
+        112.922,
+        -8.108
+      ],
+      "byteLength": 964,
+      "contentSha256": "b963cecf93da3ebb0e12fcb5fc9733c9e610a5ac59f5d366a5b877ae901d3e50",
+      "featureCount": 1,
+      "featureIdSetSha256": "d74d772514c2d09b5467366ad9bcfb73c6fb2f2328957b4e4d00f4a1cb826b58",
+      "firstFeatureId": "cctv-national-179260c7b94e68970dc79c98",
+      "geohash": "qw83",
+      "id": "qw83:0000",
+      "lastFeatureId": "cctv-national-179260c7b94e68970dc79c98",
+      "part": 0,
+      "path": "shards/qw83/0000.b963cecf93da3ebb.geojson"
+    },
+    {
+      "bbox": [
+        112.58058,
+        -8.0326239922323,
+        112.68398991818,
+        -7.91053
+      ],
+      "byteLength": 796541,
+      "contentSha256": "5ae4b8062fcaff80a3e958d5c7b1d1dec6de2a0d1419f921a7dbedc9c501e81f",
+      "featureCount": 248,
+      "featureIdSetSha256": "c3865aea0b1f09f220ca6737410ce9ec84b69953a8afe41a1346cfc8a2d5d80d",
+      "firstFeatureId": "cctv-national-143a5bf140353323d5672a5f",
+      "geohash": "qw84",
+      "id": "qw84:0000",
+      "lastFeatureId": "pemkot-malang-996051630808365936867998-jl-retawu-arah-museum",
+      "part": 0,
+      "path": "shards/qw84/0000.5ae4b8062fcaff80.geojson"
+    },
+    {
+      "bbox": [
+        112.52033,
+        -7.88201,
+        112.53727,
+        -7.8354
+      ],
+      "byteLength": 15497,
+      "contentSha256": "6b8e258834b45666852f96f5210b416c633d6aadd6651f936602a1aa830ede73",
+      "featureCount": 16,
+      "featureIdSetSha256": "e3830aca3ceab9f4f07828505bbb1355edc716c8b263ac0e275983a7d9237dd1",
+      "firstFeatureId": "cctv-national-15c56d488062165d792b6af8",
+      "geohash": "qw85",
+      "id": "qw85:0000",
+      "lastFeatureId": "cctv-national-ff07936ddd7af0081e1c0bd0",
+      "part": 0,
+      "path": "shards/qw85/0000.6b8e258834b45666.geojson"
+    },
+    {
+      "bbox": [
+        112.953,
+        -7.9425,
+        112.953,
+        -7.9425
+      ],
+      "byteLength": 962,
+      "contentSha256": "afafaa5fa034432e47e9c1912ee3fd73e25a3424f3eaf052e05def8ce0acad8f",
+      "featureCount": 1,
+      "featureIdSetSha256": "4449564bc1f9d9a384fe1e8e99f611c69e50223e3c987434da1c1d1db7ad02ee",
+      "firstFeatureId": "cctv-national-aaf9fd7fb86cacfedd5b8d48",
+      "geohash": "qw86",
+      "id": "qw86:0000",
+      "lastFeatureId": "cctv-national-aaf9fd7fb86cacfedd5b8d48",
+      "part": 0,
+      "path": "shards/qw86/0000.afafaa5fa034432e.geojson"
+    },
+    {
+      "bbox": [
+        113.746922,
+        -8.18699358,
+        113.746922,
+        -8.18699358
+      ],
+      "byteLength": 1191,
+      "contentSha256": "33e67047c65362056b144443315fa30e934d85d96db45ce7053e39140de164f1",
+      "featureCount": 1,
+      "featureIdSetSha256": "c23ee50d59e638e795f7f476fa813229c9b2e3992cda121487ed4b9eeb05675a",
+      "firstFeatureId": "binamarga-national-directory-ch-77/ch-jembatan-wirolegi-jember",
+      "geohash": "qw8c",
+      "id": "qw8c:0000",
+      "lastFeatureId": "binamarga-national-directory-ch-77/ch-jembatan-wirolegi-jember",
+      "part": 0,
+      "path": "shards/qw8c/0000.33e67047c6536205.geojson"
+    },
+    {
+      "bbox": [
+        113.814925764903,
+        -7.9311623732955,
+        113.843043653919,
+        -7.91167401901048
+      ],
+      "byteLength": 17392,
+      "contentSha256": "3891a48b82d0cd2184e9a075bd2d08056a394ad06e9f421bf9f95bd2a9261da1",
+      "featureCount": 18,
+      "featureIdSetSha256": "02fb4694d588fc087724319a1c599c00d8778d0c322e6a85cfb4e181aa453df1",
+      "firstFeatureId": "cctv-national-0a29c674ce3ae7f3d9023bdc",
+      "geohash": "qw8f",
+      "id": "qw8f:0000",
+      "lastFeatureId": "cctv-national-e729da80799846e2095c4d97",
+      "part": 0,
+      "path": "shards/qw8f/0000.3891a48b82d0cd21.geojson"
+    },
+    {
+      "bbox": [
+        113.817488766582,
+        -7.90974888421416,
+        113.817488766582,
+        -7.90974888421416
+      ],
+      "byteLength": 1011,
+      "contentSha256": "16a4ca253d4d1afd310cea52ba46d182218d5515433bb415cf29b1513d918906",
+      "featureCount": 1,
+      "featureIdSetSha256": "9a10b77ca0b404abcb0f907277bd0192eaa560e94d1755d6c1c79034f639b11a",
+      "firstFeatureId": "cctv-national-f7fad9f1acc36cdd5185834f",
+      "geohash": "qw8g",
+      "id": "qw8g:0000",
+      "lastFeatureId": "cctv-national-f7fad9f1acc36cdd5185834f",
+      "part": 0,
+      "path": "shards/qw8g/0000.16a4ca253d4d1afd.geojson"
+    },
+    {
+      "bbox": [
+        112.762062549591,
+        -7.63863063523335,
+        112.827127575874,
+        -7.61470961577051
+      ],
+      "byteLength": 1992,
+      "contentSha256": "b118aa997950b6bcbdf2ef5f1298126385b36af31bdcf7014f568284caed5b1b",
+      "featureCount": 2,
+      "featureIdSetSha256": "ca19047678c0e203784de8abbfc8ce977087b8b7cf7a6d74237a7f81130490d1",
+      "firstFeatureId": "cctv-national-0723203fed41beaa587a3a04",
+      "geohash": "qw8h",
+      "id": "qw8h:0000",
+      "lastFeatureId": "cctv-national-9bf999b44f3d74ce55f018e7",
+      "part": 0,
+      "path": "shards/qw8h/0000.b118aa997950b6bc.geojson"
+    },
+    {
+      "bbox": [
+        112.5448,
+        -7.40752,
+        112.5498,
+        -7.38926
+      ],
+      "byteLength": 5128,
+      "contentSha256": "26b1a7e3aed4dd2d7399c939b36d9da5f8298be2f74853f25308a310d039dd1e",
+      "featureCount": 5,
+      "featureIdSetSha256": "43be296952817dfcf495b1f171b611790797bfdfb1d28fd9dccc77e707157a99",
+      "firstFeatureId": "cctv-national-05ece79152eea43b6ab42bad",
+      "geohash": "qw8j",
+      "id": "qw8j:0000",
+      "lastFeatureId": "cctv-national-dcd99f5ee49efb131ced7a01",
+      "part": 0,
+      "path": "shards/qw8j/0000.26b1a7e3aed4dd2d.geojson"
+    },
+    {
+      "bbox": [
+        112.884993553162,
+        -7.71205483612934,
+        113.184,
+        -7.576
+      ],
+      "byteLength": 17684,
+      "contentSha256": "04ddb38833cdb52b62ed60fd35194eb6bb88f5a0e8e332168ad2638481dd4faa",
+      "featureCount": 19,
+      "featureIdSetSha256": "a2ef95bf7bfab54c8b1d440cb5c3d6f29c9c656fffafdc9a94329ab44098eb9d",
+      "firstFeatureId": "cctv-national-02be88e5a213226cd1a75854",
+      "geohash": "qw8k",
+      "id": "qw8k:0000",
+      "lastFeatureId": "cctv-national-dec090d8566833b879df74de",
+      "part": 0,
+      "path": "shards/qw8k/0000.04ddb38833cdb52b.geojson"
+    },
+    {
+      "bbox": [
+        112.53099,
+        -7.38258,
+        112.72482954,
+        -7.21048
+      ],
+      "byteLength": 40147,
+      "contentSha256": "eca2008640f28b3feded7b16d49e1efae111db9128f24e5c746b4632a7616c34",
+      "featureCount": 41,
+      "featureIdSetSha256": "3c3465035c311601d36e7eae1e856cda49c7c5ab318055ca925324312bce7fff",
+      "firstFeatureId": "binamarga-national-directory-kemenhub-116/kemenhub-pintu-masuk-jembatan-kab-sidoarjo-jawa-timur",
+      "geohash": "qw8n",
+      "id": "qw8n:0000",
+      "lastFeatureId": "cctv-national-fec91317b255e14f18d96112",
+      "part": 0,
+      "path": "shards/qw8n/0000.eca2008640f28b3f.geojson"
+    },
+    {
+      "bbox": [
+        112.58791,
+        -7.20315,
+        112.5955331,
+        -7.1685
+      ],
+      "byteLength": 9988,
+      "contentSha256": "39adab6e7bdf4bfb3ad982d59f42ac79767c03c9d6cd4753a1b3e5c14fd3459c",
+      "featureCount": 10,
+      "featureIdSetSha256": "b142d73b332ce1a3f8289ac6f66d8640d2c37b7bb2e4e82e216566dd63ad551d",
+      "firstFeatureId": "cctv-national-08c654df9f5359a16350baa3",
+      "geohash": "qw8p",
+      "id": "qw8p:0000",
+      "lastFeatureId": "cctv-national-e876064298501f213ffa95d0",
+      "part": 0,
+      "path": "shards/qw8p/0000.39adab6e7bdf4bfb.geojson"
+    },
+    {
+      "bbox": [
+        114.04733491,
+        -8.31108544,
+        114.04733491,
+        -8.31108544
+      ],
+      "byteLength": 1203,
+      "contentSha256": "94b8bd9ad24f8e214dd3ff9f37ecd137ea0e260b868b508fe3358af8e96178e3",
+      "featureCount": 1,
+      "featureIdSetSha256": "30eacd23ef56add8426b7f955a381796f945f03688be98a4d6ef0b3ecbfe30ac",
+      "firstFeatureId": "binamarga-national-directory-ch-58/ch-jembatan-kalitakir-banyuwangi",
+      "geohash": "qw90",
+      "id": "qw90:0000",
+      "lastFeatureId": "binamarga-national-directory-ch-58/ch-jembatan-kalitakir-banyuwangi",
+      "part": 0,
+      "path": "shards/qw90/0000.94b8bd9ad24f8e21.geojson"
+    },
+    {
+      "bbox": [
+        114.4338,
+        -8.187086,
+        114.437703,
+        -8.1701
+      ],
+      "byteLength": 3616,
+      "contentSha256": "3ac73ebdd51fe39def8f8101429ca85249840405e50a5a26651267063b08fde0",
+      "featureCount": 3,
+      "featureIdSetSha256": "fc5bef124e0d5b24511879a8620b3e922a0908af871caee429fbae42a8da3dc2",
+      "firstFeatureId": "binamarga-national-directory-kemenhub-102/kemenhub-cctv-gilimanuk-2-kab-jembrana-bali",
+      "geohash": "qw93",
+      "id": "qw93:0000",
+      "lastFeatureId": "binamarga-national-directory-kemenhub-126/kemenhub-cctv-arah-depasar-kab-jembrana-bali",
+      "part": 0,
+      "path": "shards/qw93/0000.3ac73ebdd51fe39d.geojson"
+    },
+    {
+      "bbox": [
+        114.242,
+        -8.058,
+        114.242,
+        -8.058
+      ],
+      "byteLength": 958,
+      "contentSha256": "b374796941264a66f75bc54bf27496cccf46611c27f80f03b86dea046e654d9f",
+      "featureCount": 1,
+      "featureIdSetSha256": "292f42cb03bbf1e6e8e25459ed6d3ff5caf2531d747a20ac271eded69492aaeb",
+      "firstFeatureId": "cctv-national-3d2f29f259e85cbf2e87d171",
+      "geohash": "qw94",
+      "id": "qw94:0000",
+      "lastFeatureId": "cctv-national-3d2f29f259e85cbf2e87d171",
+      "part": 0,
+      "path": "shards/qw94/0000.b374796941264a66.geojson"
+    },
+    {
+      "bbox": [
+        114.933679,
+        -8.19305,
+        114.933679,
+        -8.19305
+      ],
+      "byteLength": 1656,
+      "contentSha256": "d6664a55d1fe5d59374b039a2481113a4cf0ec8518ffd6e8629003abbde241d5",
+      "featureCount": 1,
+      "featureIdSetSha256": "2b580ede560c688e8bb8569a7509d3ba456697cb039e27d62671e91ef3571578",
+      "firstFeatureId": "pemkab-buleleng-13-simpang-seririt",
+      "geohash": "qw99",
+      "id": "qw99:0000",
+      "lastFeatureId": "pemkab-buleleng-13-simpang-seririt",
+      "part": 0,
+      "path": "shards/qw99/0000.d6664a55d1fe5d59.geojson"
+    },
+    {
+      "bbox": [
+        115.188916,
+        -8.4095178,
+        115.188916,
+        -8.4095178
+      ],
+      "byteLength": 976,
+      "contentSha256": "68dce28d6c955f04573815f6312b3cd54aa574e0df4844c87ed8a8c4ec6db703",
+      "featureCount": 1,
+      "featureIdSetSha256": "d81e9ad3aa8d04e4f15c7e307de329384639cb2c6696df8ea2c5a1f542bd86c6",
+      "firstFeatureId": "cctv-national-6020eafff58f465e5d7b58d3",
+      "geohash": "qw9b",
+      "id": "qw9b:0000",
+      "lastFeatureId": "cctv-national-6020eafff58f465e5d7b58d3",
+      "part": 0,
+      "path": "shards/qw9b/0000.68dce28d6c955f04.geojson"
+    },
+    {
+      "bbox": [
+        115.068071,
+        -8.134957,
+        115.120243,
+        -8.093357
+      ],
+      "byteLength": 18414,
+      "contentSha256": "3368ecc1cd9968856a0e6aea5509ff11df9ecec16860964b65abcc9832c755d7",
+      "featureCount": 11,
+      "featureIdSetSha256": "ef4b971ebada89529388b3fd0cbbb6e983e1bbb9f0131629a29d21486357e57d",
+      "firstFeatureId": "pemkab-buleleng-1-simpang-udayana",
+      "geohash": "qw9c",
+      "id": "qw9c:0000",
+      "lastFeatureId": "pemkab-buleleng-9-yudistira",
+      "part": 0,
+      "path": "shards/qw9c/0000.3368ecc1cd996885.geojson"
+    },
+    {
+      "bbox": [
+        118.72369,
+        -8.46429,
+        118.7534,
+        -8.44106
+      ],
+      "byteLength": 2240,
+      "contentSha256": "fc57562b5f7a88619e4bcd29cdebe97f5707e5c9bf0335d0510e6ce6868cc682",
+      "featureCount": 2,
+      "featureIdSetSha256": "a17c7dc5c4c364ef3202cb903d784672abcb464281413dcd870a610d68072ba1",
+      "firstFeatureId": "cctv-national-0ceae2819a498b9085de09a9",
+      "geohash": "qwkr",
+      "id": "qwkr:0000",
+      "lastFeatureId": "cctv-national-2381224c34bb4a503b4b2866",
+      "part": 0,
+      "path": "shards/qwkr/0000.fc57562b5f7a8861.geojson"
+    },
+    {
+      "bbox": [
+        123.607,
+        -10.1772,
+        123.607,
+        -10.1772
+      ],
+      "byteLength": 2293,
+      "contentSha256": "9362eda5394650bd401f03ab26d1069e6e2bc69013c9ba271511abaf8472db36",
+      "featureCount": 2,
+      "featureIdSetSha256": "b43a14c639ac7c6e7873243585bb27ca6a2a2f6a0abf5a5bbedee51f14ff858b",
+      "firstFeatureId": "cctv-national-2d015cf927fbbefcf3f6964e",
+      "geohash": "qwpy",
+      "id": "qwpy:0000",
+      "lastFeatureId": "cctv-national-c815008241b63106e4ca7f59",
+      "part": 0,
+      "path": "shards/qwpy/0000.9362eda5394650bd.geojson"
+    },
+    {
+      "bbox": [
+        114.58754469407165,
+        -3.372661018410213,
+        114.596541,
+        -3.35041
+      ],
+      "byteLength": 4762,
+      "contentSha256": "4f66956aba7f237f2b79d1505de8a24a4603fa740dbe3aeefc82a68b4ca4a7bb",
+      "featureCount": 2,
+      "featureIdSetSha256": "fa90f1ee8babec674711e66994d790d71e8f1f4d941e23d29b3f812cc4460771",
+      "firstFeatureId": "dishub-banjarmasin-jalan-gubernur-soebardjo-jembatan-tatah-bangkal-keluar-kota",
+      "geohash": "qx3k",
+      "id": "qx3k:0000",
+      "lastFeatureId": "dishub-banjarmasin-simpang-gerilya",
+      "part": 0,
+      "path": "shards/qx3k/0000.4f66956aba7f237f.geojson"
+    },
+    {
+      "bbox": [
+        114.579188,
+        -3.33261,
+        114.606822,
+        -3.277988
+      ],
+      "byteLength": 60260,
+      "contentSha256": "6ac5359c26a7c44a6f107a704620247afc664cdd8c4930d650d3d21595d50752",
+      "featureCount": 26,
+      "featureIdSetSha256": "c628983728047e7761c76e96856b53be1e08ef2099d7f078d8dc485325cfbece",
+      "firstFeatureId": "cctv-national-0a0bd5b1f8a3f5d0a074d101",
+      "geohash": "qx3m",
+      "id": "qx3m:0000",
+      "lastFeatureId": "dishub-banjarmasin-u-turn-jalan-s-parman-arah-luar-kota",
+      "part": 0,
+      "path": "shards/qx3m/0000.6ac5359c26a7c44a.geojson"
+    },
+    {
+      "bbox": [
+        114.62471,
+        -3.49491628,
+        114.8528713,
+        -3.347506
+      ],
+      "byteLength": 120163,
+      "contentSha256": "da821b0024a01e522dc06956f42aaa4101afe69642673a7e09cb0fe85ab80aab",
+      "featureCount": 49,
+      "featureIdSetSha256": "110d5237942277a61cbc824f37d2de63d8356cd880b8610f347408f3bef8e76f",
+      "firstFeatureId": "dishub-banjarmasin-simpang-a-yani-pramuka-km-6",
+      "geohash": "qx3s",
+      "id": "qx3s:0000",
+      "lastFeatureId": "diskominfo-banjarbaru-98",
+      "part": 0,
+      "path": "shards/qx3s/0000.da821b0024a01e52.geojson"
+    },
+    {
+      "bbox": [
+        114.613616,
+        -3.331971,
+        114.617718,
+        -3.319693
+      ],
+      "byteLength": 4795,
+      "contentSha256": "e331f2477d87745fe082ba0db97755e6e1666009a2446b5b6ae021be216ddf5a",
+      "featureCount": 2,
+      "featureIdSetSha256": "a743eca0bc42d9c62febb4ea5d834370e4d9b0e3635c469e1df0aa79e7f2f5e8",
+      "firstFeatureId": "dishub-banjarmasin-simpang-a-yani-gatot-fly-over-km-3",
+      "geohash": "qx3t",
+      "id": "qx3t:0000",
+      "lastFeatureId": "dishub-banjarmasin-simpang-veteran-gatot",
+      "part": 0,
+      "path": "shards/qx3t/0000.e331f2477d87745f.geojson"
+    },
+    {
+      "bbox": [
+        115.389232,
+        -3.784367,
+        115.389232,
+        -3.784367
+      ],
+      "byteLength": 2810,
+      "contentSha256": "8a2661ec6d25d2e7007e3934dbed65054c2709ef6b174e5ec82f4333cf5211d6",
+      "featureCount": 1,
+      "featureIdSetSha256": "563974205121e97f0efa832a9e9371878967b95fa0e4972aea7e0de5518f7cac",
+      "firstFeatureId": "pemkab-tanahbumbu-10-9-satui",
+      "geohash": "qx64",
+      "id": "qx64:0000",
+      "lastFeatureId": "pemkab-tanahbumbu-10-9-satui",
+      "part": 0,
+      "path": "shards/qx64/0000.8a2661ec6d25d2e7.geojson"
+    },
+    {
+      "bbox": [
+        115.903759,
+        -3.61556,
+        115.932407,
+        -3.608695
+      ],
+      "byteLength": 5097,
+      "contentSha256": "2d03b4f083b64f7a8972f32c2db26a0ba6f39dd25308f3e835a8aee456ec13e8",
+      "featureCount": 2,
+      "featureIdSetSha256": "a3bcb87d51d5174c0e5db4f990d9d1a9be5586306add55071b58dd90943052e3",
+      "firstFeatureId": "pemkab-tanahbumbu-5-masjid-apung",
+      "geohash": "qx67",
+      "id": "qx67:0000",
+      "lastFeatureId": "pemkab-tanahbumbu-7-6-lapangan-7-februari-pagatan",
+      "part": 0,
+      "path": "shards/qx67/0000.2d03b4f083b64f7a.geojson"
+    },
+    {
+      "bbox": [
+        115.984806,
+        -3.449798,
+        116.010343,
+        -3.40144
+      ],
+      "byteLength": 11168,
+      "contentSha256": "cc6a4e936b6bbf7373b297f2cc2c04f5ae6ad6b1244b99ac5126e1a3c466a209",
+      "featureCount": 4,
+      "featureIdSetSha256": "eef09d5c69c89116f6cf453d5ccb4fe9d6015b100ae9a15c6b39c71e277f9494",
+      "firstFeatureId": "pemkab-tanahbumbu-1-2-simpang-4-kompi",
+      "geohash": "qx6k",
+      "id": "qx6k:0000",
+      "lastFeatureId": "pemkab-tanahbumbu-4-3-simpang-3-feri",
+      "part": 0,
+      "path": "shards/qx6k/0000.cc6a4e936b6bbf73.geojson"
+    },
+    {
+      "bbox": [
+        113.39333,
+        -1.89011,
+        113.41829,
+        -1.87147
+      ],
+      "byteLength": 4017,
+      "contentSha256": "38a2fa3c2fc0884d5ab5bcf12aa856290ebf332db718151ae29e4fd1bf23e10e",
+      "featureCount": 4,
+      "featureIdSetSha256": "5edf508c184783b4533c42359b1a4873ee925d22e9ac7fbbad98442c76c5600d",
+      "firstFeatureId": "cctv-national-27e878e8785f4be80ddface3",
+      "geohash": "qx8t",
+      "id": "qx8t:0000",
+      "lastFeatureId": "cctv-national-808b367a2b0dbd85996fa593",
+      "part": 0,
+      "path": "shards/qx8t/0000.38a2fa3c2fc0884d.geojson"
+    },
+    {
+      "bbox": [
+        114.90426,
+        -0.96079,
+        114.90426,
+        -0.96079
+      ],
+      "byteLength": 1260,
+      "contentSha256": "89eaf1f2dc6cb57de70fe298fa27dea21bab57b10232cb6e066cb9544613ab76",
+      "featureCount": 1,
+      "featureIdSetSha256": "1535f7d309396fb9316058a9bc6905a35b36b66e992492f882b2780d5a3f5989",
+      "firstFeatureId": "cctv-national-bbfac180cf81632b69c8f8cb",
+      "geohash": "qxcd",
+      "id": "qxcd:0000",
+      "lastFeatureId": "cctv-national-bbfac180cf81632b69c8f8cb",
+      "part": 0,
+      "path": "shards/qxcd/0000.89eaf1f2dc6cb57d.geojson"
+    },
+    {
+      "bbox": [
+        115.38014815612101,
+        -2.174791237172263,
+        115.4167158841309,
+        -2.1641769022537707
+      ],
+      "byteLength": 23267,
+      "contentSha256": "95e0dd395f6615062c16e04f68a1a5ba97e8b13aa5537d79092b50be3cdf4a57",
+      "featureCount": 9,
+      "featureIdSetSha256": "c2e46e76dff07c16040060e6372a3e79304c6dea295f59ecae2ea3aeae39512a",
+      "firstFeatureId": "diskominfo-tabalong-simpang-bank-kalsel",
+      "geohash": "qxd5",
+      "id": "qxd5:0000",
+      "lastFeatureId": "diskominfo-tabalong-simpang-terminal",
+      "part": 0,
+      "path": "shards/qxd5/0000.95e0dd395f661506.geojson"
+    },
+    {
+      "bbox": [
+        116.822984,
+        -1.277922,
+        116.949704,
+        -1.231539
+      ],
+      "byteLength": 71219,
+      "contentSha256": "1702027d15a375cd6f5a5fc1c99be823a306e460707a019e40a551048c5c69b3",
+      "featureCount": 24,
+      "featureIdSetSha256": "06ed77309249edd83e8e471b473b612e66b7d5929bbbc7cc106c7415d5cb5af7",
+      "firstFeatureId": "dishub-balikpapan-1-sp-plaza",
+      "geohash": "qxg0",
+      "id": "qxg0:0000",
+      "lastFeatureId": "dishub-balikpapan-9-sp-korpri",
+      "part": 0,
+      "path": "shards/qxg0/0000.1702027d15a375cd.geojson"
+    },
+    {
+      "bbox": [
+        116.846165,
+        -1.223016,
+        116.862603,
+        -1.211932
+      ],
+      "byteLength": 11836,
+      "contentSha256": "8f3440354eb612e84d43ab7c9001c1b772477fad7b842dc3b98049e7d3d4e2e2",
+      "featureCount": 4,
+      "featureIdSetSha256": "398de851359008c8589e931f358fb4b9094e4641b4260ea295fc4acb1fd3edb4",
+      "firstFeatureId": "dishub-balikpapan-24-sp-batu-ampar",
+      "geohash": "qxg1",
+      "id": "qxg1:0000",
+      "lastFeatureId": "dishub-balikpapan-30-sp-kariangau",
+      "part": 0,
+      "path": "shards/qxg1/0000.8f3440354eb612e8.geojson"
+    },
+    {
+      "bbox": [
+        119.4269,
+        -5.166906,
+        119.46061,
+        -5.099731
+      ],
+      "byteLength": 10977,
+      "contentSha256": "840e3492def9398deec6b0d10736a72b76c6ef4a8d6de96e512b2edc5c519266",
+      "featureCount": 13,
+      "featureIdSetSha256": "e174daee3159bb9a89bb8e8cbdfc089eadda17f984e98037404741f5478c6eca",
+      "firstFeatureId": "cctv-national-235e0e0a278a6cec6ab47823",
+      "geohash": "qxhf",
+      "id": "qxhf:0000",
+      "lastFeatureId": "cctv-national-dfa8fe57f2ed917b48bf8cbf",
+      "part": 0,
+      "path": "shards/qxhf/0000.840e3492def9398d.geojson"
+    },
+    {
+      "bbox": [
+        119.466189,
+        -5.0953,
+        119.5232371,
+        -5.06951
+      ],
+      "byteLength": 8278,
+      "contentSha256": "df180468361adedcd0632bca274b4a3bf9e99dd92b74c15e8046095cf7908a64",
+      "featureCount": 10,
+      "featureIdSetSha256": "73d481abd8d12f78d22e13030a8d8e7338cbed32b1cb9bd3bace2df10bea3d5a",
+      "firstFeatureId": "cctv-national-202ad8058e72cd7645bcf00f",
+      "geohash": "qxhg",
+      "id": "qxhg:0000",
+      "lastFeatureId": "cctv-national-f526949304e5fa0454a5f42f",
+      "part": 0,
+      "path": "shards/qxhg/0000.df180468361adedc.geojson"
+    },
+    {
+      "bbox": [
+        121.580699,
+        -4.226379,
+        121.580699,
+        -4.226379
+      ],
+      "byteLength": 1273,
+      "contentSha256": "7b4e94f561e4828c603345a3b11d47c4227356882212d8ae0f007c9506a2fda1",
+      "featureCount": 1,
+      "featureIdSetSha256": "a6fbf3b3744f91eaee945116b24dd85904d054a2b97555fb0bc3d1de6d7dfb8a",
+      "firstFeatureId": "binamarga-national-directory-kemenhub-103/kemenhub-kolaka-kab-kolaka-sulawesi-tenggara",
+      "geohash": "qxnr",
+      "id": "qxnr:0000",
+      "lastFeatureId": "binamarga-national-directory-kemenhub-103/kemenhub-kolaka-kab-kolaka-sulawesi-tenggara",
+      "part": 0,
+      "path": "shards/qxnr/0000.7b4e94f561e4828c.geojson"
+    },
+    {
+      "bbox": [
+        118.8867,
+        -2.6806,
+        118.8867,
+        -2.6806
+      ],
+      "byteLength": 2349,
+      "contentSha256": "efa452b79d97a42c6471286746d1e14a66a4c6c6155ceba6a935fef1ab3837cd",
+      "featureCount": 2,
+      "featureIdSetSha256": "4e29c5983630e150d73e577661953257a81594aefcaa0e56fda0d2fb97e8d02a",
+      "firstFeatureId": "cctv-national-4acfe86de7dda3f11430bd91",
+      "geohash": "qxs8",
+      "id": "qxs8:0000",
+      "lastFeatureId": "cctv-national-5f076b17ad3bdf08c4d98447",
+      "part": 0,
+      "path": "shards/qxs8/0000.efa452b79d97a42c.geojson"
+    },
+    {
+      "bbox": [
+        120.7521088,
+        -1.4143325,
+        120.7521088,
+        -1.4143325
+      ],
+      "byteLength": 2578,
+      "contentSha256": "7c90f33179433475a2127cfa7023945e8d1dd790883aa5b49678093290905cab",
+      "featureCount": 2,
+      "featureIdSetSha256": "efd44b5921bdee09ade5d699f1f4f17591feffbd31435fc3d7286723aebab2e4",
+      "firstFeatureId": "binamarga-national-directory-kemenhub-114/kemenhub-terminal-kasintuwu-pintu-masuk-kab-poso-sulawesi-tengah",
+      "geohash": "qxtz",
+      "id": "qxtz:0000",
+      "lastFeatureId": "binamarga-national-directory-kemenhub-115/kemenhub-terminal-kasintuwu-pintu-keluar-kab-poso-sulawesi-tengah",
+      "part": 0,
+      "path": "shards/qxtz/0000.7c90f33179433475.geojson"
+    },
+    {
+      "bbox": [
+        122.7718496043937,
+        -1.0420481230519894,
+        122.90799013431837,
+        -0.9193442724073411
+      ],
+      "byteLength": 231548,
+      "contentSha256": "980cc2e09a8b3d69e4a6dd5d360b1571afb073d44cd6bb1a0e0397acc4673284",
+      "featureCount": 66,
+      "featureIdSetSha256": "962936f0cf0afdbc54773134caebfc0a2094e7a07df885724b6d343e2cac5935",
+      "firstFeatureId": "pemkab-banggai-1003-perempatan-gklb-imanuel-luwuk-30-21",
+      "geohash": "qxz6",
+      "id": "qxz6:0000",
+      "lastFeatureId": "pemkab-banggai-989-jembatan-pasar-simpong-30-73",
+      "part": 0,
+      "path": "shards/qxz6/0000.980cc2e09a8b3d69.geojson"
+    },
+    {
+      "bbox": [
+        128.1814,
+        -3.6954,
+        128.1814,
+        -3.6954
+      ],
+      "byteLength": 2231,
+      "contentSha256": "8a6154fb398841583c2965d1382ccd3f7f1c0ba8406cc600da9e1b7f2a23da0e",
+      "featureCount": 2,
+      "featureIdSetSha256": "0278d7b17c0e7d274cc4605a94c65fc13b796853c7fab7418fdd78ea21e6a29c",
+      "firstFeatureId": "cctv-national-5034d03bca21766f45aed6eb",
+      "geohash": "qz74",
+      "id": "qz74:0000",
+      "lastFeatureId": "cctv-national-59d2fd5274c5a5a524dceffc",
+      "part": 0,
+      "path": "shards/qz74/0000.8a6154fb39884158.geojson"
+    },
+    {
+      "bbox": [
+        131.2558,
+        -0.8762,
+        131.2558,
+        -0.8762
+      ],
+      "byteLength": 3337,
+      "contentSha256": "dddf98f9ddd54907c61c1fa0bb5ccd5e8082e10c21f4ecd5511bc04c5e4f2312",
+      "featureCount": 3,
+      "featureIdSetSha256": "4d76d821b78c4090bcff2c76598186dfd61711bbf10a226213123bc8cdae787f",
+      "firstFeatureId": "cctv-national-1fe4a708d9ea9fecc1f55391",
+      "geohash": "qzv7",
+      "id": "qzv7:0000",
+      "lastFeatureId": "cctv-national-d6024e600b28a10f601764ed",
+      "part": 0,
+      "path": "shards/qzv7/0000.dddf98f9ddd54907.geojson"
+    },
+    {
+      "bbox": [
+        134.062,
+        -0.8615,
+        134.062,
+        -0.8615
+      ],
+      "byteLength": 2305,
+      "contentSha256": "6110b0047dd27cfbf90d7d6145e5c9976b9796d8e45e6ace9160b02bf0e06567",
+      "featureCount": 2,
+      "featureIdSetSha256": "245c25fea32417985741bdcc76f190e05d1986d40d09530bbaee09e7f7fd9463",
+      "firstFeatureId": "cctv-national-1d88108bbabfa8191586859e",
+      "geohash": "qzz7",
+      "id": "qzz7:0000",
+      "lastFeatureId": "cctv-national-8f3c1ba5fe319dfa94d604d4",
+      "part": 0,
+      "path": "shards/qzz7/0000.6110b0047dd27cfb.geojson"
+    },
+    {
+      "bbox": [
+        140.4018,
+        -8.4932,
+        140.4018,
+        -8.4932
+      ],
+      "byteLength": 3331,
+      "contentSha256": "0f71e7f12d6943180fa52684a236563e217896ba8d99fcdb5f0b488052cf79dc",
+      "featureCount": 3,
+      "featureIdSetSha256": "8370b2b53435208b021a477a349372fba0b9f1db42123e937a603de9c7a8c581",
+      "firstFeatureId": "cctv-national-05d6e1f9a6a89db3777eb6e1",
+      "geohash": "rn7z",
+      "id": "rn7z:0000",
+      "lastFeatureId": "cctv-national-6a15d126e556a799f592fb4e",
+      "part": 0,
+      "path": "shards/rn7z/0000.0f71e7f12d694318.geojson"
+    },
+    {
+      "bbox": [
+        135.4833,
+        -3.3667,
+        135.4833,
+        -3.3667
+      ],
+      "byteLength": 3313,
+      "contentSha256": "fc1c1ccb680cea5d9f0342fa7037d5b9ac518460ab3978d81e6503f5432b8829",
+      "featureCount": 3,
+      "featureIdSetSha256": "bbcd9bdb3c15d1bd12fb2e30f988ccfc0f04f5b695e23d7ec0cffdd0a6017c6a",
+      "firstFeatureId": "cctv-national-8764ea8a44824f6e3b719a1c",
+      "geohash": "rp2k",
+      "id": "rp2k:0000",
+      "lastFeatureId": "cctv-national-c81417183218a85d288ca808",
+      "part": 0,
+      "path": "shards/rp2k/0000.fc1c1ccb680cea5d.geojson"
+    },
+    {
+      "bbox": [
+        138.9461,
+        -4.0958,
+        138.9461,
+        -4.0958
+      ],
+      "byteLength": 3337,
+      "contentSha256": "e1ac9c2555fe70346b3c8830134c5d342569532d219e9fec0d57921aa123ded2",
+      "featureCount": 3,
+      "featureIdSetSha256": "ec0f99685da424733c47ca2ad063e8f3a41de8fc7f6a6d41cf66b7967f7b9236",
+      "firstFeatureId": "cctv-national-2024c736f780feb5e4a823fb",
+      "geohash": "rp6b",
+      "id": "rp6b:0000",
+      "lastFeatureId": "cctv-national-f2d99a3fa499bbe7d209b88d",
+      "part": 0,
+      "path": "shards/rp6b/0000.e1ac9c2555fe7034.geojson"
+    },
+    {
+      "bbox": [
+        140.7181,
+        -2.5337,
+        140.7181,
+        -2.5337
+      ],
+      "byteLength": 2257,
+      "contentSha256": "2aaf58c6e7ab4ac373e7462c81b2b9df168f0471197c18c22a1304508faf5eb5",
+      "featureCount": 2,
+      "featureIdSetSha256": "f2d0c5ce27ee4e59e1fad34723c7ddb5825a612817106051c9b5c1b1a9ac0c40",
+      "firstFeatureId": "cctv-national-14772a2e8dbaaad454f2e241",
+      "geohash": "rps1",
+      "id": "rps1:0000",
+      "lastFeatureId": "cctv-national-55898a1256bf73e7f172549d",
+      "part": 0,
+      "path": "shards/rps1/0000.2aaf58c6e7ab4ac3.geojson"
+    },
+    {
+      "bbox": [
+        95.4464904106,
+        5.459529,
+        95.47235,
+        5.513709
+      ],
+      "byteLength": 11045,
+      "contentSha256": "7aa5835d29829b987a2952c3e07a298e1320c8dcfde2470bd4cf188c0ec7e967",
+      "featureCount": 14,
+      "featureIdSetSha256": "db2efbc8418e12c2d314ef2c5fec5dfb1266d36da5da0b19e112c2000e9a0203",
+      "firstFeatureId": "cctv-national-0c956c8887eda207ac76ae14",
+      "geohash": "w0gz",
+      "id": "w0gz:0000",
+      "lastFeatureId": "cctv-national-f287c6a249911b36b545e3bf",
+      "part": 0,
+      "path": "shards/w0gz/0000.7aa5835d29829b98.geojson"
+    },
+    {
+      "bbox": [
+        100.8216717,
+        0.3177621,
+        100.8764178,
+        0.327266
+      ],
+      "byteLength": 9576,
+      "contentSha256": "8d213ef0f151c82448924ec11c2db76b7aff13ce6f23fd74b6e21d3c348955e5",
+      "featureCount": 12,
+      "featureIdSetSha256": "2836f0442ba011933a9abc2f8fd72c19cec49386de34ef4aa834728903e7ee81",
+      "firstFeatureId": "cctv-national-1652f019d94db6e04b01b47e",
+      "geohash": "w0p9",
+      "id": "w0p9:0000",
+      "lastFeatureId": "cctv-national-e5e6521d3616795c048ab0da",
+      "part": 0,
+      "path": "shards/w0p9/0000.8d213ef0f151c824.geojson"
+    },
+    {
+      "bbox": [
+        101.0214254,
+        0.3843878,
+        101.2454612,
+        0.4239609
+      ],
+      "byteLength": 5609,
+      "contentSha256": "a79ac4dbb50b13fd562d8c8253c793cb4ff6d79c1c55aafa6e2cceb2c138b34c",
+      "featureCount": 7,
+      "featureIdSetSha256": "45a9457a060efda2edad9a5f66de5843d61c810d28c5d87a827b25708111a479",
+      "firstFeatureId": "cctv-national-2c732c73ff7c15db415cc5cd",
+      "geohash": "w0pf",
+      "id": "w0pf:0000",
+      "lastFeatureId": "cctv-national-cf19f6c1e95e14acc5d99d4d",
+      "part": 0,
+      "path": "shards/w0pf/0000.a79ac4dbb50b13fd.geojson"
+    },
+    {
+      "bbox": [
+        101.2274316,
+        0.8925231,
+        101.2336044,
+        0.9455942
+      ],
+      "byteLength": 5522,
+      "contentSha256": "9fc8bf2b2df06764579b59b2c86cb597e6895a5c5945f89980701651e74e72c5",
+      "featureCount": 7,
+      "featureIdSetSha256": "8a7fec57f7213002e900ca3542fbbd879e9564f78196b5d72ea85c056b5d8dd7",
+      "firstFeatureId": "cctv-national-2009b2c5588bfb915b4099e0",
+      "geohash": "w0pv",
+      "id": "w0pv:0000",
+      "lastFeatureId": "cctv-national-9646251584c32c1bd7cc2e75",
+      "part": 0,
+      "path": "shards/w0pv/0000.9fc8bf2b2df06764.geojson"
+    },
+    {
+      "bbox": [
+        98.392,
+        3.17,
+        98.392,
+        3.17
+      ],
+      "byteLength": 975,
+      "contentSha256": "fd4562796877b53a3ee5aa8b9edcf8a7dd8cc3cabeb8a5700e3181ebeb9b09b0",
+      "featureCount": 1,
+      "featureIdSetSha256": "8b1695ddaef56db2bcb5171f5d0120aa9e28133d973f8d91a48d9f684710254a",
+      "firstFeatureId": "cctv-national-189bb01bb9d579f223719ca2",
+      "geohash": "w0tf",
+      "id": "w0tf:0000",
+      "lastFeatureId": "cctv-national-189bb01bb9d579f223719ca2",
+      "part": 0,
+      "path": "shards/w0tf/0000.fd4562796877b53a.geojson"
+    },
+    {
+      "bbox": [
+        99.03741729675427,
+        2.9090234978581884,
+        99.07893578725114,
+        2.9750954176172004
+      ],
+      "byteLength": 93845,
+      "contentSha256": "a96e5378ee3da481e1826ee491e7fbe3f847fa62b33c4b6a1b91989748c28a92",
+      "featureCount": 37,
+      "featureIdSetSha256": "14ca886b0f234bc1d95b38bc253862e606b0d66c9ddb0dca64b8eed660207763",
+      "firstFeatureId": "pelintas-pematangsiantar-10-simpang-bdb-medan",
+      "geohash": "w0w2",
+      "id": "w0w2:0000",
+      "lastFeatureId": "pelintas-pematangsiantar-9-perempatan-lorong-20",
+      "part": 0,
+      "path": "shards/w0w2/0000.a96e5378ee3da481.geojson"
+    },
+    {
+      "bbox": [
+        99.0851459005,
+        3.0147983671,
+        99.0852585533,
+        3.0148345268
+      ],
+      "byteLength": 5111,
+      "contentSha256": "7a4664143a9a6d06eefe5cd791569542077f16e54f80aa15a820699045f493a0",
+      "featureCount": 2,
+      "featureIdSetSha256": "15f4311f1bc875e29216bf749e65e5b7eac20dec868cb6e3e455d83c412803dc",
+      "firstFeatureId": "pelintas-pematangsiantar-1-jembatan-sigagak-medan",
+      "geohash": "w0w3",
+      "id": "w0w3:0000",
+      "lastFeatureId": "pelintas-pematangsiantar-2-jembatan-sigagak-siantar",
+      "part": 0,
+      "path": "shards/w0w3/0000.7a4664143a9a6d06.geojson"
+    },
+    {
+      "bbox": [
+        99.3916188,
+        3.133222332,
+        99.45815454,
+        3.1637559
+      ],
+      "byteLength": 15437,
+      "contentSha256": "8c6751a41530469118352b178e05f58b3ee8ff37dc0dbac43f0f836734973ea9",
+      "featureCount": 19,
+      "featureIdSetSha256": "c19808d44bcdc3dbe6022146f16eac2b88de8d5699c92782d5330814605b0f9d",
+      "firstFeatureId": "cctv-national-1a40326d198b9b8ea2acb0a8",
+      "geohash": "w0w9",
+      "id": "w0w9:0000",
+      "lastFeatureId": "cctv-national-e5b78020ea3e837a556fa121",
+      "part": 0,
+      "path": "shards/w0w9/0000.8c6751a415304691.geojson"
+    },
+    {
+      "bbox": [
+        99.583028,
+        2.921262,
+        99.713694,
+        2.986221
+      ],
+      "byteLength": 42085,
+      "contentSha256": "88c6478ad1523d463f3b2a9050c6f022be5379531ca5eafa7a02d72978b1ab5b",
+      "featureCount": 30,
+      "featureIdSetSha256": "617b376b5830f42c759df96dbaf62c670fb05abc1c911c03423e4038f09320b3",
+      "firstFeatureId": "cctv-national-00beaa7539e8b2d94aada4ca",
+      "geohash": "w0wb",
+      "id": "w0wb:0000",
+      "lastFeatureId": "diskominfo-asahan-simpang-stadion",
+      "part": 0,
+      "path": "shards/w0wb/0000.88c6478ad1523d46.geojson"
+    },
+    {
+      "bbox": [
+        101.2527405,
+        0.4067705,
+        101.2584148,
+        0.4107197
+      ],
+      "byteLength": 3222,
+      "contentSha256": "eb6cf632ff6cb3f5ac1555ffeb3feb9ddb72c4e3b946922ff69186c0101fcf21",
+      "featureCount": 4,
+      "featureIdSetSha256": "6b131321253dda4083b951169443c4cd7994f3fd8616357e66ac1b6dbf1717bd",
+      "firstFeatureId": "cctv-national-8f647c1a934536ce28fe5797",
+      "geohash": "w204",
+      "id": "w204:0000",
+      "lastFeatureId": "cctv-national-c40cf83a966c5cd17cbbb86d",
+      "part": 0,
+      "path": "shards/w204/0000.eb6cf632ff6cb3f5.geojson"
+    },
+    {
+      "bbox": [
+        101.2576233,
+        0.8561525,
+        101.2800422,
+        0.8604848
+      ],
+      "byteLength": 5725,
+      "contentSha256": "4697ca8232a54a4e5161e8b1f111cd8adf6ff1b24b6d82941218efe4170d7e41",
+      "featureCount": 7,
+      "featureIdSetSha256": "bb86755315a7295c9a2202255c946d67474a8a945cdb7444652bb8bd77aa669e",
+      "firstFeatureId": "cctv-national-63a7c0b44d5a2beae20ab8b8",
+      "geohash": "w20h",
+      "id": "w20h:0000",
+      "lastFeatureId": "cctv-national-fa98e415cd9b3a722c8329df",
+      "part": 0,
+      "path": "shards/w20h/0000.4697ca8232a54a4e.geojson"
+    },
+    {
+      "bbox": [
+        101.2513528,
+        1.2119009,
+        101.263926,
+        1.228119
+      ],
+      "byteLength": 1607,
+      "contentSha256": "17252ab856b7b9e5e5e8a0d6756efac35437b78d4e62bdf8bae879b28a19acec",
+      "featureCount": 2,
+      "featureIdSetSha256": "01e402532c16426618099962d363807a9f98338b5572a9babefe5e836a9e5bfb",
+      "firstFeatureId": "cctv-national-add318ea455e9bc3001d50d7",
+      "geohash": "w20n",
+      "id": "w20n:0000",
+      "lastFeatureId": "cctv-national-d146633d825c73145291bf98",
+      "part": 0,
+      "path": "shards/w20n/0000.17252ab856b7b9e5.geojson"
+    },
+    {
+      "bbox": [
+        101.2712278,
+        1.2466264,
+        101.314093,
+        1.3931063
+      ],
+      "byteLength": 3176,
+      "contentSha256": "bebe304821ab01d39f2356195a54e914fd5673ff54b7729c3f28ba6dc5f6ca5e",
+      "featureCount": 4,
+      "featureIdSetSha256": "49964f615c75d2ab70847fe7fd586f1117e0fc40aad6f4f057958ee3a8a2c7e9",
+      "firstFeatureId": "cctv-national-5c9b1213d88f6d2279a66ca7",
+      "geohash": "w20p",
+      "id": "w20p:0000",
+      "lastFeatureId": "cctv-national-adf05471ee13fce71d51c910",
+      "part": 0,
+      "path": "shards/w20p/0000.bebe304821ab01d3.geojson"
+    },
+    {
+      "bbox": [
+        104.0265,
+        1.12486,
+        104.0265,
+        1.12486
+      ],
+      "byteLength": 982,
+      "contentSha256": "f8546e937d2194bbebad23e950c77fadca4944e0f7b9c4cac3ab01aebead39ea",
+      "featureCount": 1,
+      "featureIdSetSha256": "d5c230f6b62e693e7136ec80a4e0989500de8083839cbb272100daecd915668a",
+      "firstFeatureId": "cctv-national-51475e83a8a27d0ce372b5df",
+      "geohash": "w21y",
+      "id": "w21y:0000",
+      "lastFeatureId": "cctv-national-51475e83a8a27d0ce372b5df",
+      "part": 0,
+      "path": "shards/w21y/0000.f8546e937d2194bb.geojson"
+    },
+    {
+      "bbox": [
+        117.365,
+        2.837,
+        117.365,
+        2.837
+      ],
+      "byteLength": 2355,
+      "contentSha256": "92e0a5f7707ed44a086c42efe65bf4a4655aa7a8c3fb68d7ebc60115fbe7e07d",
+      "featureCount": 2,
+      "featureIdSetSha256": "f852c92e0c649f036d2789b12fa3abafd5228e1bcc562d1e5c795b5422a6ac98",
+      "firstFeatureId": "cctv-national-0b21dd64c15fa13b751e085a",
+      "geohash": "w8e2",
+      "id": "w8e2:0000",
+      "lastFeatureId": "cctv-national-22e44d5cb93f0daccae900c6",
+      "part": 0,
+      "path": "shards/w8e2/0000.92e0a5f7707ed44a.geojson"
+    },
+    {
+      "bbox": [
+        123.0595,
+        0.5435,
+        123.0595,
+        0.5435
+      ],
+      "byteLength": 2281,
+      "contentSha256": "d0f3cd1b28f71426d528106f3af73aee169a6e41ab1d327e72da36e9c519d50c",
+      "featureCount": 2,
+      "featureIdSetSha256": "3129b668410fa65df580405e6949db75c83753e25cd621c7ec5568e35dc1ed28",
+      "firstFeatureId": "cctv-national-dbb847445a989cc0ba0fad3b",
+      "geohash": "w8pe",
+      "id": "w8pe:0000",
+      "lastFeatureId": "cctv-national-f5276a172e5dbb4eaa48fe17",
+      "part": 0,
+      "path": "shards/w8pe/0000.d0f3cd1b28f71426.geojson"
+    },
+    {
+      "bbox": [
+        125.041013,
+        1.39583,
+        125.057546,
+        1.406224
+      ],
+      "byteLength": 11161,
+      "contentSha256": "caad753dca62e59859a85c9f243f2e6c991720f3e0aa899ee168753173e02f79",
+      "featureCount": 3,
+      "featureIdSetSha256": "aec8c2d538642d4e18cdf445b585705b894212ca906fcd839fc6a7417b809bb6",
+      "firstFeatureId": "bpjt-manado-bitung-2055-30-641-manado-bitung-km-18-600",
+      "geohash": "wb0z",
+      "id": "wb0z:0000",
+      "lastFeatureId": "bpjt-manado-bitung-2065-30-642-manado-bitung-access-road-kauditan",
+      "part": 0,
+      "path": "shards/wb0z/0000.caad753dca62e598.geojson"
+    },
+    {
+      "bbox": [
+        124.896523,
+        1.406791,
+        125.112162,
+        1.472871
+      ],
+      "byteLength": 40878,
+      "contentSha256": "774ea20ab53d7d038846041d382fb06317169557514d043481f8653abade130a",
+      "featureCount": 12,
+      "featureIdSetSha256": "57f4a65019b8095d813b3d1cda056aa38159b7dde20c81193fa6054bf8de595a",
+      "firstFeatureId": "bpjt-manado-bitung-12433-30-642-manado-bitung-km-28-750",
+      "geohash": "wb2b",
+      "id": "wb2b:0000",
+      "lastFeatureId": "bpjt-manado-bitung-2062-30-642-manado-bitung-km-25-600",
+      "part": 0,
+      "path": "shards/wb2b/0000.774ea20ab53d7d03.geojson"
+    },
+    {
+      "bbox": [
+        125.177081,
+        1.454361,
+        125.177081,
+        1.454361
+      ],
+      "byteLength": 4330,
+      "contentSha256": "18ce8d3dc8b85b8c19062456cadaa146def1d3cae033f76200d45a896152ddb8",
+      "featureCount": 1,
+      "featureIdSetSha256": "b14af96f19231ff3b6e8e78fcdd2d3f0aa941c9fecb25a2fe44ca1d783661345",
+      "firstFeatureId": "bpjt-manado-bitung-12441-30-642-manado-bitung-km-36-250",
+      "geohash": "wb30",
+      "id": "wb30:0000",
+      "lastFeatureId": "bpjt-manado-bitung-12441-30-642-manado-bitung-km-36-250",
+      "part": 0,
+      "path": "shards/wb30/0000.18ce8d3dc8b85b8c.geojson"
+    },
+    {
+      "bbox": [
+        127.63,
+        1.488,
+        127.63,
+        1.488
+      ],
+      "byteLength": 957,
+      "contentSha256": "9abd38e013a7611778761a4356158172b44d6bf456cb9cabdffb3de17d63a13e",
+      "featureCount": 1,
+      "featureIdSetSha256": "b54df81ca636992cbcf4643006a19dfe976a3cf4473b1f0af3844c6c4e84bb73",
+      "firstFeatureId": "cctv-national-da1139294aa23d04bad0ed57",
+      "geohash": "wb6b",
+      "id": "wb6b:0000",
+      "lastFeatureId": "cctv-national-da1139294aa23d04bad0ed57",
+      "part": 0,
+      "path": "shards/wb6b/0000.9abd38e013a76117.geojson"
+    }
+  ]
+}
