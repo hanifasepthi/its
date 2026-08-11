@@ -1,15 +1,15 @@
 {
   "schemaVersion": "1.0",
   "dataset": "its-cctv-indonesia",
-  "generatedAt": "2026-08-11T16:01:36.443Z",
-  "featureCount": 4215,
+  "generatedAt": "2026-08-11T16:10:04.676Z",
+  "featureCount": 4241,
   "pageSize": 250,
   "byType": {
     "jpeg": 46,
     "hls": 1537,
     "youtube": 42,
     "mp4": 20,
-    "html-page": 2504,
+    "html-page": 2530,
     "mjpeg": 66
   },
   "regions": [
@@ -60,6 +60,13 @@
       "slug": "gajahan",
       "featureCount": 1,
       "verifiedLiveCount": 1,
+      "pageCount": 1
+    },
+    {
+      "region": "Gorontalo",
+      "slug": "gorontalo",
+      "featureCount": 2,
+      "verifiedLiveCount": 2,
       "pageCount": 1
     },
     {
@@ -140,6 +147,13 @@
       "pageCount": 1
     },
     {
+      "region": "Kalimantan Utara",
+      "slug": "kalimantan-utara",
+      "featureCount": 2,
+      "verifiedLiveCount": 2,
+      "pageCount": 1
+    },
+    {
       "region": "Kepulauan Bangka Belitung",
       "slug": "kepulauan-bangka-belitung",
       "featureCount": 1,
@@ -161,6 +175,13 @@
       "pageCount": 1
     },
     {
+      "region": "Maluku",
+      "slug": "maluku",
+      "featureCount": 2,
+      "verifiedLiveCount": 2,
+      "pageCount": 1
+    },
+    {
       "region": "Maluku Utara",
       "slug": "maluku-utara",
       "featureCount": 1,
@@ -175,10 +196,66 @@
       "pageCount": 1
     },
     {
+      "region": "Nusa Tenggara Timur",
+      "slug": "nusa-tenggara-timur",
+      "featureCount": 2,
+      "verifiedLiveCount": 2,
+      "pageCount": 1
+    },
+    {
+      "region": "Papua",
+      "slug": "papua",
+      "featureCount": 2,
+      "verifiedLiveCount": 2,
+      "pageCount": 1
+    },
+    {
+      "region": "Papua Barat",
+      "slug": "papua-barat",
+      "featureCount": 2,
+      "verifiedLiveCount": 2,
+      "pageCount": 1
+    },
+    {
+      "region": "Papua Barat Daya",
+      "slug": "papua-barat-daya",
+      "featureCount": 3,
+      "verifiedLiveCount": 3,
+      "pageCount": 1
+    },
+    {
+      "region": "Papua Pegunungan",
+      "slug": "papua-pegunungan",
+      "featureCount": 3,
+      "verifiedLiveCount": 3,
+      "pageCount": 1
+    },
+    {
+      "region": "Papua Selatan",
+      "slug": "papua-selatan",
+      "featureCount": 3,
+      "verifiedLiveCount": 3,
+      "pageCount": 1
+    },
+    {
+      "region": "Papua Tengah",
+      "slug": "papua-tengah",
+      "featureCount": 3,
+      "verifiedLiveCount": 3,
+      "pageCount": 1
+    },
+    {
       "region": "Riau",
       "slug": "riau",
       "featureCount": 45,
       "verifiedLiveCount": 45,
+      "pageCount": 1
+    },
+    {
+      "region": "Sulawesi Barat",
+      "slug": "sulawesi-barat",
+      "featureCount": 2,
+      "verifiedLiveCount": 2,
       "pageCount": 1
     },
     {

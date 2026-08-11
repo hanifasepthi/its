@@ -1,11 +1,11 @@
 {
-  "generatedAt": "2026-08-11T16:01:36.621Z",
-  "featureCount": 4215,
+  "generatedAt": "2026-08-11T16:10:04.772Z",
+  "featureCount": 4241,
   "provinceCount": 38,
-  "coveredProvinceCount": 27,
+  "coveredProvinceCount": 38,
   "sufficientlyCoveredCount": 8,
-  "missingProvinceCount": 11,
-  "lowProvinceCount": 19,
+  "missingProvinceCount": 0,
+  "lowProvinceCount": 30,
   "targetPerProvince": 100,
   "nonProvinceBuckets": [
     {
@@ -184,11 +184,11 @@
     },
     {
       "province": "Nusa Tenggara Timur",
-      "count": 0,
-      "verifiedLiveCount": 0,
-      "status": "missing",
+      "count": 2,
+      "verifiedLiveCount": 2,
+      "status": "low",
       "target": 100,
-      "gap": 100
+      "gap": 98
     },
     {
       "province": "Kalimantan Barat",
@@ -224,11 +224,11 @@
     },
     {
       "province": "Kalimantan Utara",
-      "count": 0,
-      "verifiedLiveCount": 0,
-      "status": "missing",
+      "count": 2,
+      "verifiedLiveCount": 2,
+      "status": "low",
       "target": 100,
-      "gap": 100
+      "gap": 98
     },
     {
       "province": "Sulawesi Utara",
@@ -240,11 +240,11 @@
     },
     {
       "province": "Gorontalo",
-      "count": 0,
-      "verifiedLiveCount": 0,
-      "status": "missing",
+      "count": 2,
+      "verifiedLiveCount": 2,
+      "status": "low",
       "target": 100,
-      "gap": 100
+      "gap": 98
     },
     {
       "province": "Sulawesi Tengah",
@@ -256,11 +256,11 @@
     },
     {
       "province": "Sulawesi Barat",
-      "count": 0,
-      "verifiedLiveCount": 0,
-      "status": "missing",
+      "count": 2,
+      "verifiedLiveCount": 2,
+      "status": "low",
       "target": 100,
-      "gap": 100
+      "gap": 98
     },
     {
       "province": "Sulawesi Selatan",
@@ -280,11 +280,11 @@
     },
     {
       "province": "Maluku",
-      "count": 0,
-      "verifiedLiveCount": 0,
-      "status": "missing",
+      "count": 2,
+      "verifiedLiveCount": 2,
+      "status": "low",
       "target": 100,
-      "gap": 100
+      "gap": 98
     },
     {
       "province": "Maluku Utara",
@@ -296,51 +296,51 @@
     },
     {
       "province": "Papua",
-      "count": 0,
-      "verifiedLiveCount": 0,
-      "status": "missing",
+      "count": 2,
+      "verifiedLiveCount": 2,
+      "status": "low",
       "target": 100,
-      "gap": 100
+      "gap": 98
     },
     {
       "province": "Papua Barat",
-      "count": 0,
-      "verifiedLiveCount": 0,
-      "status": "missing",
+      "count": 2,
+      "verifiedLiveCount": 2,
+      "status": "low",
       "target": 100,
-      "gap": 100
+      "gap": 98
     },
     {
       "province": "Papua Barat Daya",
-      "count": 0,
-      "verifiedLiveCount": 0,
-      "status": "missing",
+      "count": 3,
+      "verifiedLiveCount": 3,
+      "status": "low",
       "target": 100,
-      "gap": 100
+      "gap": 97
     },
     {
       "province": "Papua Selatan",
-      "count": 0,
-      "verifiedLiveCount": 0,
-      "status": "missing",
+      "count": 3,
+      "verifiedLiveCount": 3,
+      "status": "low",
       "target": 100,
-      "gap": 100
+      "gap": 97
     },
     {
       "province": "Papua Tengah",
-      "count": 0,
-      "verifiedLiveCount": 0,
-      "status": "missing",
+      "count": 3,
+      "verifiedLiveCount": 3,
+      "status": "low",
       "target": 100,
-      "gap": 100
+      "gap": 97
     },
     {
       "province": "Papua Pegunungan",
-      "count": 0,
-      "verifiedLiveCount": 0,
-      "status": "missing",
+      "count": 3,
+      "verifiedLiveCount": 3,
+      "status": "low",
       "target": 100,
-      "gap": 100
+      "gap": 97
     }
   ]
 }

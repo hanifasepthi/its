@@ -198,6 +198,14 @@
       "accessType": "official-public-camera-directory",
       "attribution": "MAGMA Indonesia / PVMBG",
       "notes": "Portal resmi kamera gunung api; snapshot bertanda tangan bersifat sementara sehingga katalog menyimpan halaman publik per gunung."
+    },
+    {
+      "region": "Indonesia",
+      "operator": "Direktorat Jenderal Badan Peradilan Agama / Mahkamah Agung RI",
+      "url": "https://cctv.badilag.net/",
+      "accessType": "official-public-player-directory",
+      "attribution": "ACO Badilag / Mahkamah Agung RI",
+      "notes": "Player CCTV yang sengaja dipublikasikan untuk pemantauan layanan pengadilan; impor awal difokuskan pada sebelas provinsi yang sebelumnya belum tercakup."
     }
   ]
 }
