@@ -7,6 +7,17 @@ const webRoot = path.resolve(__dirname, "..");
 const appUpdatePath = path.join(webRoot, "public", "app-update.json");
 const appsDir = path.join(webRoot, "dist", "artifacts", "apps");
 const distDir = path.join(webRoot, "dist");
+// `/cctv` is the interactive media-first application. The catalog generator
+// also emits a static directory index for SEO; remove only that index from the
+// hosting build so Firebase can route the clean URL to the SPA, while keeping
+// every generated `/cctv/<camera>` detail page intact.
+fs.rmSync(path.join(distDir, "cctv", "index.html"), { force: true });
+const publicCctvCatalogDir = path.join(webRoot, "public", "data", "cctv-catalog");
+const hostingCctvCatalogDir = path.join(distDir, "data", "cctv-catalog");
+if (fs.existsSync(publicCctvCatalogDir)) {
+  fs.cpSync(publicCctvCatalogDir, hostingCctvCatalogDir, { recursive: true, force: true });
+  console.log("prepare-hosting-artifacts: synchronized CCTV catalog into hosting output.");
+}
 const analyticsConfig = readJson(path.join(webRoot, "analytics.config.json"));
 const SITE_ORIGIN = "https://itstelkom.web.app";
 const CLOUDFLARE_WEB_ANALYTICS_TOKEN = String(
@@ -20,6 +31,12 @@ const MICROSOFT_CLARITY_PROJECT_ID = String(
 ).trim();
 const GOOGLE_SITE_VERIFICATION = "c8bcvZrCDvCbFQbw1nvSf4Dvemq6qb35bh1J64DJ_2g";
 const BING_SITE_VERIFICATION = "C6357AD329BE82ECD8276C53EB8CDFA7";
+const OPTIONAL_SITE_VERIFICATIONS = [
+  ["baidu-site-verification", process.env.BAIDU_SITE_VERIFICATION],
+  ["yandex-verification", process.env.YANDEX_SITE_VERIFICATION],
+  ["naver-site-verification", process.env.NAVER_SITE_VERIFICATION],
+  ["p:domain_verify", process.env.PINTEREST_SITE_VERIFICATION],
+];
 const DEFAULT_SOCIAL_IMAGE = `${SITE_ORIGIN}/screenshots/desktop-home.png`;
 // Pin map data to the immutable revision that introduced the classified
 // national shards. The former moving branch later replaced these filenames,
@@ -348,6 +365,12 @@ function seoTags(html, route) {
 
   if (!hasNamedMeta(html, "google-site-verification")) tags.push(`<meta name="google-site-verification" content="${GOOGLE_SITE_VERIFICATION}" />`);
   if (!hasNamedMeta(html, "msvalidate.01")) tags.push(`<meta name="msvalidate.01" content="${BING_SITE_VERIFICATION}" />`);
+  for (const [name, rawValue] of OPTIONAL_SITE_VERIFICATIONS) {
+    const value = String(rawValue || "").trim();
+    if (value && /^[A-Za-z0-9._:-]{6,256}$/.test(value) && !hasNamedMeta(html, name)) {
+      tags.push(`<meta name="${name}" content="${escapeHtmlAttribute(value)}" />`);
+    }
+  }
   if (!hasNamedMeta(html, "robots")) tags.push('<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />');
   if (!/<link\b(?=[^>]*\brel\s*=\s*["']canonical["'])[^>]*>/i.test(html)) tags.push(`<link rel="canonical" href="${escapeHtmlAttribute(canonical)}" />`);
   if (!hasPropertyMeta(html, "og:locale")) tags.push('<meta property="og:locale" content="id_ID" />');
