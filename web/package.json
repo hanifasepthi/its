@@ -33,6 +33,7 @@
     "cctv:data:probe": "node scripts/cctv-national/probe.mjs",
     "cctv:data:audit": "node scripts/cctv-national/audit.mjs",
     "cctv:data:firebase": "node scripts/cctv-national/firebase-export.mjs",
+    "cctv:data:promote": "node scripts/cctv-national/promote-to-catalog.mjs",
     "map:transit:check": "node scripts/qa-transit-relation-semantics.mjs",
     "map:data:promote": "node scripts/promote-map-dynamics-observations.mjs",
     "map:data:promote:check": "node scripts/qa-map-dynamics-promotion.mjs",

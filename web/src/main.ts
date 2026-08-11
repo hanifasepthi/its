@@ -11498,8 +11498,7 @@ if (staticRoute) {
     video.autoplay = true;
     video.playsInline = true;
     try {
-      const module = await import("mpegts.js");
-      const mpegts = module.default;
+      const { default: mpegts } = await import("mpegts.js");
       if (!mpegts?.isSupported?.()) throw new Error("Media Source Extensions tidak tersedia.");
       const player = mpegts.createPlayer({
         type: "flv",
