@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
@@ -24,6 +24,7 @@ async function main() {
     regions.set(key, list);
   }
 
+  await rm(path.join(outDir, "regions"), { recursive: true, force: true });
   await mkdir(outDir, { recursive: true });
   const manifestRegions = [];
 

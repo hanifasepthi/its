@@ -29,6 +29,10 @@
     "browserYolo": {
       ".read": true
     },
+    "publicCctvNational": {
+      ".read": true,
+      ".write": false
+    },
     "trafficObjectDetectionDataset": {
       ".read": true
     },

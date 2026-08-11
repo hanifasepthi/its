@@ -1,99 +1,176 @@
 {
   "schemaVersion": "1.0",
   "dataset": "its-cctv-indonesia",
-  "generatedAt": "2026-08-11T13:42:29.270Z",
-  "featureCount": 959,
+  "generatedAt": "2026-08-11T15:28:48.680Z",
+  "featureCount": 2553,
   "pageSize": 250,
   "byType": {
-    "jpeg": 30,
-    "html-page": 368,
-    "unknown": 528,
-    "youtube": 23,
-    "hls": 10
+    "jpeg": 46,
+    "youtube": 51,
+    "hls": 155,
+    "mp4": 20,
+    "html-page": 2281
   },
   "regions": [
     {
+      "region": "Bali",
+      "slug": "bali",
+      "featureCount": 21,
+      "verifiedLiveCount": 4,
+      "pageCount": 1
+    },
+    {
+      "region": "Banten",
+      "slug": "banten",
+      "featureCount": 118,
+      "verifiedLiveCount": 118,
+      "pageCount": 1
+    },
+    {
       "region": "DI Yogyakarta",
       "slug": "di-yogyakarta",
-      "featureCount": 6,
-      "verifiedLiveCount": 6,
-      "pageCount": 1
+      "featureCount": 738,
+      "verifiedLiveCount": 737,
+      "pageCount": 3
     },
     {
       "region": "DKI Jakarta",
       "slug": "dki-jakarta",
-      "featureCount": 300,
-      "verifiedLiveCount": 78,
-      "pageCount": 2
+      "featureCount": 612,
+      "verifiedLiveCount": 608,
+      "pageCount": 3
     },
     {
-      "region": "Indonesia",
-      "slug": "indonesia",
-      "featureCount": 113,
-      "verifiedLiveCount": 110,
+      "region": "Gajahan",
+      "slug": "gajahan",
+      "featureCount": 1,
+      "verifiedLiveCount": 1,
+      "pageCount": 1
+    },
+    {
+      "region": "ID",
+      "slug": "id",
+      "featureCount": 2,
+      "verifiedLiveCount": 2,
       "pageCount": 1
     },
     {
       "region": "Jalan tol Indonesia",
       "slug": "jalan-tol-indonesia",
-      "featureCount": 284,
-      "verifiedLiveCount": 272,
-      "pageCount": 2
+      "featureCount": 3,
+      "verifiedLiveCount": 2,
+      "pageCount": 1
+    },
+    {
+      "region": "Jambi",
+      "slug": "jambi",
+      "featureCount": 3,
+      "verifiedLiveCount": 3,
+      "pageCount": 1
+    },
+    {
+      "region": "Jawa Barat",
+      "slug": "jawa-barat",
+      "featureCount": 515,
+      "verifiedLiveCount": 513,
+      "pageCount": 3
     },
     {
       "region": "Jawa Tengah",
       "slug": "jawa-tengah",
-      "featureCount": 50,
-      "verifiedLiveCount": 31,
+      "featureCount": 97,
+      "verifiedLiveCount": 42,
       "pageCount": 1
     },
     {
-      "region": "Kabupaten Tangerang",
-      "slug": "kabupaten-tangerang",
-      "featureCount": 35,
-      "verifiedLiveCount": 32,
+      "region": "Jawa Timur",
+      "slug": "jawa-timur",
+      "featureCount": 248,
+      "verifiedLiveCount": 247,
       "pageCount": 1
     },
     {
-      "region": "Kota Bandung",
-      "slug": "kota-bandung",
+      "region": "Kalimantan Barat",
+      "slug": "kalimantan-barat",
+      "featureCount": 5,
+      "verifiedLiveCount": 0,
+      "pageCount": 1
+    },
+    {
+      "region": "Kalimantan Selatan",
+      "slug": "kalimantan-selatan",
+      "featureCount": 70,
+      "verifiedLiveCount": 53,
+      "pageCount": 1
+    },
+    {
+      "region": "Kalimantan Tengah",
+      "slug": "kalimantan-tengah",
       "featureCount": 6,
       "verifiedLiveCount": 6,
       "pageCount": 1
     },
     {
-      "region": "Kota Banjarmasin",
-      "slug": "kota-banjarmasin",
-      "featureCount": 20,
+      "region": "Kalimantan Timur",
+      "slug": "kalimantan-timur",
+      "featureCount": 3,
+      "verifiedLiveCount": 0,
+      "pageCount": 1
+    },
+    {
+      "region": "Kepulauan Riau",
+      "slug": "kepulauan-riau",
+      "featureCount": 1,
+      "verifiedLiveCount": 1,
+      "pageCount": 1
+    },
+    {
+      "region": "Lampung",
+      "slug": "lampung",
+      "featureCount": 17,
       "verifiedLiveCount": 17,
       "pageCount": 1
     },
     {
-      "region": "Kota Denpasar",
-      "slug": "kota-denpasar",
-      "featureCount": 15,
-      "verifiedLiveCount": 15,
+      "region": "Nusa Tenggara Barat",
+      "slug": "nusa-tenggara-barat",
+      "featureCount": 2,
+      "verifiedLiveCount": 2,
       "pageCount": 1
     },
     {
-      "region": "Kota Palembang",
-      "slug": "kota-palembang",
-      "featureCount": 21,
-      "verifiedLiveCount": 21,
+      "region": "Riau",
+      "slug": "riau",
+      "featureCount": 1,
+      "verifiedLiveCount": 1,
       "pageCount": 1
     },
     {
-      "region": "Kota Pontianak",
-      "slug": "kota-pontianak",
-      "featureCount": 61,
-      "verifiedLiveCount": 54,
+      "region": "Sulawesi Utara",
+      "slug": "sulawesi-utara",
+      "featureCount": 19,
+      "verifiedLiveCount": 16,
       "pageCount": 1
     },
     {
-      "region": "Kota Yogyakarta",
-      "slug": "kota-yogyakarta",
-      "featureCount": 48,
-      "verifiedLiveCount": 38,
+      "region": "Sumatera Barat",
+      "slug": "sumatera-barat",
+      "featureCount": 28,
+      "verifiedLiveCount": 28,
+      "pageCount": 1
+    },
+    {
+      "region": "Sumatera Selatan",
+      "slug": "sumatera-selatan",
+      "featureCount": 23,
+      "verifiedLiveCount": 23,
+      "pageCount": 1
+    },
+    {
+      "region": "Sumatera Utara",
+      "slug": "sumatera-utara",
+      "featureCount": 20,
+      "verifiedLiveCount": 19,
       "pageCount": 1
     }
   ]

@@ -113,6 +113,54 @@
           "youtubeId": "YYqN1j3Xr5k"
         }
       ]
+    },
+    {
+      "region": "Sumatera Barat",
+      "operator": "Pemerintah Kota Padang",
+      "url": "https://streamcctv.padang.go.id/",
+      "accessType": "official-portal",
+      "maxPages": 40,
+      "crawlDepth": 2
+    },
+    {
+      "region": "Kalimantan Timur",
+      "operator": "Pemerintah Kota Samarinda",
+      "url": "https://samarindakota.go.id/layanan/cctv",
+      "accessType": "official-youtube-directory",
+      "maxPages": 20,
+      "crawlDepth": 1
+    },
+    {
+      "region": "Kepulauan Bangka Belitung",
+      "operator": "Pemerintah Kabupaten Belitung",
+      "url": "https://cctv.belitung.go.id/",
+      "accessType": "official-portal",
+      "maxPages": 40,
+      "crawlDepth": 2
+    },
+    {
+      "region": "Kalimantan Selatan",
+      "operator": "Pemerintah Kabupaten Tabalong",
+      "url": "https://cctv.tabalongkab.go.id/map",
+      "accessType": "official-portal",
+      "maxPages": 40,
+      "crawlDepth": 2
+    },
+    {
+      "region": "Kalimantan Selatan",
+      "operator": "Pemerintah Kabupaten Balangan",
+      "url": "https://geoportal.balangankab.go.id/WebPortal/GisWebApp/SIPCCTV/home",
+      "accessType": "official-webgis",
+      "maxPages": 30,
+      "crawlDepth": 2
+    },
+    {
+      "region": "Jawa Barat",
+      "operator": "ATCS Kota Banjar",
+      "url": "https://atcs.banjarkota.go.id/",
+      "accessType": "official-portal",
+      "maxPages": 30,
+      "crawlDepth": 2
     }
   ]
 }
