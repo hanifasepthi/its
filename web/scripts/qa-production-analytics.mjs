@@ -81,6 +81,8 @@ try {
       googleTag: Boolean(document.querySelector("script[data-its-google-tag]")),
       clarityTag: Boolean(document.querySelector('script[src*="clarity.ms/tag/"]')),
       cloudflareTag: Boolean(document.querySelector("script[data-cf-beacon]")),
+      consentManager: Boolean(document.querySelector("its-consent-manager")),
+      openDialogs: document.querySelectorAll("dialog[open]").length,
       analyticsStatus: typeof window.ITSAnalytics?.status === "function" ? window.ITSAnalytics.status() : null,
       forms,
       webMcpForms: forms.filter((form) => form.toolname && form.tooldescription).length,
@@ -101,6 +103,7 @@ try {
     failures,
     actionableFailures,
   };
+  await page.screenshot({ path: path.join(output, "home.png"), fullPage: false });
   await fs.writeFile(path.join(output, "report.json"), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
 } finally {

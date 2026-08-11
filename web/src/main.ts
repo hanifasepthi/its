@@ -4,8 +4,6 @@ import "leaflet-rotate";
 import "./style.css";
 import "./mapLegend";
 import "./components/ItsMapsApp";
-import "./components/ItsConsentManager";
-import "./components/ItsAdSlot";
 import { renderCctvPage } from "./cctvPage";
 import WIN_PREVIEW_WELCOME from "./windows/welcome.png";
 import WIN_PREVIEW_OPTIONS from "./windows/pilihopsiinstaller.png";

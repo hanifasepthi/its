@@ -144,7 +144,7 @@ function analyticsScript() {
   window.dataLayer = window.dataLayer || [];
   window.gtag = window.gtag || function(){ window.dataLayer.push(arguments); };
   window.gtag("consent", "default", {
-    analytics_storage: "denied",
+    analytics_storage: "granted",
     ad_storage: "denied",
     ad_user_data: "denied",
     ad_personalization: "denied"
@@ -211,7 +211,7 @@ function analyticsScript() {
     if (!measuredPath) return;
     maskSensitiveContent(document);
     window.clarity = window.clarity || function(){ (window.clarity.q = window.clarity.q || []).push(arguments); };
-    window.clarity("consentv2", { ad_Storage: "denied", analytics_Storage: "denied" });
+    window.clarity("consentv2", { ad_Storage: "denied", analytics_Storage: "granted" });
     const script = document.createElement("script");
     script.async = true;
     script.dataset.itsClarity = "true";
