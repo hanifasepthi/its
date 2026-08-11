@@ -30,6 +30,74 @@ import type { ApiContext, Env, PushDeliveryJob } from "./types";
 export { AiBudget } from "./budget";
 
 const API_PREFIXES = ["/api/", "/v1/"];
+const FIREBASE_DATABASE_ORIGIN = "https://itstelkom-default-rtdb.asia-southeast1.firebasedatabase.app";
+
+type PublicPresentationDeck = { title?: string; slides?: Array<{ elements?: Array<{ type?: string; src?: string; alt?: string }> }> };
+
+function safePresentationId(value: string | null): string {
+  const id = (value || "").trim();
+  return /^[A-Za-z0-9_-]{4,128}$/.test(id) ? id : "";
+}
+
+async function publicPresentationDeck(projectId: string): Promise<PublicPresentationDeck | null> {
+  if (!projectId) return null;
+  const response = await fetch(`${FIREBASE_DATABASE_ORIGIN}/presentations/${encodeURIComponent(projectId)}/deck.json`, {
+    headers: { Accept: "application/json" }, cf: { cacheTtl: 30, cacheEverything: true },
+  });
+  if (!response.ok) return null;
+  const value = await response.json<unknown>();
+  return value && typeof value === "object" ? value as PublicPresentationDeck : null;
+}
+
+function presentationImageSource(deck: PublicPresentationDeck | null): string {
+  const elements = deck?.slides?.[0]?.elements || [];
+  return elements.find((item) => item?.type === "image" && typeof item.src === "string")?.src || "";
+}
+
+function decodeDataImage(source: string): { bytes: Uint8Array; type: string } | null {
+  const match = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/i.exec(source);
+  if (!match) return null;
+  const binary = atob(match[2]); const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return { bytes, type: match[1].toLowerCase() };
+}
+
+async function presentationOgImage(request: Request): Promise<Response> {
+  const url = new URL(request.url); const projectId = safePresentationId(url.searchParams.get("p"));
+  const deck = await publicPresentationDeck(projectId); const source = presentationImageSource(deck);
+  const decoded = decodeDataImage(source);
+  if (decoded) {
+    const body = decoded.bytes.buffer.slice(decoded.bytes.byteOffset, decoded.bytes.byteOffset + decoded.bytes.byteLength) as ArrayBuffer;
+    return new Response(body, { headers: { "Content-Type": decoded.type, "Cache-Control": "public, max-age=60", "Access-Control-Allow-Origin": "*" } });
+  }
+  if (/^https:\/\//i.test(source)) {
+    const image = await fetch(source, { redirect: "follow" });
+    if (image.ok && (image.headers.get("Content-Type") || "").startsWith("image/")) return new Response(image.body, { headers: { "Content-Type": image.headers.get("Content-Type")!, "Cache-Control": "public, max-age=60" } });
+  }
+  const title = (deck?.title || "ITS Presentasi").slice(0, 90).replace(/[<>&]/g, "");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630"><defs><linearGradient id="g" x2="1" y2="1"><stop stop-color="#111827"/><stop offset="1" stop-color="#be123c"/></linearGradient></defs><rect width="1200" height="630" fill="url(#g)"/><rect x="70" y="70" width="1060" height="490" rx="22" fill="#fff"/><text x="120" y="175" font-family="Arial,sans-serif" font-size="30" fill="#be123c">ITS PRESENTASI</text><text x="120" y="300" font-family="Arial,sans-serif" font-size="58" font-weight="700" fill="#111827">${title}</text><text x="120" y="470" font-family="Arial,sans-serif" font-size="28" fill="#475569">Buka slide, komentar, dan presentasi realtime</text></svg>`;
+  return new Response(svg, { headers: { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=60" } });
+}
+
+async function injectPresentationMetadata(request: Request, response: Response): Promise<Response> {
+  const url = new URL(request.url); const projectId = safePresentationId(url.searchParams.get("p"));
+  if (!projectId || !response.ok || !(response.headers.get("Content-Type") || "").includes("text/html")) return response;
+  const deck = await publicPresentationDeck(projectId); if (!deck) return response;
+  const title = (deck.title || "ITS Presentasi").trim().slice(0, 120);
+  const description = `Buka ${title} di ITS Presentasi — slide realtime, komentar, dan mode pemirsa.`;
+  const image = `${url.origin}/presentation/og-image?p=${encodeURIComponent(projectId)}`;
+  const escaped = (value: string) => value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
+  let html = await response.text();
+  const replacements: Record<string, string> = { "og:title": title, "og:description": description, "og:url": url.href, "og:image": image, "twitter:title": title, "twitter:description": description, "twitter:image": image };
+  for (const [name, value] of Object.entries(replacements)) {
+    const attribute = name.startsWith("og:") ? "property" : "name";
+    const pattern = new RegExp(`(<meta\\s+${attribute}=["']${name.replace(":", "\\:")}["']\\s+content=["'])[^"']*(["'])`, "i");
+    html = html.replace(pattern, `$1${escaped(value)}$2`);
+  }
+  html = html.replace(/<title>[^<]*<\/title>/i, `<title>${escaped(title)} | ITS Presentasi</title>`);
+  const headers = new Headers(response.headers); headers.delete("Content-Length"); headers.set("Cache-Control", "no-cache, no-store, must-revalidate"); headers.set("X-ITS-Presentation-OG", "dynamic");
+  return new Response(html, { status: response.status, statusText: response.statusText, headers });
+}
 
 function noIndexResponse(response: Response): Response {
   const headers = new Headers(response.headers);
@@ -263,6 +331,7 @@ async function proxyFrontend(request: Request, env: Env): Promise<Response> {
 
 async function handleFetch(request: Request, env: Env, execution: ExecutionContext): Promise<Response> {
   const pathname = new URL(request.url).pathname;
+  if (pathname === "/presentation/og-image" && (request.method === "GET" || request.method === "HEAD")) return presentationOgImage(request);
   if (pathname === "/robots.txt") {
     return new Response("User-agent: *\nDisallow: /\n", {
       headers: {
@@ -277,7 +346,10 @@ async function handleFetch(request: Request, env: Env, execution: ExecutionConte
     || pathname.startsWith("/mcp/")
     || pathname === "/.well-known/mcp.json"
     || API_PREFIXES.some((prefix) => pathname.startsWith(prefix));
-  if (!isApi) return proxyFrontend(request, env);
+  if (!isApi) {
+    const response = await proxyFrontend(request, env);
+    return pathname === "/presentation" || pathname === "/presentation/" ? injectPresentationMetadata(request, response) : response;
+  }
   try {
     const response = await apiRouter({ request, env, execution });
     return noIndexResponse(withCors(response, request, env));

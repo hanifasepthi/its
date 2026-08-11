@@ -49,6 +49,11 @@ async function writeEntry<T>(entry: CacheEnvelope<T>): Promise<void> {
 }
 
 export const mapDetailCache = {
+  async peek<T>(key: string): Promise<T | null> {
+    const entry = await readEntry<T>(key);
+    return entry?.value ?? null;
+  },
+
   async get<T>(key: string, maxAgeMs: number): Promise<T | null> {
     const entry = await readEntry<T>(key);
     if (!entry || Date.now() - entry.storedAt > maxAgeMs) return null;

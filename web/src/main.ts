@@ -6,6 +6,7 @@ import "./mapLegend";
 import "./components/ItsMapsApp";
 import "./components/ItsConsentManager";
 import "./components/ItsAdSlot";
+import { renderCctvPage } from "./cctvPage";
 import WIN_PREVIEW_WELCOME from "./windows/welcome.png";
 import WIN_PREVIEW_OPTIONS from "./windows/pilihopsiinstaller.png";
 import WIN_PREVIEW_DONE from "./windows/selesaiinstaller.png";
@@ -862,10 +863,11 @@ function requiredElement<T extends Element>(selector: string, name: string): T {
   return el;
 }
 
-function staticRouteName(pathname: string): "document" | "new" | null {
+function staticRouteName(pathname: string): "document" | "new" | "cctv" | null {
   const normalized = pathname.replace(/\/+$/, "") || "/";
   if (normalized.endsWith("/document") || normalized.endsWith("/documentation")) return "document";
   if (normalized.endsWith("/new")) return "new";
+  if (normalized.endsWith("/cctv")) return "cctv";
   return null;
 }
 
@@ -1441,7 +1443,9 @@ const staticRoute = staticRouteName(window.location.pathname);
 const desktopBridge = (window as Window & { itsDesktop?: ItsDesktopBridge }).itsDesktop;
 let itsInitialDataReady = false;
 let itsMapReady = false;
-if (staticRoute) {
+if (staticRoute === "cctv") {
+  renderCctvPage(app);
+} else if (staticRoute) {
   renderStaticSitePage(app, staticRoute);
 } else {
   app.innerHTML = `<div id="map" class="map" aria-label="Raspberry Pi realtime map"></div>`;

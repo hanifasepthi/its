@@ -1,6 +1,8 @@
 import "./presentation.css";
 
 import JSZip from "jszip";
+import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { runPptAiPipeline } from "./ppt-ai-pipeline";
 import { initializeApp } from "firebase/app";
 import { connectAuthEmulator, getAuth, GoogleAuthProvider, linkWithPopup, signInAnonymously, signInWithPopup, type User } from "firebase/auth";
@@ -36,6 +38,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "224371234284",
   appId: "1:224371234284:web:e2b2f4711fae246a545cc9",
 };
+GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 const SLIDE_WIDTH = 960;
 const SLIDE_HEIGHT = 540;
@@ -4174,6 +4177,46 @@ async function importPptxFile(file: File): Promise<void> {
   }
 }
 
+async function importPdfFile(file: File): Promise<void> {
+  if (!isEditableRole()) return;
+  setSaveState("saving", "Membaca PDF…");
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const pdf = await getDocument({ data: bytes }).promise;
+    const slides: Slide[] = [];
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      setSaveState("saving", `Merender PDF ${pageNumber}/${pdf.numPages}…`);
+      const page = await pdf.getPage(pageNumber);
+      const base = page.getViewport({ scale: 1 });
+      const scale = Math.min(2.2, 1600 / Math.max(1, base.width));
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
+      const context = canvas.getContext("2d", { alpha: false });
+      if (!context) throw new Error("Canvas PDF tidak tersedia.");
+      await page.render({ canvasContext: context, viewport }).promise;
+      const ratio = Math.min(SLIDE_WIDTH / canvas.width, SLIDE_HEIGHT / canvas.height);
+      const width = canvas.width * ratio; const height = canvas.height * ratio;
+      slides.push({
+        id: uid("slide"), name: `Slide ${pageNumber}`, notes: `Diimpor dari ${file.name} · halaman ${pageNumber}`,
+        section: pageNumber === 1 ? "Intro" : "", transition: ["fade", "push", "wipe"][pageNumber % 3],
+        elements: [{ id: uid("el"), type: "image", x: (SLIDE_WIDTH - width) / 2, y: (SLIDE_HEIGHT - height) / 2, w: width, h: height, src: canvas.toDataURL("image/jpeg", .9), alt: `${file.name}, halaman ${pageNumber}`, animation: "fade" }],
+      });
+      page.cleanup();
+    }
+    deckImages.clear(); deck = sanitizeDeck({ title: file.name.replace(/\.pdf$/i, "") || "Presentasi PDF", slides });
+    currentSlide = 0; selectedElementId = null; recordHistory(); renderAll(); scheduleSave("Menyimpan presentasi PDF…");
+    toast(`${slides.length} halaman PDF diimpor sebagai slide HD dengan transisi.`);
+  } catch (error) {
+    console.error(error); setSaveState("error", "Import PDF gagal"); toast(`Import PDF gagal: ${friendlyError(error)}`);
+  }
+}
+
+async function importPresentationFile(file: File): Promise<void> {
+  if (/\.pdf$/i.test(file.name) || file.type === "application/pdf") return importPdfFile(file);
+  return importPptxFile(file);
+}
+
 async function runAiImproveCurrentDeck(): Promise<void> {
   if (!isEditableRole()) return;
   setSaveState("saving", "AI memperbaiki presentasi...");
@@ -6316,8 +6359,8 @@ function cleanupProjectRuntime(): void {
 async function handleDroppedFiles(fileList: FileList | File[]): Promise<void> {
   const files = Array.from(fileList);
   if (!files.length) return;
-  const pptx = files.find((file) => /\.(pptx|ppt)$/i.test(file.name));
-  if (pptx) { await importPptxFile(pptx); return; }
+  const pptx = files.find((file) => /\.(pptx|ppt|pdf)$/i.test(file.name));
+  if (pptx) { await importPresentationFile(pptx); return; }
   for (const image of files.filter((file) => file.type.startsWith("image/"))) await addImageFile(image);
 }
 
@@ -6582,7 +6625,7 @@ function bindUi(): void {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
     input.value = "";
-    if (file) void importPptxFile(file);
+    if (file) void importPresentationFile(file);
   });
   $("#image-input").addEventListener("change", (event) => {
     const input = event.currentTarget as HTMLInputElement;
@@ -6667,7 +6710,7 @@ function bindUi(): void {
   $("#zoom-in").addEventListener("click", () => { ($("#zoom-select") as HTMLSelectElement).value = String(Math.min(1.25, Math.round((zoom + .25) * 100) / 100)); setZoom(zoom + .1); });
   $("#zoom-out").addEventListener("click", () => { ($("#zoom-select") as HTMLSelectElement).value = "0.75"; setZoom(zoom - .1); });
   addEventListener("resize", () => { fitWorkspace(); resizeAudienceSlide(); });
-  addEventListener("keydown", (event) => {
+  addEventListener("keydown", (event: KeyboardEvent) => {
     const editing = ["INPUT", "TEXTAREA"].includes((event.target as HTMLElement)?.tagName) || (event.target as HTMLElement)?.isContentEditable;
     if (!editing && event.key === "Delete" && !event.shiftKey) {
       event.preventDefault();

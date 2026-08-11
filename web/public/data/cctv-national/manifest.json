@@ -1,0 +1,100 @@
+{
+  "schemaVersion": "1.0",
+  "dataset": "its-cctv-indonesia",
+  "generatedAt": "2026-08-11T13:42:29.270Z",
+  "featureCount": 959,
+  "pageSize": 250,
+  "byType": {
+    "jpeg": 30,
+    "html-page": 368,
+    "unknown": 528,
+    "youtube": 23,
+    "hls": 10
+  },
+  "regions": [
+    {
+      "region": "DI Yogyakarta",
+      "slug": "di-yogyakarta",
+      "featureCount": 6,
+      "verifiedLiveCount": 6,
+      "pageCount": 1
+    },
+    {
+      "region": "DKI Jakarta",
+      "slug": "dki-jakarta",
+      "featureCount": 300,
+      "verifiedLiveCount": 78,
+      "pageCount": 2
+    },
+    {
+      "region": "Indonesia",
+      "slug": "indonesia",
+      "featureCount": 113,
+      "verifiedLiveCount": 110,
+      "pageCount": 1
+    },
+    {
+      "region": "Jalan tol Indonesia",
+      "slug": "jalan-tol-indonesia",
+      "featureCount": 284,
+      "verifiedLiveCount": 272,
+      "pageCount": 2
+    },
+    {
+      "region": "Jawa Tengah",
+      "slug": "jawa-tengah",
+      "featureCount": 50,
+      "verifiedLiveCount": 31,
+      "pageCount": 1
+    },
+    {
+      "region": "Kabupaten Tangerang",
+      "slug": "kabupaten-tangerang",
+      "featureCount": 35,
+      "verifiedLiveCount": 32,
+      "pageCount": 1
+    },
+    {
+      "region": "Kota Bandung",
+      "slug": "kota-bandung",
+      "featureCount": 6,
+      "verifiedLiveCount": 6,
+      "pageCount": 1
+    },
+    {
+      "region": "Kota Banjarmasin",
+      "slug": "kota-banjarmasin",
+      "featureCount": 20,
+      "verifiedLiveCount": 17,
+      "pageCount": 1
+    },
+    {
+      "region": "Kota Denpasar",
+      "slug": "kota-denpasar",
+      "featureCount": 15,
+      "verifiedLiveCount": 15,
+      "pageCount": 1
+    },
+    {
+      "region": "Kota Palembang",
+      "slug": "kota-palembang",
+      "featureCount": 21,
+      "verifiedLiveCount": 21,
+      "pageCount": 1
+    },
+    {
+      "region": "Kota Pontianak",
+      "slug": "kota-pontianak",
+      "featureCount": 61,
+      "verifiedLiveCount": 54,
+      "pageCount": 1
+    },
+    {
+      "region": "Kota Yogyakarta",
+      "slug": "kota-yogyakarta",
+      "featureCount": 48,
+      "verifiedLiveCount": 38,
+      "pageCount": 1
+    }
+  ]
+}

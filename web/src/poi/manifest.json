@@ -1,0 +1,2334 @@
+{
+  "version": 1,
+  "requiredFallbacks": [
+    "generic.place",
+    "generic.business",
+    "generic.building",
+    "generic.service",
+    "generic.shop",
+    "generic.transport",
+    "generic.nature"
+  ],
+  "icons": [
+    {
+      "id": "generic.place",
+      "sheet": "tourism",
+      "row": 1,
+      "column": 0,
+      "category": "place",
+      "tags": {},
+      "taxonomy": [
+        "place"
+      ],
+      "aliases": [
+        "poi",
+        "tempat"
+      ],
+      "priority": 60,
+      "minZoom": 17,
+      "labelZoom": 19,
+      "baseSize": 18,
+      "color": "#475569",
+      "glyph": ".",
+      "micro": "./micro/generic/place.webp",
+      "hero": "./hero/generic/place.webp"
+    },
+    {
+      "id": "generic.business",
+      "sheet": "business",
+      "row": 0,
+      "column": 0,
+      "category": "business",
+      "tags": {
+        "office": [
+          "*"
+        ]
+      },
+      "taxonomy": [
+        "business",
+        "office"
+      ],
+      "aliases": [
+        "usaha",
+        "kantor"
+      ],
+      "priority": 48,
+      "minZoom": 16,
+      "labelZoom": 18,
+      "baseSize": 18,
+      "color": "#475569",
+      "glyph": "Bis",
+      "micro": "./micro/generic/business.webp",
+      "hero": "./hero/generic/business.webp"
+    },
+    {
+      "id": "generic.building",
+      "sheet": "housing",
+      "row": 0,
+      "column": 0,
+      "category": "building",
+      "tags": {
+        "building": [
+          "*"
+        ]
+      },
+      "taxonomy": [
+        "building"
+      ],
+      "aliases": [
+        "gedung",
+        "bangunan"
+      ],
+      "priority": 56,
+      "minZoom": 19,
+      "labelZoom": 20,
+      "baseSize": 18,
+      "color": "#64748b",
+      "glyph": "Bld",
+      "micro": "./micro/generic/building.webp",
+      "hero": "./hero/generic/building.webp"
+    },
+    {
+      "id": "generic.service",
+      "sheet": "public",
+      "row": 0,
+      "column": 2,
+      "category": "service",
+      "tags": {
+        "craft": [
+          "*"
+        ]
+      },
+      "taxonomy": [
+        "service"
+      ],
+      "aliases": [
+        "jasa",
+        "layanan"
+      ],
+      "priority": 52,
+      "minZoom": 16,
+      "labelZoom": 18,
+      "baseSize": 18,
+      "color": "#0f766e",
+      "glyph": "Svc",
+      "micro": "./micro/generic/service.webp",
+      "hero": "./hero/generic/service.webp"
+    },
+    {
+      "id": "generic.shop",
+      "sheet": "shopping",
+      "row": 0,
+      "column": 2,
+      "category": "shop",
+      "tags": {
+        "shop": [
+          "*"
+        ]
+      },
+      "taxonomy": [
+        "retail",
+        "shop"
+      ],
+      "aliases": [
+        "toko",
+        "belanja"
+      ],
+      "priority": 46,
+      "minZoom": 15,
+      "labelZoom": 17,
+      "baseSize": 18,
+      "color": "#7c3aed",
+      "glyph": "Shop",
+      "micro": "./micro/generic/shop.webp",
+      "hero": "./hero/generic/shop.webp"
+    },
+    {
+      "id": "generic.transport",
+      "sheet": "transport",
+      "row": 0,
+      "column": 1,
+      "category": "transport",
+      "tags": {
+        "public_transport": [
+          "*"
+        ]
+      },
+      "taxonomy": [
+        "transportation"
+      ],
+      "aliases": [
+        "transportasi",
+        "transit"
+      ],
+      "priority": 30,
+      "minZoom": 13,
+      "labelZoom": 15,
+      "baseSize": 19,
+      "color": "#0284c7",
+      "glyph": "Tr",
+      "micro": "./micro/generic/transport.webp",
+      "hero": "./hero/generic/transport.webp"
+    },
+    {
+      "id": "generic.nature",
+      "sheet": "tourism",
+      "row": 1,
+      "column": 0,
+      "category": "nature",
+      "tags": {
+        "natural": [
+          "*"
+        ]
+      },
+      "taxonomy": [
+        "nature",
+        "natural feature"
+      ],
+      "aliases": [
+        "alam"
+      ],
+      "priority": 42,
+      "minZoom": 14,
+      "labelZoom": 16,
+      "baseSize": 18,
+      "color": "#16a34a",
+      "glyph": "Nat",
+      "micro": "./micro/generic/nature.webp",
+      "hero": "./hero/generic/nature.webp"
+    },
+    {
+      "id": "finance.bank",
+      "sheet": "finance",
+      "row": 0,
+      "column": 0,
+      "category": "finance",
+      "tags": {
+        "amenity": [
+          "bank"
+        ]
+      },
+      "taxonomy": [
+        "finance",
+        "banking",
+        "bank"
+      ],
+      "aliases": [
+        "bank"
+      ],
+      "priority": 28,
+      "minZoom": 14,
+      "labelZoom": 16,
+      "baseSize": 20,
+      "color": "#334155",
+      "glyph": "Bank",
+      "micro": "./micro/finance/bank.webp",
+      "hero": "./hero/finance/bank.webp"
+    },
+    {
+      "id": "finance.atm",
+      "sheet": "finance",
+      "row": 0,
+      "column": 1,
+      "category": "finance",
+      "tags": {
+        "amenity": [
+          "atm"
+        ]
+      },
+      "taxonomy": [
+        "finance",
+        "atm"
+      ],
+      "aliases": [
+        "atm"
+      ],
+      "priority": 31,
+      "minZoom": 15,
+      "labelZoom": 17,
+      "baseSize": 18,
+      "color": "#334155",
+      "glyph": "ATM",
+      "micro": "./micro/finance/atm.webp",
+      "hero": "./hero/finance/atm.webp"
+    },
+    {
+      "id": "finance.money-changer",
+      "sheet": "finance",
+      "row": 1,
+      "column": 2,
+      "category": "finance",
+      "tags": {
+        "amenity": [
+          "bureau_de_change"
+        ]
+      },
+      "taxonomy": [
+        "finance",
+        "currency exchange"
+      ],
+      "aliases": [
+        "money changer",
+        "penukaran uang"
+      ],
+      "priority": 38,
+      "minZoom": 15,
+      "labelZoom": 17,
+      "baseSize": 18,
+      "color": "#334155",
+      "glyph": "FX",
+      "micro": "./micro/finance/money-changer.webp",
+      "hero": "./hero/finance/money-changer.webp"
+    },
+    {
+      "id": "finance.post-office",
+      "sheet": "finance",
+      "row": 2,
+      "column": 0,
+      "category": "public-service",
+      "tags": {
+        "amenity": [
+          "post_office"
+        ]
+      },
+      "taxonomy": [
+        "postal service",
+        "post office"
+      ],
+      "aliases": [
+        "kantor pos"
+      ],
+      "priority": 30,
+      "minZoom": 14,
+      "labelZoom": 16,
+      "baseSize": 19,
+      "color": "#f97316",
+      "glyph": "Pos",
+      "micro": "./micro/finance/post-office.webp",
+      "hero": "./hero/finance/post-office.webp"
+    },
+    {
+      "id": "health.hospital",
+      "sheet": "health",
+      "row": 0,
+      "column": 0,
+      "category": "health",
+      "tags": {
+        "amenity": [
+          "hospital"
+        ],
+        "healthcare": [
+          "hospital"
+        ]
+      },
+      "taxonomy": [
+        "healthcare",
+        "hospital"
+      ],
+      "aliases": [
+        "rumah sakit",
+        "rs"
+      ],
+      "priority": 12,
+      "minZoom": 12,
+      "labelZoom": 14,
+      "baseSize": 22,
+      "color": "#e5484d",
+      "glyph": "RS",
+      "micro": "./micro/health/hospital.webp",
+      "hero": "./hero/health/hospital.webp"
+    },
+    {
+      "id": "health.clinic",
+      "sheet": "health",
+      "row": 0,
+      "column": 4,
+      "category": "health",
+      "tags": {
+        "amenity": [
+          "clinic"
+        ],
+        "healthcare": [
+          "clinic",
+          "doctor"
+        ]
+      },
+      "taxonomy": [
+        "healthcare",
+        "clinic"
+      ],
+      "aliases": [
+        "klinik",
+        "dokter"
+      ],
+      "priority": 20,
+      "minZoom": 13,
+      "labelZoom": 15,
+      "baseSize": 20,
+      "color": "#f97316",
+      "glyph": "Klinik",
+      "micro": "./micro/health/clinic.webp",
+      "hero": "./hero/health/clinic.webp"
+    },
+    {
+      "id": "health.dentist",
+      "sheet": "health",
+      "row": 1,
+      "column": 0,
+      "category": "health",
+      "tags": {
+        "amenity": [
+          "dentist"
+        ],
+        "healthcare": [
+          "dentist"
+        ]
+      },
+      "taxonomy": [
+        "healthcare",
+        "dentist"
+      ],
+      "aliases": [
+        "dokter gigi",
+        "klinik gigi"
+      ],
+      "priority": 31,
+      "minZoom": 15,
+      "labelZoom": 17,
+      "baseSize": 18,
+      "color": "#f97316",
+      "glyph": "Gigi",
+      "micro": "./micro/health/dentist.webp",
+      "hero": "./hero/health/dentist.webp"
+    },
+    {
+      "id": "health.pharmacy",
+      "sheet": "health",
+      "row": 1,
+      "column": 1,
+      "category": "health",
+      "tags": {
+        "amenity": [
+          "pharmacy"
+        ],
+        "healthcare": [
+          "pharmacy"
+        ]
+      },
+      "taxonomy": [
+        "healthcare",
+        "pharmacy"
+      ],
+      "aliases": [
+        "apotek",
+        "farmasi"
+      ],
+      "priority": 22,
+      "minZoom": 14,
+      "labelZoom": 16,
+      "baseSize": 19,
+      "color": "#16a34a",
+      "glyph": "Rx",
+      "micro": "./micro/health/pharmacy.webp",
+      "hero": "./hero/health/pharmacy.webp"
+    },
+    {
+      "id": "health.laboratory",
+      "sheet": "health",
+      "row": 1,
+      "column": 3,
+      "category": "health",
+      "tags": {
+        "healthcare": [
+          "laboratory"
+        ]
+      },
+      "taxonomy": [
+        "healthcare",
+        "medical laboratory"
+      ],
+      "aliases": [
+        "laboratorium klinik"
+      ],
+      "priority": 34,
+      "minZoom": 15,
+      "labelZoom": 17,
+      "baseSize": 18,
+      "color": "#f97316",
+      "glyph": "Lab",
+      "micro": "./micro/health/laboratory.webp",
+      "hero": "./hero/health/laboratory.webp"
+    },
+    {
+      "id": "health.veterinary",
+      "sheet": "health",
+      "row": 3,
+      "column": 2,
+      "category": "health",
+      "tags": {
+        "amenity": [
+          "veterinary"
+        ]
+      },
+      "taxonomy": [
+        "healthcare",
+        "veterinary"
+      ],
+      "aliases": [
+        "klinik hewan",
+        "dokter hewan"
+      ],
+      "priority": 35,
+      "minZoom": 15,
+      "labelZoom": 17,
+      "baseSize": 18,
+      "color": "#f97316",
+      "glyph": "Vet",
+      "micro": "./micro/health/veterinary.webp",
+      "hero": "./hero/health/veterinary.webp"
+    },
+    {
+      "id": "lodging.hotel",
+      "sheet": "lodging",
+      "row": 0,
+      "column": 2,
+      "category": "lodging",
+      "tags": {
+        "tourism": [
+          "hotel"
+        ]
+      },
+      "taxonomy": [
+        "lodging",
+        "hotel"
+      ],
+      "aliases": [
+        "hotel"
+      ],
+      "priority": 24,
+      "minZoom": 13,
+      "labelZoom": 15,
+      "baseSize": 21,
+      "color": "#d97706",
+      "glyph": "Hotel",
+      "micro": "./micro/lodging/hotel.webp",
+      "hero": "./hero/lodging/hotel.webp"
+    },
+    {
+      "id": "lodging.hostel",
+      "sheet": "lodging",
+      "row": 1,
+      "column": 0,
+      "category": "lodging",
+      "tags": {
+        "tourism": [
+          "hostel"
+        ]
+      },
+      "taxonomy": [
+        "lodging",
+        "hostel"
+      ],
+      "aliases": [
+        "hostel"
+      ],
+      "priority": 30,
+      "minZoom": 14,
+      "labelZoom": 16,
+      "baseSize": 19,
+      "color": "#d97706",
+      "glyph": "Hostel",
+      "micro": "./micro/lodging/hostel.webp",
+      "hero": "./hero/lodging/hostel.webp"
+    },
+    {
+      "id": "lodging.guest-house",
+      "sheet": "lodging",
+      "row": 1,
+      "column": 1,
+      "category": "lodging",
+      "tags": {
+        "tourism": [
+          "guest_house"
+        ]
+      },
+      "taxonomy": [
+        "lodging",
+        "guest house"
+      ],
+      "aliases": [
+        "guest house",
+        "penginapan"
+      ],
+      "priority": 31,
+      "minZoom": 14,
+      "labelZoom": 16,
+      "baseSize": 19,
+      "color": "#d97706",
+      "glyph": "Guest",
+      "micro": "./micro/lodging/guest-house.webp",
+      "hero": "./hero/lodging/guest-house.webp"
+    },
+    {
+      "id": "lodging.homestay",
+      "sheet": "lodging",
+      "row": 1,
+      "column": 2,
+      "category": "lodging",
+      "tags": {
+        "tourism": [
+          "apartment",
+          "chalet"
+        ]
+      },
+      "taxonomy": [
+        "lodging",
+        "homestay"
+      ],
+      "aliases": [
+        "homestay",
+        "sewa harian"
+      ],
+      "priority": 34,
+      "minZoom": 15,
+      "labelZoom": 17,
+      "baseSize": 18,
+      "color": "#d97706",
+      "glyph": "Stay",
+      "micro": "./micro/lodging/homestay.webp",
+      "hero": "./hero/lodging/homestay.webp"
+    },
+    {
+      "id": "lodging.resort",
+      "sheet": "lodging",
+      "row": 1,
+      "column": 4,
+      "category": "lodging",
+      "tags": {
+        "tourism": [
+          "resort"
+        ]
+      },
+      "taxonomy": [
+        "lodging",
+        "resort"
+      ],
+      "aliases": [
+        "resort"
+      ],
+      "priority": 26,
+      "minZoom": 13,
+      "labelZoom": 15,
+      "baseSize": 21,
+      "color": "#d97706",
+      "glyph": "Resort",
+      "micro": "./micro/lodging/resort.webp",
+      "hero": "./hero/lodging/resort.webp"
+    },
+    {
+      "id": "food.restaurant",
+      "sheet": "food",
+      "row": 0,
+      "column": 0,
+      "category": "food",
+      "tags": {
+        "amenity": [
+          "restaurant"
+        ]
+      },
+      "taxonomy": [
+        "food service",
+        "restaurant"
+      ],
+      "aliases": [
+        "restoran",
+        "rumah makan"
+      ],
+      "priority": 34,
+      "minZoom": 15,
+      "labelZoom": 17,
+      "baseSize": 19,
+      "color": "#e11d48",
+      "glyph": "Eat",
+      "micro": "./micro/food/restaurant.webp",
+      "hero": "./hero/food/restaurant.webp"
+    },
+    {
+      "id": "food.cafe",
+      "sheet": "food",
+      "row": 0,
+      "column": 3,
+      "category": "food",
+      "tags": {
+        "amenity": [
+          "cafe"
+        ]
+      },
+      "taxonomy": [
+        "food service",
+        "cafe"
+      ],
+      "aliases": [
+        "kafe",
+        "warung kopi"
+      ],
+      "priority": 36,
+      "minZoom": 15,
+      "labelZoom": 17,
+      "baseSize": 18,
+      "color": "#e11d48",
+      "glyph": "Cafe",
+      "micro": "./micro/food/cafe.webp",
+      "hero": "./hero/food/cafe.webp"
+    },
+    {
+      "id": "food.fast-food",
+      "sheet": "food",
+      "row": 1,
+      "column": 0,
+      "category": "food",
+      "tags": {
+        "amenity": [
+          "fast_food"
+        ]
+      },
+      "taxonomy": [
+        "food service",
+        "fast food"
+      ],
+      "aliases": [
+        "fast food"
+      ],
+      "priority": 35,
+      "minZoom": 15,
+      "labelZoom": 17,
+      "baseSize": 18,
+      "color": "#e11d48",
+      "glyph": "Fast",
+      "micro": "./micro/food/fast-food.webp",
+      "hero": "./hero/food/fast-food.webp"
+    },
+    {
+      "id": "food.food-court",
+      "sheet": "food",
+      "row": 1,
+      "column": 1,
+      "category": "food",
+      "tags": {
+        "amenity": [
+          "food_court"
+        ]
+      },
+      "taxonomy": [
+        "food service",
+        "food court"
+      ],
+      "aliases": [
+        "food court"
+      ],
+      "priority": 34,
+      "minZoom": 15,
+      "labelZoom": 17,
+      "baseSize": 19,
+      "color": "#e11d48",
+      "glyph": "Food",
+      "micro": "./micro/food/food-court.webp",
+      "hero": "./hero/food/food-court.webp"
+    },
+    {
+      "id": "food.bakery",
+      "sheet": "food",
+      "row": 1,
+      "column": 2,
+      "category": "food",
+      "tags": {
+        "shop": [
+          "bakery"
+        ]
+      },
+      "taxonomy": [
+        "food retail",
+        "bakery"
+      ],
+      "aliases": [
+        "toko roti",
+        "bakery"
+      ],
+      "priority": 38,
+      "minZoom": 15,
+      "labelZoom": 17,
+      "baseSize": 18,
+      "color": "#e11d48",
+      "glyph": "Roti",
+      "micro": "./micro/food/bakery.webp",
+      "hero": "./hero/food/bakery.webp"
+    },
+    {
+      "id": "food.bar",
+      "sheet": "food",
+      "row": 2,
+      "column": 1,
+      "category": "food",
+      "tags": {
+        "amenity": [
+          "bar",
+          "pub"
+        ]
+      },
+      "taxonomy": [
+        "nightlife",
+        "bar"
+      ],
+      "aliases": [
+        "bar",
+        "lounge"
+      ],
+      "priority": 42,
+      "minZoom": 16,
+      "labelZoom": 18,
+      "baseSize": 18,
+      "color": "#e11d48",
+      "glyph": "Bar",
+      "micro": "./micro/food/bar.webp",
+      "hero": "./hero/food/bar.webp"
+    },
+    {
+      "id": "shopping.mall",
+      "sheet": "shopping",
+      "row": 0,
+      "column": 0,
+      "category": "shopping",
+      "tags": {
+        "shop": [
+          "mall"
+        ],
+        "building": [
+          "retail"
+        ]
+      },
+      "taxonomy": [
+        "retail",
+        "shopping mall"
+      ],
+      "aliases": [
+        "mall",
+        "pusat perbelanjaan"
+      ],
+      "priority": 18,
+      "minZoom": 13,
+      "labelZoom": 15,
+      "baseSize": 21,
+      "color": "#7c3aed",
+      "glyph": "Mall",
+      "micro": "./micro/shopping/mall.webp",
+      "hero": "./hero/shopping/mall.webp"
+    },
+    {
+      "id": "shopping.supermarket",
+      "sheet": "shopping",
+      "row": 0,
+      "column": 1,
+      "category": "shopping",
+      "tags": {
+        "shop": [
+          "supermarket"
+        ]
+      },
+      "taxonomy": [
+        "retail",
+        "supermarket"
+      ],
+      "aliases": [
+        "supermarket"
+      ],
+      "priority": 25,
+      "minZoom": 14,
+      "labelZoom": 16,
+      "baseSize": 20,
+      "color": "#7c3aed",
+      "glyph": "Market",
+      "micro": "./micro/shopping/supermarket.webp",
+      "hero": "./hero/shopping/supermarket.webp"
+    },
+    {
+      "id": "shopping.convenience",
+      "sheet": "shopping",
+      "row": 0,
+      "column": 2,
+      "category": "shopping",
+      "tags": {
+        "shop": [
+          "convenience"
+        ]
+      },
+      "taxonomy": [
+        "retail",
+        "convenience store"
+      ],
+      "aliases": [
+        "minimarket"
+      ],
+      "priority": 30,
+      "minZoom": 14,
+      "labelZoom": 16,
+      "baseSize": 19,
+      "color": "#7c3aed",
+      "glyph": "Mini",
+      "micro": "./micro/shopping/convenience.webp",
+      "hero": "./hero/shopping/convenience.webp"
+    },
+    {
+      "id": "shopping.marketplace",
+      "sheet": "shopping",
+      "row": 1,
+      "column": 0,
+      "category": "shopping",
+      "tags": {
+        "amenity": [
+          "marketplace"
+        ]
+      },
+      "taxonomy": [
+        "retail",
+        "marketplace"
+      ],
+      "aliases": [
+        "pasar"
+      ],
+      "priority": 24,
+      "minZoom": 14,
+      "labelZoom": 16,
+      "baseSize": 20,
+      "color": "#7c3aed",
+      "glyph": "Pasar",
+      "micro": "./micro/shopping/marketplace.webp",
+      "hero": "./hero/shopping/marketplace.webp"
+    },
+    {
+      "id": "shopping.clothes",
+      "sheet": "shopping",
+      "row": 1,
+      "column": 4,
+      "category": "shopping",
+      "tags": {
+        "shop": [
+          "clothes",
+          "fashion",
+          "boutique"
+        ]
+      },
+      "taxonomy": [
+        "retail",
+        "fashion",
+        "clothing store"
+      ],
+      "aliases": [
+        "toko pakaian",
+        "butik",
+        "baju"
+      ],
+      "priority": 37,
+      "minZoom": 15,
+      "labelZoom": 17,
+      "baseSize": 18,
+      "color": "#7c3aed",
+      "glyph": "Mode",
+      "micro": "./micro/shopping/clothes.webp",
+      "hero": "./hero/shopping/clothes.webp"
+    },
+    {
+      "id": "shopping.books",
+      "sheet": "shopping",
+      "row": 2,
+      "column": 3,
+      "category": "shopping",
+      "tags": {
+        "shop": [
+          "books"
+        ]
+      },
+      "taxonomy": [
+        "retail",
+        "book store"
+      ],
+      "aliases": [
+        "toko buku"
+      ],
+      "priority": 38,
+      "minZoom": 15,
+      "labelZoom": 17,
+      "baseSize": 18,
+      "color": "#7c3aed",
+      "glyph": "Buku",
+      "micro": "./micro/shopping/books.webp",
+      "hero": "./hero/shopping/books.webp"
+    },
+    {
+      "id": "education.kindergarten",
+      "sheet": "education",
+      "row": 0,
+      "column": 0,
+      "category": "education",
+      "tags": {
+        "amenity": [
+          "kindergarten"
+        ]
+      },
+      "taxonomy": [
+        "education",
+        "kindergarten"
+      ],
+      "aliases": [
+        "tk",
+        "paud"
+      ],
+      "priority": 32,
+      "minZoom": 14,
+      "labelZoom": 16,
+      "baseSize": 19,
+      "color": "#2563eb",
+      "glyph": "TK",
+      "micro": "./micro/education/kindergarten.webp",
+      "hero": "./hero/education/kindergarten.webp"
+    },
+    {
+      "id": "education.school",
+      "sheet": "education",
+      "row": 0,
+      "column": 1,
+      "category": "education",
+      "tags": {
+        "amenity": [
+          "school"
+        ]
+      },
+      "taxonomy": [
+        "education",
+        "school"
+      ],
+      "aliases": [
+        "sekolah",
+        "sd",
+        "smp",
+        "sma"
+      ],
+      "priority": 25,
+      "minZoom": 13,
+      "labelZoom": 15,
+      "baseSize": 20,
+      "color": "#2563eb",
+      "glyph": "Edu",
+      "micro": "./micro/education/school.webp",
+      "hero": "./hero/education/school.webp"
+    },
+    {
+      "id": "education.university",
+      "sheet": "education",
+      "row": 1,
+      "column": 0,
+      "category": "education",
+      "tags": {
+        "amenity": [
+          "university",
+          "college"
+        ]
+      },
+      "taxonomy": [
+        "education",
+        "university",
+        "college"
+      ],
+      "aliases": [
+        "universitas",
+        "kampus",
+        "perguruan tinggi"
+      ],
+      "priority": 15,
+      "minZoom": 12,
+      "labelZoom": 14,
+      "baseSize": 22,
+      "color": "#2563eb",
+      "glyph": "Edu",
+      "micro": "./micro/education/university.webp",
+      "hero": "./hero/education/university.webp"
+    },
+    {
+      "id": "education.training",
+      "sheet": "education",
+      "row": 1,
+      "column": 6,
+      "category": "education",
+      "tags": {
+        "amenity": [
+          "training",
+          "language_school"
+        ]
+      },
+      "taxonomy": [
+        "education",
+        "training",
+        "course"
+      ],
+      "aliases": [
+        "kursus",
+        "bimbel",
+        "pelatihan"
+      ],
+      "priority": 39,
+      "minZoom": 15,
+      "labelZoom": 17,
+      "baseSize": 18,
+      "color": "#2563eb",
+      "glyph": "Kursus",
+      "micro": "./micro/education/training.webp",
+      "hero": "./hero/education/training.webp"
+    },
+    {
+      "id": "education.library",
+      "sheet": "education",
+      "row": 2,
+      "column": 3,
+      "category": "education",
+      "tags": {
+        "amenity": [
+          "library"
+        ]
+      },
+      "taxonomy": [
+        "education",
+        "library"
+      ],
+      "aliases": [
+        "perpustakaan"
+      ],
+      "priority": 27,
+      "minZoom": 14,
+      "labelZoom": 16,
+      "baseSize": 19,
+      "color": "#2563eb",
+      "glyph": "Lib",
+      "micro": "./micro/education/library.webp",
+      "hero": "./hero/education/library.webp"
+    },
+    {
+      "id": "education.research-laboratory",
+      "sheet": "education",
+      "row": 2,
+      "column": 4,
+      "category": "education",
+      "tags": {
+        "amenity": [
+          "research_institute"
+        ],
+        "office": [
+          "research"
+        ]
+      },
+      "taxonomy": [
+        "education",
+        "research laboratory"
+      ],
+      "aliases": [
+        "laboratorium",
+        "riset"
+      ],
+      "priority": 34,
+      "minZoom": 15,
+      "labelZoom": 17,
+      "baseSize": 18,
+      "color": "#2563eb",
+      "glyph": "Lab",
+      "micro": "./micro/education/research-laboratory.webp",
+      "hero": "./hero/education/research-laboratory.webp"
+    },
+    {
+      "id": "transport.railway-station",
+      "sheet": "transport",
+      "row": 0,
+      "column": 0,
+      "category": "transport",
+      "tags": {
+        "railway": [
+          "station",
+          "halt"
+        ]
+      },
+      "taxonomy": [
+        "transportation",
+        "railway station"
+      ],
+      "aliases": [
+        "stasiun kereta"
+      ],
+      "priority": 8,
+      "minZoom": 11,
+      "labelZoom": 13,
+      "baseSize": 23,
+      "color": "#2563eb",
+      "glyph": "Rail",
+      "micro": "./micro/transport/railway-station.webp",
+      "hero": "./hero/transport/railway-station.webp"
+    },
+    {
+      "id": "transport.bus-terminal",
+      "sheet": "transport",
+      "row": 0,
+      "column": 1,
+      "category": "transport",
+      "tags": {
+        "amenity": [
+          "bus_station"
+        ]
+      },
+      "taxonomy": [
+        "transportation",
+        "bus terminal"
+      ],
+      "aliases": [
+        "terminal bus"
+      ],
+      "priority": 10,
+      "minZoom": 11,
+      "labelZoom": 13,
+      "baseSize": 23,
+      "color": "#2563eb",
+      "glyph": "Bus",
+      "micro": "./micro/transport/bus-terminal.webp",
+      "hero": "./hero/transport/bus-terminal.webp"
+    },
+    {
+      "id": "transport.bus-stop",
+      "sheet": "transport",
+      "row": 0,
+      "column": 2,
+      "category": "transport",
+      "tags": {
+        "highway": [
+          "bus_stop"
+        ],
+        "public_transport": [
+          "platform",
+          "stop_position"
+        ]
+      },
+      "taxonomy": [
+        "transportation",
+        "bus stop"
+      ],
+      "aliases": [
+        "halte",
+        "shelter"
+      ],
+      "priority": 26,
+      "minZoom": 14,
+      "labelZoom": 16,
+      "baseSize": 18,
+      "color": "#0284c7",
+      "glyph": "Stop",
+      "micro": "./micro/transport/bus-stop.webp",
+      "hero": "./hero/transport/bus-stop.webp"
+    },
+    {
+      "id": "transport.airport",
+      "sheet": "transport",
+      "row": 1,
+      "column": 0,
+      "category": "transport",
+      "tags": {
+        "aeroway": [
+          "aerodrome",
+          "terminal"
+        ]
+      },
+      "taxonomy": [
+        "transportation",
+        "airport"
+      ],
+      "aliases": [
+        "bandara"
+      ],
+      "priority": 5,
+      "minZoom": 10,
+      "labelZoom": 12,
+      "baseSize": 24,
+      "color": "#2563eb",
+      "glyph": "Air",
+      "micro": "./micro/transport/airport.webp",
+      "hero": "./hero/transport/airport.webp"
+    },
+    {
+      "id": "transport.parking",
+      "sheet": "transport",
+      "row": 2,
+      "column": 2,
+      "category": "transport",
+      "tags": {
+        "amenity": [
+          "parking"
+        ]
+      },
+      "taxonomy": [
+        "transportation",
+        "parking"
+      ],
+      "aliases": [
+        "parkir"
+      ],
+      "priority": 35,
+      "minZoom": 15,
+      "labelZoom": 17,
+      "baseSize": 18,
+      "color": "#64748b",
+      "glyph": "P",
+      "micro": "./micro/transport/parking.webp",
+      "hero": "./hero/transport/parking.webp"
+    },
+    {
+      "id": "transport.bicycle-parking",
+      "sheet": "transport",
+      "row": 3,
+      "column": 0,
+      "category": "transport",
+      "tags": {
+        "amenity": [
+          "bicycle_parking"
+        ]
+      },
+      "taxonomy": [
+        "transportation",
+        "bicycle parking"
+      ],
+      "aliases": [
+        "parkir sepeda"
+      ],
+      "priority": 40,
+      "minZoom": 16,
+      "labelZoom": 18,
+      "baseSize": 17,
+      "color": "#0d9488",
+      "glyph": "Bike",
+      "micro": "./micro/transport/bicycle-parking.webp",
+      "hero": "./hero/transport/bicycle-parking.webp"
+    },
+    {
+      "id": "transport.fuel",
+      "sheet": "transport",
+      "row": 3,
+      "column": 1,
+      "category": "transport",
+      "tags": {
+        "amenity": [
+          "fuel"
+        ]
+      },
+      "taxonomy": [
+        "transportation",
+        "fuel station"
+      ],
+      "aliases": [
+        "spbu",
+        "pom bensin"
+      ],
+      "priority": 27,
+      "minZoom": 14,
+      "labelZoom": 16,
+      "baseSize": 19,
+      "color": "#f97316",
+      "glyph": "Fuel",
+      "micro": "./micro/transport/fuel.webp",
+      "hero": "./hero/transport/fuel.webp"
+    },
+    {
+      "id": "transport.charging",
+      "sheet": "transport",
+      "row": 3,
+      "column": 2,
+      "category": "transport",
+      "tags": {
+        "amenity": [
+          "charging_station"
+        ]
+      },
+      "taxonomy": [
+        "transportation",
+        "charging station"
+      ],
+      "aliases": [
+        "spklu",
+        "charging"
+      ],
+      "priority": 31,
+      "minZoom": 15,
+      "labelZoom": 17,
+      "baseSize": 18,
+      "color": "#16a34a",
+      "glyph": "EV",
+      "micro": "./micro/transport/charging.webp",
+      "hero": "./hero/transport/charging.webp"
+    },
+    {
+      "id": "worship.mosque",
+      "sheet": "worship",
+      "row": 0,
+      "column": 0,
+      "category": "worship",
+      "tags": {
+        "amenity": [
+          "place_of_worship"
+        ],
+        "religion": [
+          "muslim"
+        ]
+      },
+      "taxonomy": [
+        "religion",
+        "mosque"
+      ],
+      "aliases": [
+        "masjid",
+        "mushola"
+      ],
+      "priority": 29,
+      "minZoom": 14,
+      "labelZoom": 16,
+      "baseSize": 19,
+      "color": "#0d9488",
+      "glyph": "Ibd",
+      "micro": "./micro/worship/mosque.webp",
+      "hero": "./hero/worship/mosque.webp"
+    },
+    {
+      "id": "worship.church",
+      "sheet": "worship",
+      "row": 0,
+      "column": 4,
+      "category": "worship",
+      "tags": {
+        "amenity": [
+          "place_of_worship"
+        ],
+        "religion": [
+          "christian"
+        ]
+      },
+      "taxonomy": [
+        "religion",
+        "church"
+      ],
+      "aliases": [
+        "gereja",
+        "kapel",
+        "katedral"
+      ],
+      "priority": 29,
+      "minZoom": 14,
+      "labelZoom": 16,
+      "baseSize": 19,
+      "color": "#0d9488",
+      "glyph": "Ibd",
+      "micro": "./micro/worship/church.webp",
+      "hero": "./hero/worship/church.webp"
+    },
+    {
+      "id": "worship.temple",
+      "sheet": "worship",
+      "row": 2,
+      "column": 0,
+      "category": "worship",
+      "tags": {
+        "amenity": [
+          "place_of_worship"
+        ],
+        "religion": [
+          "hindu"
+        ]
+      },
+      "taxonomy": [
+        "religion",
+        "temple"
+      ],
+      "aliases": [
+        "pura",
+        "kuil"
+      ],
+      "priority": 31,
+      "minZoom": 14,
+      "labelZoom": 16,
+      "baseSize": 19,
+      "color": "#0d9488",
+      "glyph": "Ibd",
+      "micro": "./micro/worship/temple.webp",
+      "hero": "./hero/worship/temple.webp"
+    },
+    {
+      "id": "worship.buddhist",
+      "sheet": "worship",
+      "row": 2,
+      "column": 2,
+      "category": "worship",
+      "tags": {
+        "amenity": [
+          "place_of_worship"
+        ],
+        "religion": [
+          "buddhist"
+        ]
+      },
+      "taxonomy": [
+        "religion",
+        "buddhist temple"
+      ],
+      "aliases": [
+        "vihara",
+        "kuil buddha"
+      ],
+      "priority": 31,
+      "minZoom": 14,
+      "labelZoom": 16,
+      "baseSize": 19,
+      "color": "#0d9488",
+      "glyph": "Ibd",
+      "micro": "./micro/worship/buddhist.webp",
+      "hero": "./hero/worship/buddhist.webp"
+    },
+    {
+      "id": "government.local-office",
+      "sheet": "government",
+      "row": 0,
+      "column": 0,
+      "category": "government",
+      "tags": {
+        "office": [
+          "government"
+        ],
+        "government": [
+          "administrative"
+        ]
+      },
+      "taxonomy": [
+        "government",
+        "administration"
+      ],
+      "aliases": [
+        "kantor desa",
+        "kelurahan",
+        "kecamatan"
+      ],
+      "priority": 24,
+      "minZoom": 13,
+      "labelZoom": 15,
+      "baseSize": 20,
+      "color": "#059669",
+      "glyph": "Gov",
+      "micro": "./micro/government/local-office.webp",
+      "hero": "./hero/government/local-office.webp"
+    },
+    {
+      "id": "government.police",
+      "sheet": "government",
+      "row": 1,
+      "column": 0,
+      "category": "government",
+      "tags": {
+        "amenity": [
+          "police"
+        ]
+      },
+      "taxonomy": [
+        "government",
+        "police"
+      ],
+      "aliases": [
+        "polisi",
+        "polsek",
+        "polres"
+      ],
+      "priority": 16,
+      "minZoom": 12,
+      "labelZoom": 14,
+      "baseSize": 21,
+      "color": "#059669",
+      "glyph": "Pol",
+      "micro": "./micro/government/police.webp",
+      "hero": "./hero/government/police.webp"
+    },
+    {
+      "id": "government.court",
+      "sheet": "government",
+      "row": 1,
+      "column": 3,
+      "category": "government",
+      "tags": {
+        "amenity": [
+          "courthouse"
+        ]
+      },
+      "taxonomy": [
+        "government",
+        "court"
+      ],
+      "aliases": [
+        "pengadilan"
+      ],
+      "priority": 20,
+      "minZoom": 13,
+      "labelZoom": 15,
+      "baseSize": 20,
+      "color": "#059669",
+      "glyph": "Court",
+      "micro": "./micro/government/court.webp",
+      "hero": "./hero/government/court.webp"
+    },
+    {
+      "id": "government.fire-station",
+      "sheet": "government",
+      "row": 4,
+      "column": 1,
+      "category": "emergency",
+      "tags": {
+        "amenity": [
+          "fire_station"
+        ],
+        "emergency": [
+          "fire_station"
+        ]
+      },
+      "taxonomy": [
+        "emergency",
+        "fire station"
+      ],
+      "aliases": [
+        "damkar",
+        "pemadam kebakaran"
+      ],
+      "priority": 14,
+      "minZoom": 12,
+      "labelZoom": 14,
+      "baseSize": 21,
+      "color": "#dc2626",
+      "glyph": "Fire",
+      "micro": "./micro/government/fire-station.webp",
+      "hero": "./hero/government/fire-station.webp"
+    },
+    {
+      "id": "public.drinking-water",
+      "sheet": "public",
+      "row": 1,
+      "column": 1,
+      "contentRatio": 0.43,
+      "category": "public-service",
+      "tags": {
+        "amenity": [
+          "drinking_water"
+        ]
+      },
+      "taxonomy": [
+        "public facility",
+        "drinking water"
+      ],
+      "aliases": [
+        "air minum"
+      ],
+      "priority": 44,
+      "minZoom": 16,
+      "labelZoom": 18,
+      "baseSize": 17,
+      "color": "#0d9488",
+      "glyph": "Water",
+      "micro": "./micro/public/drinking-water.webp",
+      "hero": "./hero/public/drinking-water.webp"
+    },
+    {
+      "id": "public.recycling",
+      "sheet": "public",
+      "row": 0,
+      "column": 4,
+      "category": "public-service",
+      "tags": {
+        "amenity": [
+          "recycling"
+        ]
+      },
+      "taxonomy": [
+        "public facility",
+        "recycling"
+      ],
+      "aliases": [
+        "recycling",
+        "daur ulang"
+      ],
+      "priority": 45,
+      "minZoom": 16,
+      "labelZoom": 18,
+      "baseSize": 17,
+      "color": "#0d9488",
+      "glyph": "Rec",
+      "micro": "./micro/public/recycling.webp",
+      "hero": "./hero/public/recycling.webp"
+    },
+    {
+      "id": "public.cctv",
+      "sheet": "public",
+      "row": 1,
+      "column": 3,
+      "contentRatio": 0.43,
+      "category": "public-service",
+      "tags": {
+        "man_made": [
+          "surveillance"
+        ],
+        "surveillance": [
+          "camera"
+        ]
+      },
+      "taxonomy": [
+        "public facility",
+        "cctv"
+      ],
+      "aliases": [
+        "cctv",
+        "kamera pengawas"
+      ],
+      "priority": 48,
+      "minZoom": 17,
+      "labelZoom": 19,
+      "baseSize": 16,
+      "color": "#0d9488",
+      "glyph": "CCTV",
+      "micro": "./micro/public/cctv.webp",
+      "hero": "./hero/public/cctv.webp"
+    },
+    {
+      "id": "public.emergency-shelter",
+      "sheet": "public",
+      "row": 0,
+      "column": 2,
+      "category": "emergency",
+      "tags": {
+        "amenity": [
+          "shelter"
+        ],
+        "emergency": [
+          "assembly_point"
+        ]
+      },
+      "taxonomy": [
+        "emergency",
+        "shelter"
+      ],
+      "aliases": [
+        "shelter darurat",
+        "evakuasi"
+      ],
+      "priority": 18,
+      "minZoom": 13,
+      "labelZoom": 15,
+      "baseSize": 20,
+      "color": "#0d9488",
+      "glyph": "SOS",
+      "micro": "./micro/public/emergency-shelter.webp",
+      "hero": "./hero/public/emergency-shelter.webp"
+    },
+    {
+      "id": "road.traffic-signal",
+      "sheet": "road",
+      "row": 0,
+      "column": 0,
+      "category": "road",
+      "tags": {
+        "highway": [
+          "traffic_signals"
+        ]
+      },
+      "taxonomy": [
+        "road infrastructure",
+        "traffic signal"
+      ],
+      "aliases": [
+        "lampu lalu lintas",
+        "traffic light"
+      ],
+      "priority": 17,
+      "minZoom": 15,
+      "labelZoom": 18,
+      "baseSize": 18,
+      "color": "#111827",
+      "glyph": "Sig",
+      "micro": "./micro/road/traffic-signal.webp",
+      "hero": "./hero/road/traffic-signal.webp"
+    },
+    {
+      "id": "road.pedestrian-crossing",
+      "sheet": "road",
+      "row": 0,
+      "column": 1,
+      "category": "road",
+      "tags": {
+        "highway": [
+          "crossing"
+        ]
+      },
+      "taxonomy": [
+        "road infrastructure",
+        "pedestrian crossing"
+      ],
+      "aliases": [
+        "zebra cross",
+        "penyeberangan"
+      ],
+      "priority": 38,
+      "minZoom": 16,
+      "labelZoom": 19,
+      "baseSize": 17,
+      "color": "#111827",
+      "glyph": "Cross",
+      "micro": "./micro/road/pedestrian-crossing.webp",
+      "hero": "./hero/road/pedestrian-crossing.webp"
+    },
+    {
+      "id": "road.entrance",
+      "sheet": "road",
+      "row": 0,
+      "column": 3,
+      "category": "road",
+      "tags": {
+        "entrance": [
+          "yes",
+          "main",
+          "service"
+        ]
+      },
+      "taxonomy": [
+        "road infrastructure",
+        "entrance"
+      ],
+      "aliases": [
+        "pintu masuk",
+        "entrance"
+      ],
+      "priority": 40,
+      "minZoom": 16,
+      "labelZoom": 18,
+      "baseSize": 17,
+      "color": "#111827",
+      "glyph": "In",
+      "micro": "./micro/road/entrance.webp",
+      "hero": "./hero/road/entrance.webp"
+    },
+    {
+      "id": "road.gate",
+      "sheet": "road",
+      "row": 1,
+      "column": 0,
+      "category": "road",
+      "tags": {
+        "barrier": [
+          "gate"
+        ]
+      },
+      "taxonomy": [
+        "road infrastructure",
+        "gate"
+      ],
+      "aliases": [
+        "gerbang",
+        "gate"
+      ],
+      "priority": 40,
+      "minZoom": 16,
+      "labelZoom": 18,
+      "baseSize": 17,
+      "color": "#111827",
+      "glyph": "Gate",
+      "micro": "./micro/road/gate.webp",
+      "hero": "./hero/road/gate.webp"
+    },
+    {
+      "id": "road.elevator",
+      "sheet": "road",
+      "row": 1,
+      "column": 2,
+      "category": "road",
+      "tags": {
+        "highway": [
+          "elevator"
+        ],
+        "building": [
+          "elevator"
+        ]
+      },
+      "taxonomy": [
+        "accessibility",
+        "elevator"
+      ],
+      "aliases": [
+        "lift",
+        "elevator"
+      ],
+      "priority": 45,
+      "minZoom": 17,
+      "labelZoom": 19,
+      "baseSize": 16,
+      "color": "#111827",
+      "glyph": "Lift",
+      "micro": "./micro/road/elevator.webp",
+      "hero": "./hero/road/elevator.webp"
+    },
+    {
+      "id": "tourism.park",
+      "sheet": "tourism",
+      "row": 1,
+      "column": 0,
+      "category": "nature",
+      "tags": {
+        "leisure": [
+          "park",
+          "garden"
+        ]
+      },
+      "taxonomy": [
+        "nature",
+        "park"
+      ],
+      "aliases": [
+        "taman",
+        "taman kota"
+      ],
+      "priority": 27,
+      "minZoom": 13,
+      "labelZoom": 15,
+      "baseSize": 20,
+      "color": "#16a34a",
+      "glyph": "Park",
+      "micro": "./micro/tourism/park.webp",
+      "hero": "./hero/tourism/park.webp"
+    },
+    {
+      "id": "tourism.zoo",
+      "sheet": "tourism",
+      "row": 1,
+      "column": 2,
+      "category": "tourism",
+      "tags": {
+        "tourism": [
+          "zoo"
+        ]
+      },
+      "taxonomy": [
+        "tourism",
+        "zoo"
+      ],
+      "aliases": [
+        "kebun binatang"
+      ],
+      "priority": 20,
+      "minZoom": 12,
+      "labelZoom": 14,
+      "baseSize": 21,
+      "color": "#e11d48",
+      "glyph": "Zoo",
+      "micro": "./micro/tourism/zoo.webp",
+      "hero": "./hero/tourism/zoo.webp"
+    },
+    {
+      "id": "tourism.theme-park",
+      "sheet": "tourism",
+      "row": 1,
+      "column": 3,
+      "category": "tourism",
+      "tags": {
+        "tourism": [
+          "theme_park"
+        ]
+      },
+      "taxonomy": [
+        "tourism",
+        "theme park"
+      ],
+      "aliases": [
+        "taman hiburan"
+      ],
+      "priority": 21,
+      "minZoom": 12,
+      "labelZoom": 14,
+      "baseSize": 21,
+      "color": "#e11d48",
+      "glyph": "Fun",
+      "micro": "./micro/tourism/theme-park.webp",
+      "hero": "./hero/tourism/theme-park.webp"
+    },
+    {
+      "id": "tourism.museum",
+      "sheet": "tourism",
+      "row": 3,
+      "column": 0,
+      "category": "tourism",
+      "tags": {
+        "tourism": [
+          "museum",
+          "gallery"
+        ]
+      },
+      "taxonomy": [
+        "tourism",
+        "museum"
+      ],
+      "aliases": [
+        "museum",
+        "galeri"
+      ],
+      "priority": 16,
+      "minZoom": 12,
+      "labelZoom": 14,
+      "baseSize": 21,
+      "color": "#e11d48",
+      "glyph": "Mus",
+      "micro": "./micro/tourism/museum.webp",
+      "hero": "./hero/tourism/museum.webp"
+    },
+    {
+      "id": "tourism.monument",
+      "sheet": "tourism",
+      "row": 3,
+      "column": 3,
+      "category": "tourism",
+      "tags": {
+        "historic": [
+          "monument",
+          "memorial"
+        ]
+      },
+      "taxonomy": [
+        "tourism",
+        "monument",
+        "historic site"
+      ],
+      "aliases": [
+        "monumen",
+        "landmark"
+      ],
+      "priority": 7,
+      "minZoom": 11,
+      "labelZoom": 13,
+      "baseSize": 23,
+      "color": "#a16207",
+      "glyph": "Mon",
+      "micro": "./micro/tourism/monument.webp",
+      "hero": "./hero/tourism/monument.webp"
+    },
+    {
+      "id": "sport.gym",
+      "sheet": "sport",
+      "row": 0,
+      "column": 0,
+      "category": "sport",
+      "tags": {
+        "leisure": [
+          "fitness_centre"
+        ],
+        "sport": [
+          "fitness"
+        ]
+      },
+      "taxonomy": [
+        "sport",
+        "gym"
+      ],
+      "aliases": [
+        "gym",
+        "pusat kebugaran"
+      ],
+      "priority": 38,
+      "minZoom": 15,
+      "labelZoom": 17,
+      "baseSize": 18,
+      "color": "#16a34a",
+      "glyph": "Gym",
+      "micro": "./micro/sport/gym.webp",
+      "hero": "./hero/sport/gym.webp"
+    },
+    {
+      "id": "sport.football",
+      "sheet": "sport",
+      "row": 0,
+      "column": 1,
+      "category": "sport",
+      "tags": {
+        "sport": [
+          "soccer",
+          "football"
+        ]
+      },
+      "taxonomy": [
+        "sport",
+        "football"
+      ],
+      "aliases": [
+        "lapangan sepak bola"
+      ],
+      "priority": 35,
+      "minZoom": 14,
+      "labelZoom": 16,
+      "baseSize": 19,
+      "color": "#16a34a",
+      "glyph": "Ball",
+      "micro": "./micro/sport/football.webp",
+      "hero": "./hero/sport/football.webp"
+    },
+    {
+      "id": "sport.swimming-pool",
+      "sheet": "sport",
+      "row": 1,
+      "column": 1,
+      "category": "sport",
+      "tags": {
+        "leisure": [
+          "swimming_pool"
+        ],
+        "sport": [
+          "swimming"
+        ]
+      },
+      "taxonomy": [
+        "sport",
+        "swimming pool"
+      ],
+      "aliases": [
+        "kolam renang"
+      ],
+      "priority": 34,
+      "minZoom": 14,
+      "labelZoom": 16,
+      "baseSize": 19,
+      "color": "#16a34a",
+      "glyph": "Swim",
+      "micro": "./micro/sport/swimming-pool.webp",
+      "hero": "./hero/sport/swimming-pool.webp"
+    },
+    {
+      "id": "sport.stadium",
+      "sheet": "sport",
+      "row": 1,
+      "column": 2,
+      "category": "sport",
+      "tags": {
+        "leisure": [
+          "stadium"
+        ]
+      },
+      "taxonomy": [
+        "sport",
+        "stadium"
+      ],
+      "aliases": [
+        "stadion"
+      ],
+      "priority": 14,
+      "minZoom": 11,
+      "labelZoom": 13,
+      "baseSize": 22,
+      "color": "#16a34a",
+      "glyph": "Stad",
+      "micro": "./micro/sport/stadium.webp",
+      "hero": "./hero/sport/stadium.webp"
+    },
+    {
+      "id": "business.office",
+      "sheet": "business",
+      "row": 0,
+      "column": 0,
+      "category": "business",
+      "tags": {
+        "office": [
+          "company"
+        ]
+      },
+      "taxonomy": [
+        "business",
+        "office"
+      ],
+      "aliases": [
+        "kantor perusahaan"
+      ],
+      "priority": 42,
+      "minZoom": 16,
+      "labelZoom": 18,
+      "baseSize": 18,
+      "color": "#64748b",
+      "glyph": "Off",
+      "micro": "./micro/business/office.webp",
+      "hero": "./hero/business/office.webp"
+    },
+    {
+      "id": "business.factory",
+      "sheet": "business",
+      "row": 0,
+      "column": 2,
+      "category": "business",
+      "tags": {
+        "man_made": [
+          "works"
+        ],
+        "building": [
+          "industrial"
+        ]
+      },
+      "taxonomy": [
+        "industry",
+        "factory"
+      ],
+      "aliases": [
+        "pabrik",
+        "industri"
+      ],
+      "priority": 30,
+      "minZoom": 14,
+      "labelZoom": 16,
+      "baseSize": 19,
+      "color": "#64748b",
+      "glyph": "Fab",
+      "micro": "./micro/business/factory.webp",
+      "hero": "./hero/business/factory.webp"
+    },
+    {
+      "id": "business.warehouse",
+      "sheet": "business",
+      "row": 0,
+      "column": 3,
+      "category": "business",
+      "tags": {
+        "building": [
+          "warehouse"
+        ]
+      },
+      "taxonomy": [
+        "industry",
+        "warehouse"
+      ],
+      "aliases": [
+        "gudang",
+        "warehouse"
+      ],
+      "priority": 40,
+      "minZoom": 15,
+      "labelZoom": 17,
+      "baseSize": 18,
+      "color": "#64748b",
+      "glyph": "WH",
+      "micro": "./micro/business/warehouse.webp",
+      "hero": "./hero/business/warehouse.webp"
+    },
+    {
+      "id": "business.coworking",
+      "sheet": "business",
+      "row": 0,
+      "column": 4,
+      "category": "business",
+      "tags": {
+        "office": [
+          "coworking"
+        ]
+      },
+      "taxonomy": [
+        "business",
+        "coworking"
+      ],
+      "aliases": [
+        "co-working",
+        "coworking"
+      ],
+      "priority": 44,
+      "minZoom": 16,
+      "labelZoom": 18,
+      "baseSize": 17,
+      "color": "#64748b",
+      "glyph": "Work",
+      "micro": "./micro/business/coworking.webp",
+      "hero": "./hero/business/coworking.webp"
+    },
+    {
+      "id": "housing.apartment",
+      "sheet": "housing",
+      "row": 0,
+      "column": 0,
+      "category": "housing",
+      "tags": {
+        "building": [
+          "apartments"
+        ]
+      },
+      "taxonomy": [
+        "housing",
+        "apartment"
+      ],
+      "aliases": [
+        "apartemen"
+      ],
+      "priority": 45,
+      "minZoom": 16,
+      "labelZoom": 18,
+      "baseSize": 17,
+      "color": "#92400e",
+      "glyph": "Apt",
+      "micro": "./micro/housing/apartment.webp",
+      "hero": "./hero/housing/apartment.webp"
+    },
+    {
+      "id": "housing.residential",
+      "sheet": "housing",
+      "row": 0,
+      "column": 1,
+      "category": "housing",
+      "tags": {
+        "landuse": [
+          "residential"
+        ]
+      },
+      "taxonomy": [
+        "housing",
+        "residential area"
+      ],
+      "aliases": [
+        "perumahan",
+        "kompleks hunian"
+      ],
+      "priority": 47,
+      "minZoom": 16,
+      "labelZoom": 18,
+      "baseSize": 17,
+      "color": "#92400e",
+      "glyph": "Home",
+      "micro": "./micro/housing/residential.webp",
+      "hero": "./hero/housing/residential.webp"
+    },
+    {
+      "id": "housing.house",
+      "sheet": "housing",
+      "row": 0,
+      "column": 3,
+      "category": "housing",
+      "tags": {
+        "building": [
+          "house",
+          "residential",
+          "detached"
+        ]
+      },
+      "taxonomy": [
+        "housing",
+        "house"
+      ],
+      "aliases": [
+        "rumah"
+      ],
+      "priority": 55,
+      "minZoom": 18,
+      "labelZoom": 20,
+      "baseSize": 16,
+      "color": "#92400e",
+      "glyph": "Home",
+      "micro": "./micro/housing/house.webp",
+      "hero": "./hero/housing/house.webp"
+    }
+  ]
+}
