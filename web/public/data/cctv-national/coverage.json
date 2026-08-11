@@ -1,11 +1,11 @@
 {
-  "generatedAt": "2026-08-11T15:39:20.836Z",
+  "generatedAt": "2026-08-11T15:43:35.254Z",
   "featureCount": 3768,
   "provinceCount": 38,
-  "coveredProvinceCount": 23,
+  "coveredProvinceCount": 24,
   "sufficientlyCoveredCount": 8,
-  "missingProvinceCount": 15,
-  "lowProvinceCount": 15,
+  "missingProvinceCount": 14,
+  "lowProvinceCount": 16,
   "targetPerProvince": 100,
   "nonProvinceBuckets": [
     {
@@ -96,11 +96,11 @@
     },
     {
       "province": "Kepulauan Bangka Belitung",
-      "count": 0,
+      "count": 1,
       "verifiedLiveCount": 0,
-      "status": "missing",
+      "status": "low",
       "target": 100,
-      "gap": 100
+      "gap": 99
     },
     {
       "province": "Bengkulu",
@@ -216,11 +216,11 @@
     },
     {
       "province": "Kalimantan Timur",
-      "count": 30,
+      "count": 29,
       "verifiedLiveCount": 28,
       "status": "low",
       "target": 100,
-      "gap": 70
+      "gap": 71
     },
     {
       "province": "Kalimantan Utara",

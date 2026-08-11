@@ -53,7 +53,11 @@ function accepted(row) {
 }
 
 function key(row) {
-  const stream = String(row.streamUrl).replace(/[?&](?:t|s|cache|refresh)=[^&]*/gi, "");
+  let stream = String(row.streamUrl).replace(/[?&](?:t|s|cache|refresh)=[^&]*/gi, "");
+  if (row.streamType === "youtube") {
+    const match = stream.match(/(?:youtube\.com\/(?:watch\?v=|live\/|embed\/)|youtu\.be\/)([\w-]{6,})/i);
+    if (match) stream = `youtube:${match[1]}`;
+  }
   return createHash("sha256").update(stream.toLowerCase()).digest("hex");
 }
 

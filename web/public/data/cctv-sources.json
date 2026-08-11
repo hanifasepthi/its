@@ -176,6 +176,20 @@
           "youtubeId": "FRE6otES69Q"
         }
       ]
+    },
+    {
+      "region": "Kepulauan Bangka Belitung",
+      "operator": "Diskominfo SP Kabupaten Belitung Timur",
+      "url": "https://beltim.go.id/cctv",
+      "accessType": "official-youtube-live",
+      "attribution": "Pemerintah Kabupaten Belitung Timur / Diskotikdansa",
+      "players": [
+        {
+          "name": "CCTV Belitung Timur",
+          "pageUrl": "https://beltim.go.id/cctv",
+          "youtubeId": "zeOKjJN4_A0"
+        }
+      ]
     }
   ]
 }
