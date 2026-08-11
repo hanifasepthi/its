@@ -1,11 +1,11 @@
 {
-  "generatedAt": "2026-08-11T15:53:28.421Z",
-  "featureCount": 4205,
+  "generatedAt": "2026-08-11T16:01:36.621Z",
+  "featureCount": 4215,
   "provinceCount": 38,
-  "coveredProvinceCount": 26,
+  "coveredProvinceCount": 27,
   "sufficientlyCoveredCount": 8,
-  "missingProvinceCount": 12,
-  "lowProvinceCount": 18,
+  "missingProvinceCount": 11,
+  "lowProvinceCount": 19,
   "targetPerProvince": 100,
   "nonProvinceBuckets": [
     {
@@ -48,11 +48,11 @@
     },
     {
       "province": "Sumatera Utara",
-      "count": 97,
-      "verifiedLiveCount": 96,
+      "count": 98,
+      "verifiedLiveCount": 97,
       "status": "low",
       "target": 100,
-      "gap": 3
+      "gap": 2
     },
     {
       "province": "Sumatera Barat",
@@ -80,19 +80,19 @@
     },
     {
       "province": "Jambi",
-      "count": 10,
-      "verifiedLiveCount": 10,
+      "count": 11,
+      "verifiedLiveCount": 11,
       "status": "low",
       "target": 100,
-      "gap": 90
+      "gap": 89
     },
     {
       "province": "Sumatera Selatan",
-      "count": 70,
-      "verifiedLiveCount": 69,
+      "count": 71,
+      "verifiedLiveCount": 70,
       "status": "low",
       "target": 100,
-      "gap": 30
+      "gap": 29
     },
     {
       "province": "Kepulauan Bangka Belitung",
@@ -112,11 +112,11 @@
     },
     {
       "province": "Lampung",
-      "count": 17,
-      "verifiedLiveCount": 17,
+      "count": 18,
+      "verifiedLiveCount": 18,
       "status": "low",
       "target": 100,
-      "gap": 83
+      "gap": 82
     },
     {
       "province": "DKI Jakarta",
@@ -136,8 +136,8 @@
     },
     {
       "province": "Jawa Barat",
-      "count": 804,
-      "verifiedLiveCount": 777,
+      "count": 806,
+      "verifiedLiveCount": 779,
       "status": "covered",
       "target": 100,
       "gap": 0
@@ -160,8 +160,8 @@
     },
     {
       "province": "Jawa Timur",
-      "count": 543,
-      "verifiedLiveCount": 279,
+      "count": 546,
+      "verifiedLiveCount": 282,
       "status": "covered",
       "target": 100,
       "gap": 0
@@ -288,11 +288,11 @@
     },
     {
       "province": "Maluku Utara",
-      "count": 0,
-      "verifiedLiveCount": 0,
-      "status": "missing",
+      "count": 1,
+      "verifiedLiveCount": 1,
+      "status": "low",
       "target": 100,
-      "gap": 100
+      "gap": 99
     },
     {
       "province": "Papua",

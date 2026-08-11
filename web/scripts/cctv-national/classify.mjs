@@ -12,9 +12,11 @@ export function classifyStream(url, contentType = "", sample = "") {
   if (/video\/(?:x-msvideo|avi)/i.test(ct) || /\.avi(?:$|[?#])/i.test(u)) return "avi";
   if (/^rtsp:\/\//i.test(u)) return "rtsp";
   if (/^rtmps?:\/\//i.test(u)) return "rtmp";
-  if (/youtube\.com|youtu\.be/i.test(u + " " + s)) return "youtube";
+  // A portal can embed or merely link to YouTube while its own URL is still
+  // an HTML page. Classify the response itself before scanning embedded URLs.
+  if (/text\/html/i.test(ct) || /<html[\s>]|<!doctype html/i.test(s)) return "html-page";
+  if (/youtube\.com|youtu\.be/i.test(u)) return "youtube";
   if (/webrtc|RTCPeerConnection|whep|whip/i.test(s)) return "webrtc-page";
-  if (/<html[\s>]|<!doctype html/i.test(s)) return "html-page";
   return "unknown";
 }
 

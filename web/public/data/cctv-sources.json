@@ -190,6 +190,14 @@
           "youtubeId": "zeOKjJN4_A0"
         }
       ]
+    },
+    {
+      "region": "Indonesia",
+      "operator": "PVMBG / Badan Geologi / Kementerian ESDM",
+      "url": "https://magma.esdm.go.id/v1/gunung-api/cctv",
+      "accessType": "official-public-camera-directory",
+      "attribution": "MAGMA Indonesia / PVMBG",
+      "notes": "Portal resmi kamera gunung api; snapshot bertanda tangan bersifat sementara sehingga katalog menyimpan halaman publik per gunung."
     }
   ]
 }
