@@ -4,6 +4,7 @@ import "leaflet-rotate";
 import "./style.css";
 import "./mapLegend";
 import "./components/ItsMapsApp";
+import "./components/ItsCctvTrafficFeed";
 import { renderCctvPage } from "./cctvPage";
 import WIN_PREVIEW_WELCOME from "./windows/welcome.png";
 import WIN_PREVIEW_OPTIONS from "./windows/pilihopsiinstaller.png";
@@ -17,6 +18,7 @@ import {
   publishBrowserRfDetrResult,
   RF_DETR_ANDROID_MODEL_ID,
   runBrowserRfDetr,
+  warmBrowserRfDetrWorker,
   type BrowserRfDetrDetection,
   type BrowserRfDetrResult,
 } from "./browserRfDetr";
@@ -25,7 +27,50 @@ import { pythonSandbox } from "./research/PythonSandbox";
 import { agentOrchestrator } from "./agent-core/AgentOrchestrator";
 import type { DynamicAgentPlan } from "./agent-core/AgentPlanSchema";
 import { mountAgentLiveActivity } from "./agentLiveActivity";
-import { disablePublicPush, enablePublicPush, publicPushOptedIn, restorePublicPush } from "./pushNotifications";
+import {
+  disablePublicPush,
+  disableTravelContextSync,
+  enablePublicPush,
+  publicPushOptedIn,
+  publishPushSnapshot,
+  queueTravelContextUpdate,
+  restorePublicPush,
+  type TravelContextUpdate,
+} from "./pushNotifications";
+import {
+  generateBrowserText,
+  isBrowserTextModelReady,
+  warmBrowserTextModel,
+} from "./ai/browserTextModelClient";
+import {
+  activateItsLocalAi,
+  cancelItsLocalAi,
+  generateWithItsLocalAi,
+  getItsLocalAiSnapshot,
+  isItsLocalAiEnabled,
+  isItsLocalAiReady,
+  itsLocalAiRuntime,
+  registerItsLocalAiWebMcp,
+  setItsLocalAiEnabled,
+  shouldUseItsLocalAi,
+} from "./litert-lm/appRuntime";
+import { runCloudflareCctvVision } from "./ai/cloudflareCctvVision";
+import { classifyTrafficFrame, matchRoadCorridor, recommendSignalPhases, type TrafficFrameAssessment } from "./traffic/CctvTrafficAnalytics";
+import {
+  inferTravelMode,
+  travelModeSourceLabel,
+  type TravelModeSource,
+} from "./traffic/TravelModeInference";
+import { cctvCatalogLoader } from "./cctv/CctvCatalogLoader";
+import { classifyCctvMedia } from "./cctv/CctvMediaCapability";
+import { startWhepPlayback, type WhepPlaybackSession } from "./cctv/WhepPlayer";
+import {
+  NOTIFICATION_CHAT_QUERY_KEYS,
+  notificationChatContextFromUrl,
+  notificationChatPrompt,
+  rememberNotificationChatContext,
+  type NotificationChatContext,
+} from "./notifications/NotificationChatContext";
 import {
   fetchMicrosoftStorePublicSnapshot,
   queryItsWindowsAppInstallation,
@@ -53,6 +98,28 @@ import {
   resolvePoiIcon,
   type PoiIconDefinition,
 } from "./poi/PoiIconRegistry";
+import { getApp, getApps, initializeApp } from "firebase/app";
+import { getPerformance } from "firebase/performance";
+
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCjF1ukhniubgZf4K-zNaY9EdB8Yq8wAsg",
+  authDomain: "itstelkom.firebaseapp.com",
+  databaseURL:
+    "https://itstelkom-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "itstelkom",
+  storageBucket: "itstelkom.firebasestorage.app",
+  messagingSenderId: "224371234284",
+  appId: "1:224371234284:web:e2b2f4711fae246a545cc9",
+};
+
+// Mencegah Firebase diinisialisasi berulang kali
+export const appk =
+  getApps().length === 0
+    ? initializeApp(FIREBASE_CONFIG)
+    : getApp();
+
+// Mengaktifkan Firebase Performance Monitoring
+export const perf = getPerformance(appk);
 
 // Navigation 3D pulls in MapLibre and Three.js. Keep that renderer outside the
 // critical startup bundle so the map shell and controls can paint first.
@@ -126,6 +193,8 @@ const FREE_MAP_SERVICE_STACK = [
 
 const AI_SERVICE_STACK = [
   ["RF-DETR", "Deteksi objek COCO pada video/snapshot browser dengan model transformer ONNX dari Hugging Face.", "https://hf.co/onnx-community/rfdetr_medium-ONNX"],
+  ["Cloudflare Workers AI DETR", "Deteksi awal satu frame kecil untuk CCTV publik yang sedang dibuka; frame tidak dipersistenkan dan RF-DETR browser melanjutkan analisis kontinu.", "https://developers.cloudflare.com/ai/models/%40cf/facebook/detr-resnet-50/"],
+  ["LiteRT-LM Web", "Runtime text-in/text-out WebGPU early preview yang hanya dimuat setelah pengguna mengaktifkan AI lokal; model web Gemma 4 E2B mengikuti dokumentasi resmi Google AI Edge.", "https://ai.google.dev/edge/litert-lm/js"],
   ["Qwen3 1.7B ONNX", "Model bahasa ONNX lokal untuk perangkat menengah; percakapan tidak dikirim ke layanan inferensi eksternal.", "https://huggingface.co/onnx-community/Qwen3-1.7B-ONNX"],
   ["Qwen3 4B ONNX", "Model riset ONNX lokal untuk perangkat WebGPU yang menyusun jawaban hanya dari evidence terverifikasi.", "https://huggingface.co/onnx-community/Qwen3-4B-ONNX"],
   ["Crossref, OpenAlex, Europe PMC", "Indeks metadata ilmiah publik untuk judul, penulis, DOI, abstrak, sitasi, dan tautan open-access. ITS Maps tidak mengunggah PDF jurnal.", "https://www.crossref.org/documentation/retrieve-metadata/rest-api/"],
@@ -280,7 +349,7 @@ type ProfileMember = {
   name: string;
   prodi: string;
   posisi: string;
-  tugas: string;
+  tugas: string[];
   photoUrl: string;
 };
 type ControllerUpdateInfo = {
@@ -694,7 +763,7 @@ type ItsProfileSource = {
 };
 
 type ItsCreatorEducation = {
-  institution: string;
+  institution?: string;
   program: string;
   period?: string;
   sourceUrl?: string;
@@ -713,30 +782,19 @@ type ItsVerifiedCreatorProfile = {
 
 const ITS_CREATOR_PROFILE: ItsVerifiedCreatorProfile = {
   name: "Hanifa Septhi Larasati",
-  role: "Pencipta aplikasi ITS Maps",
+  role: "Leader Team",
   publisher: "Hanifa Teams",
-  summary:
-    "Merancang konsep, alur aplikasi, integrasi Raspberry Pi, pemantauan lalu lintas, AI deteksi objek, dan antarmuka ITS Maps.",
+  summary: "Menangani Coding, Project Management, dan Software Design untuk ITS Maps.",
   photoUrl: profileAssetUrl(0),
-
-  // Isi hanya berdasarkan data yang memang Anda izinkan untuk dipublikasikan.
   education: [
     {
-      institution: "Telkom University",
-      program: "ISI PROGRAM STUDI YANG BENAR",
-      period: "ISI PERIODE JIKA AKAN DITAMPILKAN",
-      sourceUrl: "",
+      program: "Teknik Telekomunikasi",
     },
   ],
-
   skills: [
-    "Intelligent Transport System",
-    "Raspberry Pi",
-    "TypeScript",
-    "Leaflet",
-    "RF-DETR",
-    "Computer Vision",
-    "Firebase Realtime Database",
+    "Coding",
+    "Project Management",
+    "Software Design",
   ],
 
   sources: [
@@ -821,35 +879,20 @@ function initialMapMode(): BaseMapMode {
 }
 const SNAPSHOT_HISTORY_STORAGE_KEY = "its-map-snapshot-history:v1";
 const SNAPSHOT_HISTORY_LIMIT = 36;
-const PROFILE_MEMBER_COUNT = 4;
 const PROFILE_MEMBERS: ProfileMember[] = [
   {
     name: "Hanifa Septhi Larasati",
-    prodi: "Belum diisi",
-    posisi: "Pencipta aplikasi",
-    tugas: "Merancang konsep, alur aplikasi, dan validasi fitur ITS Maps.",
+    prodi: "Teknik Telekomunikasi",
+    posisi: "Leader Team",
+    tugas: ["Coding", "Project Management", "Software Design"],
     photoUrl: profileAssetUrl(0),
   },
   {
-    name: "Nama anggota 2",
-    prodi: "Belum diisi",
-    posisi: "Belum diisi",
-    tugas: "Belum diisi",
+    name: "Nur Indah Meliana",
+    prodi: "Teknik Telekomunikasi",
+    posisi: "Hardware ITS",
+    tugas: [],
     photoUrl: profileAssetUrl(1),
-  },
-  {
-    name: "Nama anggota 3",
-    prodi: "Belum diisi",
-    posisi: "Belum diisi",
-    tugas: "Belum diisi",
-    photoUrl: profileAssetUrl(2),
-  },
-  {
-    name: "Nama anggota 4",
-    prodi: "Belum diisi",
-    posisi: "Belum diisi",
-    tugas: "Belum diisi",
-    photoUrl: profileAssetUrl(3),
   },
 ];
 
@@ -861,8 +904,12 @@ function requiredElement<T extends Element>(selector: string, name: string): T {
   return el;
 }
 
+function normalizedRoutePath(pathname: string): string {
+  return pathname.replace(/\/+$/, "") || "/";
+}
+
 function staticRouteName(pathname: string): "document" | "new" | "cctv" | null {
-  const normalized = pathname.replace(/\/+$/, "") || "/";
+  const normalized = normalizedRoutePath(pathname);
   if (normalized.endsWith("/document") || normalized.endsWith("/documentation")) return "document";
   if (normalized.endsWith("/new")) return "new";
   if (normalized.endsWith("/cctv")) return "cctv";
@@ -1438,6 +1485,7 @@ function bindStaticTerminals(): void {
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Missing #app element.");
 const staticRoute = staticRouteName(window.location.pathname);
+const cctvRoute = normalizedRoutePath(window.location.pathname).endsWith("/cctv");
 const desktopBridge = (window as Window & { itsDesktop?: ItsDesktopBridge }).itsDesktop;
 let itsInitialDataReady = false;
 let itsMapReady = false;
@@ -1567,7 +1615,19 @@ if (staticRoute === "cctv") {
     tabletSearchQuery: "",
     routeLayer: null as L.LayerGroup | null,
     destinationMarker: null as L.Marker | null,
-    lastUserLocation: null as { lat: number; lng: number; accuracy?: number; source: string; updatedAt: number } | null,
+    lastUserLocation: (() => {
+      try {
+        const value = JSON.parse(localStorage.getItem("its-last-user-location:v1") || "null") as Record<string, unknown> | null;
+        const lat = Number(value?.lat);
+        const lng = Number(value?.lng);
+        const updatedAt = Number(value?.updatedAt);
+        return Number.isFinite(lat) && Number.isFinite(lng) && Number.isFinite(updatedAt)
+          ? { lat, lng, accuracy: Number(value?.accuracy) || undefined, source: String(value?.source || "last-known"), updatedAt }
+          : null;
+      } catch {
+        return null;
+      }
+    })() as { lat: number; lng: number; accuracy?: number; source: string; updatedAt: number } | null,
     userLocationWatchId: null as number | null,
     nativeLocationPollTimer: 0,
     mapNavigationSeq: 0,
@@ -1688,9 +1748,637 @@ if (staticRoute === "cctv") {
   state.overpassLayer = L.layerGroup().addTo(map);
   state.roadGuideLayer = L.layerGroup().addTo(map);
   state.visionLayer = L.layerGroup().addTo(map);
+  let cctvAttentionLayer: L.CircleMarker | null = null;
+
+  const CCTV_TRAVEL_ALERT_KEY = "its-cctv-travel-alerts:v1";
+  let cctvTravelWatchId: number | null = null;
+  let cctvTravelPreviousPoint: { lat: number; lng: number; at: number } | null = null;
+  let cctvTravelDwell: { lat: number; lng: number; startedAt: number; alerted: boolean } | null = null;
+  const cctvTravelLastAlert = new Map<string, { at: number; mode: string }>();
+  const cctvTravelSpeedSamples: Array<{ at: number; speedKmh: number }> = [];
+  let cctvTravelLatestContext: TravelContextUpdate | null = null;
+  let cctvTravelLastContextSyncAt = 0;
+  // Speech is deliberately session-only. A persisted location opt-in must not
+  // produce voice after reload until a fresh, trusted user gesture unlocks it.
+  let cctvTravelVoiceUnlocked = false;
+
+  function updateCctvTravelAlertButtons(active: boolean): void {
+    document.querySelectorAll<HTMLButtonElement>("[data-cctv-travel-alert-toggle]").forEach((button) => {
+      button.setAttribute("aria-pressed", String(active));
+      const label = button.querySelector("b");
+      if (label) label.textContent = active ? "Peringatan aktif" : "Aktifkan peringatan";
+    });
+  }
+
+  function cctvTravelSnapshot(id: string): {
+    imageUrl?: string;
+    capturedAt?: number;
+    objectCount?: number;
+    detections?: Array<{ label?: string; confidence?: number }>;
+  } | null {
+    try {
+      const snapshots = JSON.parse(localStorage.getItem(`its-cctv-snapshots:${id}`) || "[]");
+      return Array.isArray(snapshots) && snapshots[0] && typeof snapshots[0] === "object" ? snapshots[0] : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function cctvTravelVehicleCount(snapshot: ReturnType<typeof cctvTravelSnapshot>): number {
+    const detections = Array.isArray(snapshot?.detections) ? snapshot.detections : [];
+    if (detections.length > 0) {
+      return detections.filter((detection) => /^(?:car|mobil|truck|truk|bus|motorcycle|motor|bicycle|sepeda|vehicle|kendaraan)$/i
+        .test(String(detection.label || "").trim())).length;
+    }
+    return Math.max(0, Math.round(Number(snapshot?.objectCount || 0)));
+  }
+
+  function syncCctvTravelContext(context: TravelContextUpdate, force = false, snapshotSource = ""): void {
+    cctvTravelLatestContext = context;
+    const now = Date.now();
+    if (!publicPushOptedIn() || (!force && now - cctvTravelLastContextSyncAt < 20_000)) return;
+    cctvTravelLastContextSyncAt = now;
+    void (async () => {
+      const uploaded = snapshotSource
+        ? await publishPushSnapshot(context.candidate.id, snapshotSource).catch(() => undefined)
+        : undefined;
+      const enriched: TravelContextUpdate = uploaded
+        ? { ...context, candidate: { ...context.candidate, snapshotImageUrl: uploaded } }
+        : context;
+      cctvTravelLatestContext = enriched;
+      await queueTravelContextUpdate({ ...enriched, observedAt: now });
+    })().catch(() => undefined);
+  }
+
+  function cctvTravelBearing(from: { lat: number; lng: number }, to: { lat: number; lng: number }): number {
+    return computeBearing(from.lat, from.lng, to.lat, to.lng);
+  }
+
+  function cctvTravelBearingDelta(left: number, right: number): number {
+    return Math.abs(((left - right + 540) % 360) - 180);
+  }
+
+  async function showCctvTravelNotification(
+    title: string,
+    body: string,
+    id: string,
+    lat: number,
+    lng: number,
+    image?: string,
+    notificationType = "ambient_update",
+    emitEvent = true,
+  ): Promise<void> {
+    const url = `${window.location.origin}/?lat=${lat.toFixed(6)}&lng=${lng.toFixed(6)}&z=18&cctv=${encodeURIComponent(id)}&trafficAlert=nearby`;
+    if (document.visibilityState === "visible"
+      && "Notification" in window && Notification.permission === "granted" && "serviceWorker" in navigator) {
+      const registration = await navigator.serviceWorker.ready;
+      await registration.showNotification(title, {
+        body,
+        icon: "/icons/icon-192.png",
+        badge: "/icons/icon-96.png",
+        image,
+        tag: `its-cctv-travel-${id}`,
+        renotify: false,
+        data: {
+          url,
+          type: notificationType,
+          eventId: `${id}:${notificationType}:${Date.now()}`,
+          mode: cctvTravelLatestContext?.mode || "unknown",
+          modeSource: cctvTravelLatestContext?.modeSource || "unknown",
+          modeConfidence: cctvTravelLatestContext?.modeConfidence || 0,
+        },
+        actions: [
+          { action: "open", title: notificationType === "dwell_suggestion" ? "Lihat sekitar" : "Buka peta" },
+          { action: "chat", title: "Tanya AI" },
+        ],
+      } as NotificationOptions & { image?: string; actions?: Array<{ action: string; title: string }> });
+    }
+    if (emitEvent) {
+      window.dispatchEvent(new CustomEvent("its:cctv-travel-alert", {
+        detail: {
+          title,
+          body,
+          id,
+          lat,
+          lng,
+          image,
+          url,
+          mode: cctvTravelLatestContext?.mode || "unknown",
+          modeSource: cctvTravelLatestContext?.modeSource || "unknown",
+          modeConfidence: cctvTravelLatestContext?.modeConfidence || 0,
+        },
+      }));
+    }
+  }
+
+  function speakCctvTravelAlert(message: string): void {
+    if (!("speechSynthesis" in window) || document.visibilityState !== "visible") return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(message);
+    utterance.lang = "id-ID";
+    utterance.rate = 1.02;
+    utterance.pitch = 1;
+    window.speechSynthesis.speak(utterance);
+  }
+
+  async function dynamicCctvNotificationLead(context: Record<string, unknown>): Promise<string> {
+    if (!isBrowserTextModelReady("notification")) return "";
+    try {
+      const text = await generateBrowserText("notification", [
+        {
+          role: "system",
+          content: "Anda asisten keselamatan perjalanan. Tulis satu kalimat Bahasa Indonesia, maksimal 18 kata, natural, tanpa menambah angka/fakta yang tidak ada.",
+        },
+        { role: "user", content: JSON.stringify(context) },
+      ], {
+        max_new_tokens: 36,
+        do_sample: true,
+        temperature: 0.55,
+        repetition_penalty: 1.08,
+      }, undefined, 12_000);
+      return text.replace(/\s+/g, " ").trim().slice(0, 180);
+    } catch {
+      return "";
+    }
+  }
+
+  async function evaluateCctvTravelPosition(position: {
+    lat: number;
+    lng: number;
+    heading?: number | null;
+    speedKmh?: number;
+    mode?: "car" | "motorcycle" | "truck" | "bicycle" | "walk" | "transit" | "unknown";
+    modeSource?: TravelModeSource;
+    modeConfidence?: number;
+    accuracy?: number;
+    destinationKnown?: boolean;
+  }): Promise<void> {
+    if (localStorage.getItem(CCTV_TRAVEL_ALERT_KEY) !== "true") return;
+    const now = Date.now();
+    if (Number.isFinite(position.accuracy) && Number(position.accuracy) > 120) return;
+    let rawSpeedKmh = Number(position.speedKmh);
+    if ((!Number.isFinite(rawSpeedKmh) || rawSpeedKmh < 0) && cctvTravelPreviousPoint) {
+      const elapsedHours = (now - cctvTravelPreviousPoint.at) / 3_600_000;
+      if (elapsedHours > 0) {
+        rawSpeedKmh = haversineDistanceMeters(
+          cctvTravelPreviousPoint.lat,
+          cctvTravelPreviousPoint.lng,
+          position.lat,
+          position.lng,
+        ) / 1_000 / elapsedHours;
+      }
+    }
+    rawSpeedKmh = Number.isFinite(rawSpeedKmh) ? Math.max(0, Math.min(220, rawSpeedKmh)) : 0;
+    cctvTravelSpeedSamples.push({ at: now, speedKmh: rawSpeedKmh });
+    while (cctvTravelSpeedSamples[0] && cctvTravelSpeedSamples[0].at < now - 20_000) cctvTravelSpeedSamples.shift();
+    const sortedSpeeds = cctvTravelSpeedSamples.map((sample) => sample.speedKmh).sort((a, b) => a - b);
+    const speedKmh = sortedSpeeds.length > 0
+      ? sortedSpeeds[Math.floor(sortedSpeeds.length / 2)]
+      : rawSpeedKmh;
+    const inferredModeEvidence = inferTravelMode({
+      speedKmh,
+      explicitMode: position.mode,
+      explicitSource: position.modeSource,
+      explicitConfidence: position.modeConfidence,
+    });
+    const inferredMode = inferredModeEvidence.mode;
+    const modeSource = inferredModeEvidence.source;
+    const modeConfidence = inferredModeEvidence.confidence;
+    if (speedKmh < 2) {
+      if (!cctvTravelDwell || haversineDistanceMeters(
+        cctvTravelDwell.lat,
+        cctvTravelDwell.lng,
+        position.lat,
+        position.lng,
+      ) > 55) {
+        cctvTravelDwell = { lat: position.lat, lng: position.lng, startedAt: now, alerted: false };
+      }
+    } else {
+      cctvTravelDwell = null;
+    }
+    let heading = Number(position.heading);
+    if (!Number.isFinite(heading) && cctvTravelPreviousPoint) {
+      const moved = haversineDistanceMeters(
+        cctvTravelPreviousPoint.lat,
+        cctvTravelPreviousPoint.lng,
+        position.lat,
+        position.lng,
+      );
+      if (moved >= 12) heading = cctvTravelBearing(cctvTravelPreviousPoint, position);
+    }
+    cctvTravelPreviousPoint = { lat: position.lat, lng: position.lng, at: now };
+    const latitudeDelta = 5_000 / 111_320;
+    const longitudeDelta = latitudeDelta / Math.max(0.2, Math.cos(position.lat * Math.PI / 180));
+    const nearbyFeatures = await cctvCatalogLoader.loadFeaturesInBounds({
+      west: position.lng - longitudeDelta,
+      south: position.lat - latitudeDelta,
+      east: position.lng + longitudeDelta,
+      north: position.lat + latitudeDelta,
+    });
+    const candidates = nearbyFeatures.flatMap((feature) => {
+      if (feature.geometry.type !== "Point") return [];
+      const [lng, lat] = feature.geometry.coordinates as number[];
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return [];
+      const distance = haversineDistanceMeters(position.lat, position.lng, lat, lng);
+      if (distance > 5_000) return [];
+      const bearing = cctvTravelBearing(position, { lat, lng });
+      if (distance > 650 && Number.isFinite(heading) && cctvTravelBearingDelta(heading, bearing) > 55) return [];
+      const id = String(feature.id || feature.properties?.sourceId || "");
+      const snapshot = cctvTravelSnapshot(id);
+      const freshEvidence = snapshot && Number(snapshot.capturedAt || 0) >= now - 15 * 60_000 ? snapshot : null;
+      return [{ feature, id, lat, lng, distance, snapshot: freshEvidence }];
+    }).sort((left, right) => {
+      const leftEvidence = Number(left.snapshot?.objectCount || 0);
+      const rightEvidence = Number(right.snapshot?.objectCount || 0);
+      return (rightEvidence >= 5 ? 1 : 0) - (leftEvidence >= 5 ? 1 : 0) || left.distance - right.distance;
+    });
+    const nearestCandidate = candidates[0];
+    if (!nearestCandidate) return;
+    if (cctvTravelDwell && !cctvTravelDwell.alerted
+      && now - cctvTravelDwell.startedAt >= 10 * 60_000) {
+      cctvTravelDwell.alerted = true;
+      const dwellName = String(nearestCandidate.feature.properties?.name || "kamera lalu lintas terdekat");
+      const dwellContext: TravelContextUpdate = {
+        observedAt: now,
+        lat: position.lat,
+        lng: position.lng,
+        speedKmh,
+        mode: inferredMode,
+        modeSource,
+        modeConfidence,
+        dwellMinutes: Math.floor((now - cctvTravelDwell.startedAt) / 60_000),
+        destinationKnown: position.destinationKnown === true,
+        visibility: document.visibilityState === "visible" ? "visible" : "hidden",
+        candidate: {
+          id: nearestCandidate.id,
+          name: dwellName,
+          lat: nearestCandidate.lat,
+          lng: nearestCandidate.lng,
+          vehicleCount: cctvTravelVehicleCount(nearestCandidate.snapshot),
+          snapshotCapturedAt: Number(nearestCandidate.snapshot?.capturedAt || 0) || undefined,
+          snapshotImageUrl: /^https:\/\//i.test(String(nearestCandidate.snapshot?.imageUrl || ""))
+            ? String(nearestCandidate.snapshot?.imageUrl).slice(0, 2_000)
+            : undefined,
+        },
+      };
+      syncCctvTravelContext(dwellContext, document.visibilityState !== "visible", String(nearestCandidate.snapshot?.imageUrl || ""));
+      await showCctvTravelNotification(
+        `Anda berhenti cukup lama · ${dwellName}`,
+        "Anda terdeteksi diam sekitar 10 menit. Lihat kondisi lalu lintas sekitar sebelum melanjutkan perjalanan.",
+        nearestCandidate.id,
+        nearestCandidate.lat,
+        nearestCandidate.lng,
+        nearestCandidate.snapshot?.imageUrl,
+        "dwell_suggestion",
+      );
+      return;
+    }
+    const candidate = candidates.find((item) => {
+      const prior = cctvTravelLastAlert.get(item.id);
+      return !prior || now - prior.at >= 5 * 60_000
+        || (inferredMode === "motorcycle" && prior.mode !== "motorcycle");
+    });
+    if (!candidate) return;
+    const name = String(candidate.feature.properties?.name || "kamera lalu lintas");
+    const rawEnforcementType = String(
+      candidate.feature.properties?.enforcementType
+      || candidate.feature.properties?.cameraFunction
+      || "",
+    ).trim();
+    // Ganjil-genap needs plate, schedule, direction and an official active-rule
+    // source. A camera label alone cannot verify those facts, so it is never
+    // inferred here. Only explicit ETLE/speed-camera metadata is eligible.
+    const enforcementType = /(?:^|[^a-z])(?:etle|e-?tilang)(?:$|[^a-z])/i.test(rawEnforcementType)
+      ? "ETLE"
+      : /\b(?:speed(?:\s+camera)?|kamera\s+kecepatan)\b/i.test(rawEnforcementType)
+        ? "kamera kecepatan"
+        : "";
+    const verifiedEnforcement = candidate.feature.properties?.enforcementVerified === true
+      && Boolean(enforcementType);
+    const meters = Math.max(10, Math.round(candidate.distance / 10) * 10);
+    const count = cctvTravelVehicleCount(candidate.snapshot);
+    const status = count >= 10 ? "macet" : count >= 5 ? "padat" : count > 0 ? "lancar" : "belum dianalisis";
+    const delayMinutes = count >= 5 ? Math.max(2, Math.min(30, Math.round(count * 0.7))) : 0;
+    const snapshotTime = Number(candidate.snapshot?.capturedAt || 0);
+    const evidenceTime = snapshotTime > 0
+      ? new Date(snapshotTime).toLocaleTimeString("id-ID", {
+        timeZone: "Asia/Jakarta",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+      : "";
+    const safety = verifiedEnforcement
+      ? ` Metadata sumber menandai fungsi ${enforcementType}; kurangi kecepatan dan patuhi batas pada rambu.`
+      : " Kurangi kecepatan dan patuhi rambu sebelum memasuki simpang.";
+    const modeLabel = inferredMode === "motorcycle" ? "motor"
+      : inferredMode === "car" ? "mobil"
+        : inferredMode === "bicycle" ? "sepeda"
+          : inferredMode === "walk" ? "jalan kaki"
+            : inferredMode === "transit" ? "angkutan umum"
+              : "perjalanan";
+    const modeEvidenceLabel = `${travelModeSourceLabel(modeSource)}${modeConfidence > 0
+      ? `, skor bukti ${Math.round(modeConfidence * 100)}%`
+      : ""}`;
+    const factualBody = count > 0
+      ? `${count} objek kendaraan; kondisi ${status}. Bukti ${evidenceTime ? `${evidenceTime} WIB` : "frame terbaru"}, jarak ${meters} m, moda ${modeLabel} (${modeEvidenceLabel}). Estimasi perlambatan ${delayMinutes || 1} menit berlaku hingga frame berikutnya. Buka peta untuk cek rute alternatif.${safety}`
+      : `CCTV publik sekitar ${meters} meter di depan. AI belum memiliki frame segar. Buka peta untuk memeriksa kamera dan rute alternatif.${safety}`;
+    const dynamicContext = {
+      road: name,
+      distanceMeters: meters,
+      mode: modeLabel,
+      modeSource,
+      modeConfidence,
+      congestion: status,
+      vehicleObjects: count,
+      delayMinutes: delayMinutes || 1,
+    };
+    const title = [name, status.toUpperCase()].join(" \u00b7 ");
+    cctvTravelLastAlert.set(candidate.id, { at: now, mode: inferredMode });
+    const travelContext: TravelContextUpdate = {
+      observedAt: now,
+      lat: position.lat,
+      lng: position.lng,
+      speedKmh,
+      mode: inferredMode,
+      modeSource,
+      modeConfidence,
+      dwellMinutes: cctvTravelDwell ? Math.floor((now - cctvTravelDwell.startedAt) / 60_000) : 0,
+      destinationKnown: position.destinationKnown === true,
+      visibility: document.visibilityState === "visible" ? "visible" : "hidden",
+      candidate: {
+        id: candidate.id,
+        name,
+        lat: candidate.lat,
+        lng: candidate.lng,
+        vehicleCount: count,
+        snapshotCapturedAt: Number(candidate.snapshot?.capturedAt || 0) || undefined,
+        snapshotImageUrl: /^https:\/\//i.test(String(candidate.snapshot?.imageUrl || ""))
+          ? String(candidate.snapshot?.imageUrl).slice(0, 2_000)
+          : undefined,
+        enforcementType: verifiedEnforcement ? enforcementType : undefined,
+        enforcementVerified: verifiedEnforcement,
+      },
+    };
+    syncCctvTravelContext(travelContext, document.visibilityState !== "visible", String(candidate.snapshot?.imageUrl || ""));
+    // The verified/factual alert and motorcycle voice must not wait for a
+    // browser model, including when a cache marker survives a page reload.
+    // Once the already-warm local model replies, silently refresh the same
+    // tagged notification with its natural-language lead.
+    const notification = showCctvTravelNotification(
+      title,
+      factualBody,
+      candidate.id,
+      candidate.lat,
+      candidate.lng,
+      candidate.snapshot?.imageUrl,
+      "ambient_update",
+    );
+    if (inferredMode === "motorcycle" && cctvTravelVoiceUnlocked) {
+      speakCctvTravelAlert(count > 0
+        ? `${name} sekitar ${meters} meter di depan terpantau ${status}. Perkiraan perlambatan ${delayMinutes || 1} menit. Kurangi kecepatan dan patuhi rambu.`
+        : `${name} sekitar ${meters} meter di depan. AI sedang memperbarui kondisi. Kurangi kecepatan dan patuhi rambu.`);
+    }
+    void dynamicCctvNotificationLead(dynamicContext).then((generatedLead) => {
+      const latestAlert = cctvTravelLastAlert.get(candidate.id);
+      if (!generatedLead || latestAlert?.at !== now) return;
+      return showCctvTravelNotification(
+        title,
+        `${generatedLead} ${factualBody}`,
+        candidate.id,
+        candidate.lat,
+        candidate.lng,
+        candidate.snapshot?.imageUrl,
+        "ambient_update",
+        false,
+      );
+    }).catch(() => undefined);
+    await notification;
+  }
+
+  function stopCctvTravelAlerts(): void {
+    if (cctvTravelWatchId !== null && navigator.geolocation) navigator.geolocation.clearWatch(cctvTravelWatchId);
+    cctvTravelWatchId = null;
+    cctvTravelPreviousPoint = null;
+    cctvTravelDwell = null;
+    cctvTravelLastAlert.clear();
+    cctvTravelSpeedSamples.length = 0;
+    cctvTravelLatestContext = null;
+    cctvTravelLastContextSyncAt = 0;
+    cctvTravelVoiceUnlocked = false;
+    localStorage.removeItem(CCTV_TRAVEL_ALERT_KEY);
+    updateCctvTravelAlertButtons(false);
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    void disableTravelContextSync().catch(() => undefined);
+    showGlobalNotice("success", "Peringatan perjalanan nonaktif", "Pemantauan CCTV berdasarkan lokasi telah dihentikan.");
+  }
+
+  async function startCctvTravelAlerts(requestPermissions = false): Promise<void> {
+    if (!navigator.geolocation) {
+      showGlobalNotice("error", "Lokasi tidak tersedia", "Browser ini tidak menyediakan Geolocation API.");
+      return;
+    }
+    if (requestPermissions) {
+      cctvTravelVoiceUnlocked = navigator.userActivation?.isActive === true;
+      if (cctvTravelVoiceUnlocked && "speechSynthesis" in window) {
+        // Resume is silent; it only unlocks a user-consented session on engines
+        // that suspend synthesis until a gesture. The later GPS callback may
+        // still be rejected by the OS, in which case the visual alert remains.
+        window.speechSynthesis.resume();
+      }
+    }
+    // Foreground safety alerts must become available immediately. Push setup
+    // can wait on the browser/OS indefinitely, so it is a progressive channel
+    // and must never block the visible toggle or geolocation watcher.
+    localStorage.setItem(CCTV_TRAVEL_ALERT_KEY, "true");
+    updateCctvTravelAlertButtons(true);
+    if (requestPermissions && "serviceWorker" in navigator) {
+      void navigator.serviceWorker.ready
+        .then((registration) => enablePublicPush(registration))
+        .catch((error) => {
+        console.warn("[CCTV travel] Web Push belum aktif; peringatan aktif-tab tetap berjalan.", error);
+        });
+    }
+    let notificationModelWarmStarted = false;
+    const warmNotificationModel = () => {
+      if (notificationModelWarmStarted) return;
+      notificationModelWarmStarted = true;
+      void warmBrowserTextModel("notification").catch(() => undefined);
+    };
+    const idleCallback = (window as Window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+    }).requestIdleCallback;
+    if (idleCallback) {
+      idleCallback(warmNotificationModel, { timeout: 8_000 });
+    }
+    // Idle callbacks can be throttled while a map/video is busy.  Always keep
+    // a short timer fallback so the local notification model begins warming
+    // without requiring the user to reopen a sheet or wait for an idle frame.
+    window.setTimeout(warmNotificationModel, 2_000);
+    if (cctvTravelWatchId !== null) return;
+    if ("serviceWorker" in navigator) {
+      void navigator.serviceWorker.ready.then(async (registration) => {
+        const periodic = (registration as ServiceWorkerRegistration & {
+          periodicSync?: { register(tag: string, options: { minInterval: number }): Promise<void> };
+        }).periodicSync;
+        if (!periodic || !navigator.permissions) return;
+        const permission = await navigator.permissions.query({
+          name: "periodic-background-sync" as PermissionName,
+        }).catch(() => null);
+        if (permission?.state === "granted") {
+          await periodic.register("its-congestion-check", { minInterval: 15 * 60_000 }).catch(() => undefined);
+        }
+      });
+    }
+    cctvTravelWatchId = navigator.geolocation.watchPosition(
+      (current) => void evaluateCctvTravelPosition({
+        lat: current.coords.latitude,
+        lng: current.coords.longitude,
+        heading: current.coords.heading,
+        speedKmh: current.coords.speed === null ? undefined : Number(current.coords.speed) * 3.6,
+        mode: "unknown",
+        modeSource: "gps-heuristic",
+        modeConfidence: 0,
+        accuracy: current.coords.accuracy,
+        destinationKnown: false,
+      }).catch(() => undefined),
+      (error) => {
+        showGlobalNotice("error", "Peringatan lokasi berhenti", error.message || "Izin lokasi tidak tersedia.");
+        stopCctvTravelAlerts();
+      },
+      { enableHighAccuracy: true, maximumAge: 2_000, timeout: 15_000 },
+    );
+    showGlobalNotice(
+      "success",
+      "Peringatan perjalanan aktif",
+      `Arah dan lokasi dipantau saat aplikasi aktif. ${cctvTravelVoiceUnlocked
+        ? "Suara keselamatan motor aktif untuk sesi ini."
+        : "Suara motor hanya aktif setelah gestur izin pada sesi ini."}`,
+    );
+  }
+
+  window.addEventListener("its:toggle-cctv-travel-alerts", () => {
+    if (localStorage.getItem(CCTV_TRAVEL_ALERT_KEY) === "true") stopCctvTravelAlerts();
+    else void startCctvTravelAlerts(true);
+  });
+  window.addEventListener("its:periodic-congestion-check", () => {
+    if (localStorage.getItem(CCTV_TRAVEL_ALERT_KEY) === "true") void startCctvTravelAlerts(false);
+  });
+  window.addEventListener("its:navigation-position", (event) => {
+    const detail = (event as CustomEvent<{
+      lat?: number;
+      lng?: number;
+      heading?: number;
+      speedKmh?: number;
+      mode?: "car" | "motorcycle" | "truck" | "bicycle" | "walk" | "transit";
+      modeSource?: "navigation-explicit" | "manual-explicit";
+      modeConfidence?: number;
+      routeDistanceM?: number;
+    }>).detail || {};
+    if (Number.isFinite(detail.lat) && Number.isFinite(detail.lng)) {
+      void evaluateCctvTravelPosition({
+        lat: Number(detail.lat),
+        lng: Number(detail.lng),
+        heading: detail.heading,
+        speedKmh: detail.speedKmh,
+        mode: detail.mode || "unknown",
+        modeSource: detail.modeSource || "navigation-explicit",
+        modeConfidence: Number.isFinite(detail.modeConfidence) ? Number(detail.modeConfidence) : 1,
+        destinationKnown: Number.isFinite(detail.routeDistanceM),
+      }).catch(() => undefined);
+    }
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "hidden" || localStorage.getItem(CCTV_TRAVEL_ALERT_KEY) !== "true") return;
+    if (!cctvTravelLatestContext) return;
+    syncCctvTravelContext({ ...cctvTravelLatestContext, visibility: "hidden" }, true);
+  });
+  if (localStorage.getItem(CCTV_TRAVEL_ALERT_KEY) === "true") void startCctvTravelAlerts(false);
+
+  function openMapDynamicsPointPreview(feature: MapDetailFeatureCollection["features"][number], point: L.LatLng): void {
+    const properties = feature.properties || {};
+    const name = String(properties.name || properties.title || "Kamera CCTV");
+    const streamStatus = String(properties.streamStatus || "").trim().toLowerCase();
+    // A directory page, community mirror, or information article is useful
+    // attribution but is not a camera feed.  Do not put it in a video popup:
+    // that caused Jakarta's generic article page to be presented as CCTV.
+    if (!/^(?:verified-live|public-live)$/.test(streamStatus)) {
+      openMapDynamicsPoint(feature, point);
+      return;
+    }
+    const rawUrl = String(properties.streamUrl || properties.publicUrl || "");
+    const streamUrl = /^(?:https?|wss):\/\//i.test(rawUrl) && !/@/.test(rawUrl)
+      ? usablePublicMediaUrl(rawUrl)
+      : "";
+    const previewMedia = classifyCctvMedia({
+      url: streamUrl,
+      mediaFormat: properties.mediaFormat,
+      codec: properties.codec,
+      mimeType: properties.mimeType,
+    });
+    const previewRequiresProxy = /(?:worker|proxy)/iu.test(String(properties.playbackAccess || ""));
+    if (!streamUrl || previewMedia.browserPlayback === "unsupported" || previewMedia.browserPlayback === "limited") {
+      openMapDynamicsPoint(feature, point);
+      return;
+    }
+    const previewVideoMarkup = previewMedia.format === "webrtc-whep"
+      ? `<video data-whep-video data-src="${escapeHtml(streamUrl)}" autoplay playsinline muted></video>`
+      : previewMedia.format === "mjpeg"
+      ? `<img class="map-camera-mjpeg" src="${escapeHtml(publicMediaProxyUrl(streamUrl))}" alt="Video MJPEG realtime ${escapeHtml(name)}" crossorigin="anonymous">`
+      : isLikelyHlsUrl(streamUrl)
+      ? `<video class="hls-video" data-hls-video data-src="${escapeHtml(previewRequiresProxy ? hlsAiProxyUrl(streamUrl) : streamUrl)}"${previewRequiresProxy ? ' crossorigin="anonymous"' : ""} autoplay playsinline muted></video>`
+      : previewMedia.format === "flv"
+        ? `<video data-flv-video data-src="${escapeHtml(/^wss:\/\//iu.test(streamUrl) ? streamUrl : publicMediaProxyUrl(streamUrl))}" autoplay playsinline muted></video>`
+        : `<video src="${escapeHtml(streamUrl)}" autoplay playsinline muted></video>`;
+    const root = document.createElement("section");
+    root.className = "its-cctv-marker-preview";
+    root.innerHTML = `
+      <header><span><i></i> LIVE</span><strong>${escapeHtml(name)}</strong></header>
+      <div>
+        ${previewVideoMarkup}
+      </div>
+      <footer>
+        <button type="button" data-preview-pip aria-label="Picture in Picture"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><rect x="12" y="11" width="7" height="5" rx="1"/></svg></button>
+        <button type="button" data-preview-fullscreen aria-label="Layar penuh"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M8 21H3v-5"/></svg></button>
+        <button type="button" data-preview-detail>Lihat selengkapnya</button>
+      </footer>`;
+    const popup = L.popup({
+      className: "its-cctv-marker-popup",
+      closeButton: true,
+      autoPan: true,
+      maxWidth: 360,
+      minWidth: 250,
+      offset: L.point(0, -24),
+    }).setLatLng(point).setContent(root).openOn(map);
+    setupHlsVideos(root);
+    const previewWhepController = previewMedia.format === "webrtc-whep" ? new AbortController() : null;
+    const previewWhepSession = previewWhepController
+      ? startWhepPlayback(
+        root.querySelector<HTMLVideoElement>("video[data-whep-video]")!,
+        streamUrl,
+        { signal: previewWhepController.signal },
+      ).catch(() => null)
+      : Promise.resolve<WhepPlaybackSession | null>(null);
+    root.querySelector("[data-preview-detail]")?.addEventListener("click", () => {
+      map.closePopup(popup);
+      openMapDynamicsPoint(feature, point);
+    });
+    root.querySelector("[data-preview-pip]")?.addEventListener("click", () => {
+      const video = root.querySelector<HTMLVideoElement>("video");
+      void video?.requestPictureInPicture?.().catch(() => undefined);
+    });
+    root.querySelector("[data-preview-fullscreen]")?.addEventListener("click", () => {
+      void root.requestFullscreen?.().catch(() => undefined);
+    });
+    map.once("popupclose", () => {
+      previewWhepController?.abort();
+      void previewWhepSession.then((session) => session?.close());
+      stopHlsVideos(root);
+    });
+  }
 
   function openMapDynamicsPoint(feature: MapDetailFeatureCollection["features"][number], point: L.LatLng): void {
     const properties = feature.properties || {};
+    const publicCctvId = String(feature.id || properties.sourceId || "");
     const kind = String(properties.kind || "").toLowerCase();
     if (!/(?:cctv|camera|surveillance|speed_camera)/.test(kind)) return;
     document.getElementById("map-dynamics-camera-modal")?.remove();
@@ -1700,45 +2388,175 @@ if (staticRoute === "cctv") {
     const streamCandidate = String(properties.streamUrl || properties.publicUrl || properties.website || properties.linkLive || properties.link_live || "");
     // Never move credentials embedded by an upstream metadata service into
     // client HTML. A public player is rendered only for a credential-free URL.
-    const streamUrl = /^(?:https?):\/\//i.test(streamCandidate) && !/@/.test(streamCandidate)
+    const streamUrl = /^(?:https?|wss):\/\//i.test(streamCandidate) && !/@/.test(streamCandidate)
       ? usablePublicMediaUrl(streamCandidate)
       : "";
     const streamStatus = String(properties.streamStatus || (streamUrl ? "public-live" : "metadata-only"));
+    const streamCodec = String(properties.codec || "");
+    const streamMediaFormat = String(properties.mediaFormat || "");
+    const streamPlaybackAccess = String(properties.playbackAccess || "");
+    const streamMimeType = String(properties.mimeType || "");
+    const streamCapability = classifyCctvMedia({
+      url: streamUrl,
+      mediaFormat: streamMediaFormat,
+      codec: streamCodec,
+      mimeType: streamMimeType,
+    });
+    const playbackNote = String(properties.playbackNote || "").trim();
+    const rawVcmSiteId = properties.vcmSiteId;
+    const vcmSiteId = Number(rawVcmSiteId);
+    const hasOfficialVcm = rawVcmSiteId !== null
+      && rawVcmSiteId !== undefined
+      && Number.isInteger(vcmSiteId)
+      && vcmSiteId >= 0;
+    // Only a credential-free, direct feed that has been classified live may
+    // enter the custom player and AI path.  A third-party page is retained as
+    // source metadata, but never embedded as if it were the exact CCTV.
     const streamIsPlayable = Boolean(streamUrl)
-      && /^(?:public-live|verified-live|public-page-third-party)$/i.test(streamStatus);
+      && /^(?:public-live|verified-live)$/i.test(streamStatus)
+      && streamCapability.browserPlayback !== "unsupported"
+      && streamCapability.browserPlayback !== "limited";
+    setBackgroundCctvInteractivePlayback(streamIsPlayable);
+    const streamIsBrowserCodecLimited = streamStatus === "official-live-hevc-browser-limited"
+      || /(?:hevc|h\.265|hvc1|hev1)/i.test(streamCodec);
     const isThirdPartyPublicPage = streamStatus === "public-page-third-party";
     const address = String(properties.address || properties.location || "").trim();
     const operator = String(properties.operator || "").trim();
     const attribution = String(properties.attribution || "").trim();
+    const roadCorridor = properties.roadCorridor && typeof properties.roadCorridor === "object"
+      ? properties.roadCorridor as Record<string, unknown>
+      : null;
+    const roadGeometry = Array.isArray(roadCorridor?.geometry)
+      ? roadCorridor.geometry.flatMap((coordinate) =>
+        Array.isArray(coordinate) && coordinate.length >= 2
+          && Number.isFinite(Number(coordinate[0])) && Number.isFinite(Number(coordinate[1]))
+          ? [{ lat: Number(coordinate[1]), lng: Number(coordinate[0]) }]
+          : [])
+      : [];
+    const corridorLengthM = Number(roadCorridor?.lengthM || 0);
+    const userCorridorMatch = state.vehicleMarker && roadGeometry.length >= 2
+      ? matchRoadCorridor(state.vehicleMarker.getLatLng(), roadGeometry, Number(roadCorridor?.bufferM || 50))
+      : null;
     const streamOptions = Array.isArray(properties.streams)
       ? properties.streams.flatMap((entry) => {
         if (!entry || typeof entry !== "object") return [];
         const record = entry as Record<string, unknown>;
-        const url = usablePublicMediaUrl(String(record.embedUrl || record.sourcePageUrl || ""));
+        const url = usablePublicMediaUrl(String(record.streamUrl || record.embedUrl || record.sourcePageUrl || ""));
         if (!url || /@/.test(url)) return [];
-        return [{ name: String(record.name || `Kamera ${String(record.id || "")}`).trim() || "Kamera", url }];
+        return [{
+          name: String(record.name || `Kamera ${String(record.id || "")}`).trim() || "Kamera",
+          url,
+          mediaFormat: String(record.mediaFormat || streamMediaFormat),
+          playbackAccess: String(record.playbackAccess || streamPlaybackAccess),
+        }];
       })
       : [];
+    const mediaFormatByUrl = new Map(streamOptions.map((option) => [option.url, option.mediaFormat]));
+    const playbackAccessByUrl = new Map(streamOptions.map((option) => [option.url, option.playbackAccess]));
+    if (streamUrl) mediaFormatByUrl.set(streamUrl, streamMediaFormat);
+    if (streamUrl) playbackAccessByUrl.set(streamUrl, streamPlaybackAccess);
+    const cameraCapability = (url: string, mediaFormat = mediaFormatByUrl.get(url) || "") => classifyCctvMedia({
+      url,
+      mediaFormat,
+      codec: url === streamUrl ? streamCodec : "",
+      mimeType: url === streamUrl ? streamMimeType : "",
+    });
+    const cameraPlayerMarkup = (url: string, aiReadable = false, mediaFormat = mediaFormatByUrl.get(url) || "") => {
+      const capability = cameraCapability(url, mediaFormat);
+      if (capability.format === "webrtc-whep") {
+        return `<video data-camera-video data-whep-video data-src="${escapeHtml(url)}" autoplay playsinline muted></video><canvas class="map-camera-ai-canvas" data-camera-ai-canvas aria-hidden="true"></canvas><output class="map-camera-whep-status" data-camera-whep-status role="status">Menghubungkan WHEPâ€¦</output>`;
+      }
+      if (capability.format === "hls") {
+        const proxyRequired = /(?:worker|proxy)/iu.test(playbackAccessByUrl.get(url) || "");
+        const proxied = aiReadable || proxyRequired;
+        return `<video class="hls-video" data-camera-video data-hls-video data-src="${escapeHtml(proxied ? hlsAiProxyUrl(url) : url)}"${proxied ? ' crossorigin="anonymous"' : ""} autoplay playsinline muted></video><canvas class="map-camera-ai-canvas" data-camera-ai-canvas aria-hidden="true"></canvas>`;
+      }
+      if (capability.format === "direct-video") {
+        // A direct fMP4 stream still needs a CORS-readable source when AI is
+        // active.  The Worker only proxies explicitly allowlisted official
+        // origins, so this does not turn the application into an open proxy.
+        const directUrl = aiReadable ? publicMediaProxyUrl(url) : url;
+        return `<video data-camera-video src="${escapeHtml(directUrl)}"${aiReadable ? ' crossorigin="anonymous"' : ""} autoplay playsinline muted></video><canvas class="map-camera-ai-canvas" data-camera-ai-canvas aria-hidden="true"></canvas>`;
+      }
+      if (capability.format === "flv") {
+        const flvUrl = /^wss:\/\//iu.test(url) ? url : publicMediaProxyUrl(url);
+        return `<video data-camera-video data-flv-video data-src="${escapeHtml(flvUrl)}" crossorigin="anonymous" autoplay playsinline muted></video><canvas class="map-camera-ai-canvas" data-camera-ai-canvas aria-hidden="true"></canvas>`;
+      }
+      if (capability.format === "mjpeg") {
+        return `<img class="map-camera-mjpeg" src="${escapeHtml(publicMediaProxyUrl(url))}" alt="Video MJPEG realtime ${escapeHtml(name)}" crossorigin="anonymous">`;
+      }
+      if (capability.format === "audio-only") {
+        return `<audio data-camera-audio src="${escapeHtml(url)}" autoplay></audio>`;
+      }
+      return `<iframe src="${escapeHtml(url)}" title="Video realtime ${escapeHtml(name)}" loading="eager" allow="autoplay; fullscreen; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`;
+    };
+    const cameraMediaSupportsAi = (url: string) => cameraCapability(url).aiFrames;
+    const cameraPlayerChromeMarkup = (url: string) => {
+      // Picture-in-Picture is meaningful only when there is an HTMLVideoElement
+      // under our control. An iframe/MJPEG source must not expose a button that
+      // looks usable and then fails after a user taps it.
+      const videoSource = cameraMediaSupportsAi(url);
+      const pipRuntimeSupported = videoSource
+        && typeof HTMLVideoElement !== "undefined"
+        && (Boolean(documentPictureInPictureApi())
+          || ("requestPictureInPicture" in HTMLVideoElement.prototype
+            && document.pictureInPictureEnabled !== false));
+      return `
+      <span class="map-camera-live-badge"><i></i> LIVE</span>
+      <div class="map-camera-player-controls" data-camera-pip-supported="${pipRuntimeSupported ? "true" : "false"}">
+        ${videoSource ? `<button type="button" data-camera-pip title="${pipRuntimeSupported ? "Picture in Picture" : "Picture in Picture tidak didukung browser"}" aria-label="Picture in Picture"${pipRuntimeSupported ? "" : " disabled aria-disabled=\"true\""}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><rect x="12" y="11" width="7" height="5" rx="1"/></svg>
+        </button>` : ""}
+        <button type="button" data-camera-fullscreen title="Layar penuh" aria-label="Layar penuh" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M8 21H3v-5"/></svg>
+        </button>
+      </div>`;
+    };
     const modal = document.createElement("div");
     modal.id = "map-dynamics-camera-modal";
     modal.className = "map-license-modal map-camera-source-modal";
     modal.innerHTML = `
-      <section class="map-license-sheet map-camera-source-sheet" role="dialog" aria-modal="true" aria-labelledby="map-camera-source-title">
+      <section class="map-license-sheet map-camera-source-sheet" role="dialog" aria-modal="true" aria-labelledby="map-camera-source-title" tabindex="-1">
         <div class="map-license-grip" data-swipe-handle aria-hidden="true"></div>
         <header class="map-license-head">
-          <div><span>${isThirdPartyPublicPage ? "Lokasi CCTV terverifikasi · pemutar publik pihak ketiga" : "CCTV terverifikasi"}</span><h2 id="map-camera-source-title">${escapeHtml(name)}</h2></div>
+          <div><h2 id="map-camera-source-title">${escapeHtml(name)}</h2></div>
           <div class="map-camera-head-actions">
+            ${streamIsPlayable && cameraMediaSupportsAi(streamUrl) ? `<button type="button" data-camera-ai-toggle aria-label="AI deteksi kendaraan aktif otomatis" title="AI deteksi kendaraan">${cameraAiIconSvg()}</button>` : ""}
             ${streamIsPlayable ? `<button type="button" data-camera-float aria-label="Jadikan pemutar CCTV panel mengambang" title="Panel mengambang"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h13v13M21 3l-8 8M16 21H3V8"/></svg></button>` : ""}
-            <button type="button" data-camera-source-close aria-label="Tutup detail CCTV" title="Tutup"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+            <button type="button" data-camera-source-close aria-label="Tutup detail CCTV" title="Tutup"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="3"/><path d="M9 8v8"/></svg></button>
           </div>
         </header>
         ${streamIsPlayable ? `
-          <div class="map-camera-live-badge"><i></i> ${isThirdPartyPublicPage ? "Pemutar publik — status live mengikuti penyedia" : "LIVE dari penyedia sumber"}</div>
-          <div class="map-camera-public-player">
-            <iframe data-camera-player src="${escapeHtml(streamUrl)}" title="Video realtime ${escapeHtml(name)}" loading="eager" allow="autoplay; fullscreen; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+          <div class="map-camera-public-player" data-camera-player>
+            ${cameraPlayerMarkup(streamUrl, false, streamMediaFormat)}
+            ${cameraPlayerChromeMarkup(streamUrl)}
           </div>
+          <div class="map-camera-ai-status" data-camera-ai-status hidden>
+            <strong>AI kendaraan siap</strong>
+            <span>Deteksi berjalan otomatis untuk menghitung kendaraan dan memperkirakan kepadatan dari frame CCTV.</span>
+          </div>
+          <section class="map-camera-ai-segments" data-camera-ai-segments aria-label="Tiga segmen AI terakhir"></section>
+          <section class="map-camera-analytics" data-camera-analytics>
+            <header><strong>Kendaraan & durasi lampu</strong><span data-camera-chart-caption>Menunggu frame AI</span></header>
+            ${hasOfficialVcm ? `<p class="map-camera-vcm-status" data-camera-vcm-status>Penghitung resmi Dishub sedang dimuat…</p>` : ""}
+            <div class="map-camera-chart-wrap">
+              <canvas data-camera-traffic-chart width="640" height="220" role="img"
+                aria-label="Grafik hubungan jumlah kendaraan pada sumbu X dan rekomendasi durasi lampu dalam detik pada sumbu Y"></canvas>
+              <output class="map-camera-chart-tooltip" data-camera-chart-tooltip hidden></output>
+            </div>
+            <div class="map-camera-chart-legend" role="group" aria-label="Legenda grafik">
+              <span><i></i> Sampel analisis realtime</span>
+              <small>X: jumlah kendaraan · Y: durasi lampu (detik)</small>
+            </div>
+            <div class="map-camera-detection-table" role="table" aria-label="Tabel hasil deteksi kendaraan" data-camera-detection-table></div>
+          </section>
           ${streamOptions.length > 1 ? `<div class="map-camera-stream-tabs" role="group" aria-label="Pilih sudut kamera">${streamOptions.map((option, index) => `<button type="button" data-camera-stream="${escapeHtml(option.url)}" aria-pressed="${index === 0 ? "true" : "false"}">${escapeHtml(option.name)}</button>`).join("")}</div>` : ""}
           ${isThirdPartyPublicPage ? `<p class="map-camera-disclaimer">Halaman ini merupakan mirror publik independen. Jika penyedia menolak embed atau membatasi trafik, gunakan tombol buka pemutar.</p>` : ""}
+        ` : streamIsBrowserCodecLimited ? `
+          <div class="map-camera-unavailable is-codec-limited" data-camera-codec-limited>
+            <strong>Siaran resmi aktif, tetapi memakai codec HEVC/H.265.</strong>
+            <p>${escapeHtml(playbackNote || "Codec ini tidak didukung secara merata oleh browser. Pemindaian AI tidak diantrekan sampai perangkat dapat mendekode frame video, sehingga tidak ada status menunggu tanpa batas.")}</p>
+          </div>
         ` : `
           <div class="map-camera-unavailable">
             <strong>Lokasi kamera tersedia, tetapi video tidak dapat diputar di ITS Maps.</strong>
@@ -1750,17 +2568,506 @@ if (staticRoute === "cctv") {
           <div><dt>Sumber</dt><dd>${escapeHtml(source)}</dd></div>
           ${operator ? `<div><dt>Pengelola</dt><dd>${escapeHtml(operator)}</dd></div>` : ""}
           ${address ? `<div><dt>Alamat</dt><dd>${escapeHtml(address)}</dd></div>` : ""}
+          ${roadGeometry.length >= 2 ? `<div><dt>Ruas representasi</dt><dd>${escapeHtml(String(roadCorridor?.roadName || "Jalan terdekat"))} · ${corridorLengthM >= 1000 ? `${(corridorLengthM / 1000).toFixed(2)} km` : `${Math.round(corridorLengthM)} m`}</dd></div>` : ""}
+          ${userCorridorMatch ? `<div><dt>Geofence ruas</dt><dd>${userCorridorMatch.inside ? "Anda berada di koridor ruas ini" : `Di luar koridor · ${Math.round(userCorridorMatch.distanceM)} m dari garis jalan`}</dd></div>` : ""}
         </dl>
-        ${sourceUrl ? `<a class="map-camera-source-link" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">${isThirdPartyPublicPage ? "Buka pemutar publik" : "Buka sumber"}</a>` : ""}
+        ${sourceUrl ? `<a class="map-camera-source-link" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">${isThirdPartyPublicPage ? "Buka halaman referensi" : "Buka sumber"}</a>` : ""}
         ${attribution ? `<footer class="map-camera-attribution">Kontribusi data: ${escapeHtml(attribution)}</footer>` : ""}
       </section>`;
+    const corridorLayer = roadGeometry.length >= 2
+      ? L.polyline(roadGeometry, {
+        color: "#0ea5e9",
+        weight: 9,
+        opacity: 0.3,
+        lineCap: "round",
+        lineJoin: "round",
+        interactive: false,
+      }).addTo(map)
+      : null;
+    let publicCameraAiTimer = 0;
+    let publicCameraAiOverlayFrame = 0;
+    let publicCameraAiOverlayLastPaint = 0;
+    let publicCameraAiOverlay: {
+      canvas: HTMLCanvasElement;
+      detections: BrowserRfDetrDetection[];
+      frameWidth: number;
+      frameHeight: number;
+    } | null = null;
+    let detachCameraFullscreenControls = () => undefined;
+    let publicCameraVcmTimer = 0;
+    let officialVcmTotal: number | null = null;
+    let publicCameraAiBusy = false;
+    let publicCameraAiProxyEnabled = false;
+    let publicCameraWhepAbort: AbortController | null = null;
+    let publicCameraWhepSession: WhepPlaybackSession | null = null;
+    let publicCameraWhepPending: Promise<WhepPlaybackSession> | null = null;
+    // Each user-visible stream gets at most one edge bootstrap. The local
+    // browser model owns all continuous follow-up analysis.
+    const publicCameraAiEdgeBootstrapByStream = new Set<string>();
+    let simulatedSignalMarker: L.Marker | null = null;
+    let activeStreamUrl = streamUrl;
+    let activeStreamMediaFormat = streamMediaFormat;
+    const assessmentByStream = new Map<string, TrafficFrameAssessment>();
+    const streamNameByUrl = new Map(streamOptions.map((option) => [option.url, option.name]));
+    const trafficChartSamples: Array<{ vehicles: number; duration: number }> = [];
+    let trafficChartResizeObserver: ResizeObserver | null = null;
+    let trafficChartRedrawFrame = 0;
+    let trafficChartHighlight = -1;
+    let publicCameraPipWindow: Window | null = null;
+    let publicCameraPipTimer = 0;
+    let publicCameraAutoPipRegistered = false;
+    const stopPublicCameraWhep = () => {
+      publicCameraWhepAbort?.abort();
+      publicCameraWhepAbort = null;
+      if (publicCameraWhepSession) void publicCameraWhepSession.close();
+      publicCameraWhepSession = null;
+      const pending = publicCameraWhepPending;
+      publicCameraWhepPending = null;
+      if (pending) void pending.then((session) => session.close()).catch(() => undefined);
+    };
+    const setupPublicCameraMedia = (root: HTMLElement, url: string, mediaFormat: string) => {
+      setupHlsVideos(root);
+      const video = root.querySelector<HTMLVideoElement>("video[data-whep-video]");
+      if (!video || cameraCapability(url, mediaFormat).format !== "webrtc-whep") return;
+      stopPublicCameraWhep();
+      const controller = new AbortController();
+      publicCameraWhepAbort = controller;
+      const status = root.querySelector<HTMLOutputElement>("[data-camera-whep-status]");
+      const updateState = (state: string, detail = "") => {
+        root.dataset.whepState = state;
+        if (status) {
+          status.hidden = state === "connected";
+          status.textContent = detail || (state === "connecting" ? "Menghubungkan WHEPâ€¦"
+            : state === "negotiating" ? "Negosiasi SDPâ€¦"
+              : state === "connected" ? "WHEP tersambung"
+                : state === "failed" ? "WHEP gagal tersambung"
+                  : "Koneksi WHEP terputus");
+        }
+        window.dispatchEvent(new CustomEvent("its:whep-state", { detail: { url, state, message: detail } }));
+      };
+      video.addEventListener("loadeddata", () => updateState("connected"), { once: true });
+      const pending = startWhepPlayback(video, url, {
+        signal: controller.signal,
+        onState: updateState,
+      });
+      publicCameraWhepPending = pending;
+      void pending.then((session) => {
+        if (publicCameraWhepPending !== pending || controller.signal.aborted) {
+          void session.close();
+          return;
+        }
+        publicCameraWhepPending = null;
+        publicCameraWhepSession = session;
+      }).catch((error) => {
+        if (publicCameraWhepPending === pending) publicCameraWhepPending = null;
+        if (!controller.signal.aborted) updateState("failed", error instanceof Error ? error.message : "WHEP gagal tersambung.");
+      });
+    };
+    const chartCanvasLayout = (chart: HTMLCanvasElement) => {
+      const rect = chart.getBoundingClientRect();
+      const width = Math.max(260, Math.round(rect.width || 640));
+      const height = Math.max(164, Math.round(rect.height || Math.min(232, Math.max(176, width * 0.42))));
+      // Cap the backing scale at 2x: this keeps the graph sharp on high-DPI
+      // screens without making every realtime redraw unnecessarily expensive.
+      const pixelRatio = clamp(window.devicePixelRatio || 1, 1, 2);
+      const backingWidth = Math.round(width * pixelRatio);
+      const backingHeight = Math.round(height * pixelRatio);
+      if (chart.width !== backingWidth || chart.height !== backingHeight) {
+        chart.width = backingWidth;
+        chart.height = backingHeight;
+      }
+      const padding = {
+        left: clamp(Math.round(width * 0.145), 46, 64),
+        right: clamp(Math.round(width * 0.045), 14, 22),
+        top: 18,
+        bottom: clamp(Math.round(height * 0.25), 40, 50),
+      };
+      const plotWidth = Math.max(1, width - padding.left - padding.right);
+      const plotHeight = Math.max(1, height - padding.top - padding.bottom);
+      chart.dataset.chartCssWidth = String(width);
+      chart.dataset.chartCssHeight = String(height);
+      chart.dataset.chartPadLeft = String(padding.left);
+      chart.dataset.chartPadRight = String(padding.right);
+      chart.dataset.chartPadTop = String(padding.top);
+      chart.dataset.chartPadBottom = String(padding.bottom);
+      return { width, height, pixelRatio, padding, plotWidth, plotHeight };
+    };
+    const drawTrafficRelationshipChart = (highlightIndex = trafficChartHighlight) => {
+      const chart = modal.querySelector<HTMLCanvasElement>("[data-camera-traffic-chart]");
+      const context = chart?.getContext("2d");
+      if (!chart || !context) return;
+      const { width, height, pixelRatio, padding, plotWidth, plotHeight } = chartCanvasLayout(chart);
+      const maxVehicles = Math.max(10, Math.ceil(Math.max(0, ...trafficChartSamples.map((sample) => sample.vehicles)) / 5) * 5);
+      const maxDuration = Math.max(30, Math.ceil(Math.max(0, ...trafficChartSamples.map((sample) => sample.duration)) / 10) * 10);
+      const point = (sample: { vehicles: number; duration: number }) => ({
+        x: padding.left + sample.vehicles / maxVehicles * plotWidth,
+        y: padding.top + plotHeight - sample.duration / maxDuration * plotHeight,
+      });
+      const tickFontSize = clamp(Math.round(width / 47), 10, 12);
+      context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+      context.clearRect(0, 0, width, height);
+      context.font = `${tickFontSize}px system-ui, sans-serif`;
+      context.textBaseline = "middle";
+      context.lineWidth = 1;
+      for (let index = 0; index <= 5; index += 1) {
+        const x = padding.left + plotWidth * index / 5;
+        const y = padding.top + plotHeight - plotHeight * index / 5;
+        context.strokeStyle = "rgba(100,116,139,.18)";
+        context.beginPath();
+        context.moveTo(padding.left, y);
+        context.lineTo(width - padding.right, y);
+        context.stroke();
+        context.beginPath();
+        context.moveTo(x, padding.top);
+        context.lineTo(x, padding.top + plotHeight);
+        context.stroke();
+        context.fillStyle = "#64748b";
+        context.textAlign = "right";
+        context.fillText(String(Math.round(maxDuration * index / 5)), padding.left - 7, y);
+        context.textAlign = "center";
+        context.fillText(String(Math.round(maxVehicles * index / 5)), x, padding.top + plotHeight + 16);
+      }
+      context.strokeStyle = "#475569";
+      context.lineWidth = 1.35;
+      context.beginPath();
+      context.moveTo(padding.left, padding.top);
+      context.lineTo(padding.left, padding.top + plotHeight);
+      context.lineTo(width - padding.right, padding.top + plotHeight);
+      context.stroke();
+      context.save();
+      context.translate(13, padding.top + plotHeight / 2);
+      context.rotate(-Math.PI / 2);
+      context.fillStyle = "#334155";
+      context.font = `700 ${Math.max(10, tickFontSize)}px system-ui, sans-serif`;
+      context.textAlign = "center";
+      context.fillText("Durasi lampu (detik)", 0, 0);
+      context.restore();
+      context.fillStyle = "#334155";
+      context.textAlign = "center";
+      context.fillText("Jumlah kendaraan", padding.left + plotWidth / 2, height - 9);
+      const orderedSamples = trafficChartSamples
+        .map((sample, originalIndex) => ({ sample, originalIndex }))
+        .sort((left, right) => left.sample.vehicles - right.sample.vehicles
+          || left.sample.duration - right.sample.duration
+          || left.originalIndex - right.originalIndex);
+      if (orderedSamples.length > 1) {
+        context.beginPath();
+        orderedSamples.forEach(({ sample }, index) => {
+          const current = point(sample);
+          if (!index) context.moveTo(current.x, current.y);
+          else context.lineTo(current.x, current.y);
+        });
+        context.strokeStyle = "#2563eb";
+        context.lineWidth = 2.5;
+        context.lineJoin = "round";
+        context.stroke();
+      }
+      orderedSamples.forEach(({ sample, originalIndex }) => {
+        const current = point(sample);
+        context.beginPath();
+        context.arc(current.x, current.y, originalIndex === highlightIndex ? 6 : 4.25, 0, Math.PI * 2);
+        context.fillStyle = originalIndex === highlightIndex ? "#f97316" : "#2563eb";
+        context.fill();
+        context.strokeStyle = "#fff";
+        context.lineWidth = 2;
+        context.stroke();
+      });
+      chart.dataset.maxVehicles = String(maxVehicles);
+      chart.dataset.maxDuration = String(maxDuration);
+      chart.dataset.chartPoints = orderedSamples.map(({ sample }) => `${sample.vehicles},${sample.duration}`).join(";");
+      chart.dataset.chartReady = "true";
+    };
+    const scheduleTrafficChartDraw = () => {
+      if (trafficChartRedrawFrame) return;
+      trafficChartRedrawFrame = window.requestAnimationFrame(() => {
+        trafficChartRedrawFrame = 0;
+        drawTrafficRelationshipChart();
+      });
+    };
+    const onTrafficChartResize = () => scheduleTrafficChartDraw();
+    type PublicCctvSnapshot = {
+      id: string;
+      imageUrl: string;
+      capturedAt: number;
+      objectCount: number;
+      elapsedSec: number;
+      detections: Array<{ label: string; confidence: number }>;
+      accent?: string;
+    };
+    const storedCameraSnapshots = (): PublicCctvSnapshot[] => {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(`its-cctv-snapshots:${publicCctvId}`) || "[]");
+        return Array.isArray(parsed) ? parsed.slice(0, 3) : [];
+      } catch {
+        return [];
+      }
+    };
+    const renderCameraDetectionTable = (detections: Array<{ label: string; confidence?: number }>) => {
+      const detectionCounts = new Map<string, number>();
+      detections.forEach((detection) => {
+        const label = detectionLabel(detection.label);
+        detectionCounts.set(label, (detectionCounts.get(label) || 0) + 1);
+      });
+      const table = modal.querySelector<HTMLElement>("[data-camera-detection-table]");
+      if (table) {
+        const preferredLabels = ["Mobil", "Motor", "Bus", "Truk", "Sepeda", "Orang"];
+        const displayedObjectTotal = preferredLabels.reduce((total, label) => total + (detectionCounts.get(label) || 0), 0);
+        table.innerHTML = preferredLabels.map((label) => `
+          <div role="row"><span role="cell">${escapeHtml(label)}</span><strong role="cell">${detectionCounts.get(label) || 0}</strong></div>
+        `).join("") + `<footer><span>Total enam kelas</span><strong>${displayedObjectTotal}</strong></footer>`;
+      }
+      return detectionCounts;
+    };
+    const renderPublicCctvSegments = () => {
+      const host = modal.querySelector<HTMLElement>("[data-camera-ai-segments]");
+      if (!host) return;
+      const snapshots = storedCameraSnapshots();
+      host.innerHTML = `
+        <header><strong>Segmen AI</strong><span>${snapshots.length}/3 frame terbaru</span></header>
+        <div>${Array.from({ length: 3 }, (_, index) => {
+        const snapshot = snapshots[index];
+        if (!snapshot) return `<span class="map-camera-segment-placeholder" role="status"><span class="its-cctv-feed__sr-only">Menunggu segmen AI ${index + 1}</span><i></i></span>`;
+        return `<button type="button" data-camera-segment="${escapeHtml(snapshot.id)}" style="--segment-accent:${escapeHtml(snapshot.accent || "#2563eb")}">
+            <img src="${escapeHtml(snapshot.imageUrl)}" alt="Segmen AI ${index + 1} ${escapeHtml(name)}">
+            <span><b>${snapshot.objectCount} objek</b><small>${new Date(snapshot.capturedAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</small></span>
+          </button>`;
+      }).join("")}</div>`;
+    };
+    let segmentDetailReturnFocus: HTMLElement | null = null;
+    const closeCctvSegmentDetail = (axis: "x" | "y" = "y") => {
+      const current = modal.querySelector<HTMLElement>("[data-camera-segment-detail]");
+      if (!current) return;
+      current.classList.remove("open");
+      current.setAttribute("aria-hidden", "true");
+      current.style.transform = axis === "x" ? "translateX(105%)" : "translateY(105%)";
+      window.setTimeout(() => current.remove(), 220);
+      segmentDetailReturnFocus?.focus({ preventScroll: true });
+      segmentDetailReturnFocus = null;
+    };
+    const openCctvSegmentDetail = (snapshot: PublicCctvSnapshot) => {
+      closeCctvSegmentDetail();
+      segmentDetailReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      const counts = new Map<string, number>();
+      snapshot.detections.forEach((detection) => {
+        const label = detectionLabel(detection.label);
+        counts.set(label, (counts.get(label) || 0) + 1);
+      });
+      const detail = document.createElement("aside");
+      detail.className = "map-camera-segment-detail";
+      detail.dataset.cameraSegmentDetail = snapshot.id;
+      detail.setAttribute("role", "dialog");
+      detail.setAttribute("aria-modal", "true");
+      detail.setAttribute("aria-labelledby", "map-camera-segment-detail-title");
+      detail.tabIndex = -1;
+      detail.innerHTML = `
+        <div class="map-camera-segment-grip" data-camera-segment-drag aria-hidden="true"></div>
+        <header data-camera-segment-drag><div><strong id="map-camera-segment-detail-title">Detail segmen AI</strong><span>${new Date(snapshot.capturedAt).toLocaleString("id-ID")}</span></div>
+          <button type="button" data-camera-segment-detail-close aria-label="Tutup detail segmen">×</button></header>
+        <img src="${escapeHtml(snapshot.imageUrl)}" alt="Bukti hasil deteksi ${escapeHtml(name)}">
+        <div class="map-camera-segment-summary">${[...counts.entries()].map(([label, count]) => `<span>${escapeHtml(label)} <b>${count}</b></span>`).join("") || "<span>Tidak ada objek terkonfirmasi</span>"}</div>
+        <button type="button" data-camera-segment-seek="${escapeHtml(snapshot.id)}">Buka video pada frame ini</button>`;
+      modal.querySelector(".map-camera-source-sheet")?.appendChild(detail);
+      let drag: { id: number; x: number; y: number; axis: "pending" | "x" | "y" | "ignore"; offset: number } | null = null;
+      const resetDetailDrag = () => {
+        detail.style.transition = "";
+        detail.style.transform = "";
+      };
+      detail.addEventListener("pointerdown", (event) => {
+        event.stopPropagation();
+        const target = event.target as HTMLElement | null;
+        if (target?.closest("button, a") || (!target?.closest("[data-camera-segment-drag]") && detail.scrollTop > 1)) return;
+        drag = { id: event.pointerId, x: event.clientX, y: event.clientY, axis: "pending", offset: 0 };
+        detail.style.transition = "none";
+        try { detail.setPointerCapture(event.pointerId); } catch { /* Best effort. */ }
+      });
+      detail.addEventListener("pointermove", (event) => {
+        event.stopPropagation();
+        if (!drag || drag.id !== event.pointerId) return;
+        const dx = event.clientX - drag.x;
+        const dy = event.clientY - drag.y;
+        if (drag.axis === "pending" && Math.max(Math.abs(dx), Math.abs(dy)) > 7) {
+          drag.axis = usesDesktopSidePanel()
+            ? Math.abs(dx) >= Math.abs(dy) && dx > 0 ? "x" : "ignore"
+            : Math.abs(dy) >= Math.abs(dx) && dy > 0 ? "y" : "ignore";
+        }
+        if (drag.axis !== "x" && drag.axis !== "y") return;
+        drag.offset = Math.max(0, drag.axis === "x" ? dx : dy);
+        detail.style.transform = drag.axis === "x"
+          ? `translateX(${drag.offset}px)`
+          : `translateY(${drag.offset}px)`;
+        event.preventDefault();
+      });
+      const finishDetailDrag = (event: PointerEvent) => {
+        event.stopPropagation();
+        if (!drag || drag.id !== event.pointerId) return;
+        const completed = drag;
+        drag = null;
+        try { detail.releasePointerCapture(event.pointerId); } catch { /* Best effort. */ }
+        const threshold = completed.axis === "x"
+          ? Math.max(70, detail.getBoundingClientRect().width * 0.24)
+          : Math.max(72, detail.getBoundingClientRect().height * 0.2);
+        if ((completed.axis === "x" || completed.axis === "y") && completed.offset >= threshold) {
+          closeCctvSegmentDetail(completed.axis);
+        } else {
+          resetDetailDrag();
+        }
+      };
+      detail.addEventListener("pointerup", finishDetailDrag);
+      detail.addEventListener("pointercancel", finishDetailDrag);
+      detail.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          event.stopPropagation();
+          closeCctvSegmentDetail(usesDesktopSidePanel() ? "x" : "y");
+        }
+      });
+      requestAnimationFrame(() => {
+        detail.classList.add("open");
+        detail.focus({ preventScroll: true });
+      });
+    };
+    const stopPublicCameraAiOverlay = () => {
+      if (publicCameraAiOverlayFrame) window.cancelAnimationFrame(publicCameraAiOverlayFrame);
+      publicCameraAiOverlayFrame = 0;
+      publicCameraAiOverlayLastPaint = 0;
+      if (publicCameraAiOverlay?.canvas.isConnected) {
+        publicCameraAiOverlay.canvas.dataset.cameraOverlayAnimation = "stopped";
+      }
+      publicCameraAiOverlay = null;
+    };
+    const startPublicCameraAiOverlay = (
+      canvas: HTMLCanvasElement,
+      detections: BrowserRfDetrDetection[],
+      frameWidth: number,
+      frameHeight: number,
+    ) => {
+      if (!frameWidth || !frameHeight) return;
+      publicCameraAiOverlay = { canvas, detections, frameWidth, frameHeight };
+      canvas.dataset.cameraOverlayAnimation = "active";
+      if (publicCameraAiOverlayFrame) return;
+      const paint = (timestamp: number) => {
+        const overlay = publicCameraAiOverlay;
+        if (!overlay || !modal.isConnected || !overlay.canvas.isConnected) {
+          stopPublicCameraAiOverlay();
+          return;
+        }
+        // The inference loop intentionally runs at a conservative interval;
+        // repainting its last result at 30fps keeps scanner/lock motion smooth
+        // without re-running RF-DETR for every display frame.
+        if (timestamp - publicCameraAiOverlayLastPaint >= 32) {
+          publicCameraAiOverlayLastPaint = timestamp;
+          drawRfDetrDetections(overlay.canvas, overlay.detections, overlay.frameWidth, overlay.frameHeight, {
+            hud: true,
+            scanActive: true,
+            scannerFocus: overlay.detections[0] || null,
+          });
+        }
+        publicCameraAiOverlayFrame = window.requestAnimationFrame(paint);
+      };
+      publicCameraAiOverlayFrame = window.requestAnimationFrame(paint);
+    };
+    const stopPublicCameraAi = () => {
+      window.clearInterval(publicCameraAiTimer);
+      publicCameraAiTimer = 0;
+      publicCameraAiBusy = false;
+      stopPublicCameraAiOverlay();
+    };
+    const refreshOfficialVcm = async () => {
+      if (!hasOfficialVcm) return;
+      const status = modal.querySelector<HTMLElement>("[data-camera-vcm-status]");
+      try {
+        const endpoint = new URL("https://its.hanifahseptiani45.workers.dev/v1/traffic/banjarmasin-vcm");
+        endpoint.searchParams.set("siteId", String(vcmSiteId));
+        const response = await fetch(endpoint, { headers: { Accept: "application/json" } });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json() as {
+          grandTotal?: unknown;
+          lines?: Array<{ by_vehicle?: Record<string, unknown> }>;
+          observedAt?: string;
+        };
+        const total = Number(payload.grandTotal);
+        if (!Number.isFinite(total)) throw new Error("invalid total");
+        officialVcmTotal = total;
+        const vehicleTotals = new Map<string, number>();
+        (payload.lines || []).forEach((line) => {
+          Object.entries(line.by_vehicle || {}).forEach(([vehicle, count]) => {
+            vehicleTotals.set(vehicle, (vehicleTotals.get(vehicle) || 0) + Number(count || 0));
+          });
+        });
+        const labels: Record<string, string> = {
+          car: "mobil",
+          motorcycle: "motor",
+          truck: "truk",
+          bus: "bus",
+        };
+        const breakdown = [...vehicleTotals.entries()]
+          .filter(([, count]) => Number.isFinite(count) && count > 0)
+          .map(([vehicle, count]) => `${labels[vehicle] || vehicle} ${count.toLocaleString("id-ID")}`)
+          .join(" · ");
+        if (status) {
+          status.textContent = `VCM resmi Dishub: ${total.toLocaleString("id-ID")} lintasan${breakdown ? ` · ${breakdown}` : ""}`;
+          status.dataset.ready = "true";
+        }
+      } catch {
+        if (status) status.textContent = officialVcmTotal === null
+          ? "Penghitung resmi Dishub sedang tidak dapat dibaca."
+          : `VCM resmi Dishub terakhir: ${officialVcmTotal.toLocaleString("id-ID")} lintasan`;
+      }
+    };
+    const historySheetAtOpen = document.getElementById("m-ai-history-sheet");
+    const stackedWithCctvFeed = usesDesktopSidePanel()
+      && Boolean(historySheetAtOpen)
+      && document.body.classList.contains("ai-history-sheet-open")
+      && aiHistoryActiveTab === "cctv";
+    if (stackedWithCctvFeed) {
+      modal.classList.add("camera-source-stacked");
+      document.body.classList.add("camera-source-stack-open");
+      const initialHeight = clamp(Math.round(window.innerHeight * 0.58), 360, 650);
+      document.documentElement.style.setProperty("--camera-source-stack-height", `${initialHeight}px`);
+      document.documentElement.style.setProperty("--camera-source-stack-space", `${initialHeight}px`);
+    }
     const close = () => {
+      stopPublicCameraAi();
+      stopPublicCameraWhep();
+      stopHlsVideos(modal);
+      detachCameraFullscreenControls();
+      trafficChartResizeObserver?.disconnect();
+      trafficChartResizeObserver = null;
+      if (trafficChartRedrawFrame) window.cancelAnimationFrame(trafficChartRedrawFrame);
+      trafficChartRedrawFrame = 0;
+      window.removeEventListener("resize", onTrafficChartResize);
+      window.clearInterval(publicCameraVcmTimer);
+      window.clearInterval(publicCameraPipTimer);
+      publicCameraPipTimer = 0;
+      if (publicCameraPipWindow && !publicCameraPipWindow.closed) publicCameraPipWindow.close();
+      publicCameraPipWindow = null;
+      if (publicCameraAutoPipRegistered) {
+        try {
+          (navigator.mediaSession as ItsPictureInPictureMediaSession | undefined)
+            ?.setActionHandler("enterpictureinpicture", null);
+        } catch { /* Media Session PiP is a progressive enhancement. */ }
+        publicCameraAutoPipRegistered = false;
+      }
+      corridorLayer?.remove();
+      simulatedSignalMarker?.remove();
+      closeCctvSegmentDetail();
       modal.classList.remove("open");
-      clearSidePanelWidth();
+      document.body.classList.remove("camera-source-open", "camera-source-stack-open");
+      document.documentElement.style.removeProperty("--camera-source-stack-height");
+      document.documentElement.style.removeProperty("--camera-source-stack-space");
+      if (stackedWithCctvFeed && historySheetAtOpen?.isConnected) {
+        setSidePanelWidthFromSheet(historySheetAtOpen);
+      } else {
+        clearSidePanelWidth();
+      }
       window.setTimeout(() => modal.remove(), 220);
+      setBackgroundCctvInteractivePlayback(false);
     };
     modal.addEventListener("click", (event) => { if (event.target === modal) close(); });
     modal.querySelector("[data-camera-source-close]")?.addEventListener("click", close);
+    if (hasOfficialVcm) {
+      void refreshOfficialVcm();
+      publicCameraVcmTimer = window.setInterval(() => void refreshOfficialVcm(), 60_000);
+    }
     const floatButton = modal.querySelector<HTMLButtonElement>("[data-camera-float]");
     floatButton?.addEventListener("click", () => {
       const floating = modal.classList.toggle("is-floating-camera");
@@ -1771,18 +3078,654 @@ if (staticRoute === "cctv") {
         modal.style.removeProperty("--camera-float-y");
       }
     });
-    const player = modal.querySelector<HTMLIFrameElement>("[data-camera-player]");
+    const player = modal.querySelector<HTMLElement>("[data-camera-player]");
+    const cameraPointers = new Map<number, { x: number; y: number }>();
+    let cameraMediaScale = 1;
+    let cameraMediaX = 0;
+    let cameraMediaY = 0;
+    let cameraPinchStart: { distance: number; scale: number; x: number; y: number } | null = null;
+    const applyCameraMediaTransform = () => {
+      if (!player) return;
+      const transform = `translate(${cameraMediaX}px, ${cameraMediaY}px) scale(${cameraMediaScale})`;
+      player.querySelectorAll<HTMLElement>("video, .map-camera-mjpeg, [data-camera-ai-canvas]").forEach((media) => {
+        media.style.transformOrigin = "center center";
+        media.style.transform = transform;
+      });
+      player.classList.toggle("is-camera-zoomed", cameraMediaScale > 1.01);
+      player.dataset.cameraZoom = cameraMediaScale.toFixed(2);
+    };
+    const resetCameraMediaTransform = () => {
+      cameraMediaScale = 1;
+      cameraMediaX = 0;
+      cameraMediaY = 0;
+      cameraPinchStart = null;
+      applyCameraMediaTransform();
+    };
+    player?.addEventListener("pointerdown", (event) => {
+      if ((event.target as HTMLElement | null)?.closest("button")) return;
+      cameraPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      try { player.setPointerCapture(event.pointerId); } catch { /* Best effort. */ }
+      if (cameraPointers.size === 2) {
+        const [first, second] = [...cameraPointers.values()];
+        cameraPinchStart = {
+          distance: Math.max(1, Math.hypot(second.x - first.x, second.y - first.y)),
+          scale: cameraMediaScale,
+          x: cameraMediaX,
+          y: cameraMediaY,
+        };
+      }
+    });
+    player?.addEventListener("pointermove", (event) => {
+      const previous = cameraPointers.get(event.pointerId);
+      if (!previous) return;
+      cameraPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (cameraPointers.size >= 2 && cameraPinchStart) {
+        const [first, second] = [...cameraPointers.values()];
+        const distance = Math.max(1, Math.hypot(second.x - first.x, second.y - first.y));
+        cameraMediaScale = clamp(cameraPinchStart.scale * distance / cameraPinchStart.distance, 1, 4);
+        if (cameraMediaScale <= 1.01) {
+          cameraMediaX = 0;
+          cameraMediaY = 0;
+        }
+        applyCameraMediaTransform();
+        event.preventDefault();
+      } else if (cameraPointers.size === 1 && cameraMediaScale > 1.01) {
+        const bounds = player.getBoundingClientRect();
+        const limitX = bounds.width * (cameraMediaScale - 1) * 0.5;
+        const limitY = bounds.height * (cameraMediaScale - 1) * 0.5;
+        cameraMediaX = clamp(cameraMediaX + event.clientX - previous.x, -limitX, limitX);
+        cameraMediaY = clamp(cameraMediaY + event.clientY - previous.y, -limitY, limitY);
+        applyCameraMediaTransform();
+        event.preventDefault();
+      }
+    });
+    const releaseCameraPointer = (event: PointerEvent) => {
+      cameraPointers.delete(event.pointerId);
+      if (cameraPointers.size < 2) cameraPinchStart = null;
+      if (cameraMediaScale <= 1.01) resetCameraMediaTransform();
+    };
+    player?.addEventListener("pointerup", releaseCameraPointer);
+    player?.addEventListener("pointercancel", releaseCameraPointer);
+    player?.addEventListener("dblclick", (event) => {
+      if ((event.target as HTMLElement | null)?.closest("button")) return;
+      if (cameraMediaScale > 1.01) resetCameraMediaTransform();
+      else {
+        cameraMediaScale = 2;
+        applyCameraMediaTransform();
+      }
+    });
+    const syncCameraFullscreenControls = () => {
+      if (!player) return;
+      const fullscreen = document.fullscreenElement === player;
+      player.classList.toggle("is-camera-fullscreen", fullscreen);
+      player.querySelectorAll<HTMLButtonElement>("[data-camera-fullscreen]").forEach((button) => {
+        button.setAttribute("aria-pressed", String(fullscreen));
+        button.setAttribute("aria-label", fullscreen ? "Keluar dari layar penuh" : "Layar penuh");
+        button.title = fullscreen ? "Keluar dari layar penuh" : "Layar penuh";
+      });
+    };
+    const onCameraFullscreenChange = () => syncCameraFullscreenControls();
+    document.addEventListener("fullscreenchange", onCameraFullscreenChange);
+    detachCameraFullscreenControls = () => {
+      document.removeEventListener("fullscreenchange", onCameraFullscreenChange);
+      if (document.fullscreenElement === player) void document.exitFullscreen().catch(() => undefined);
+    };
+    const toggleCameraFullscreen = async () => {
+      if (!player) return;
+      try {
+        if (document.fullscreenElement === player) await document.exitFullscreen();
+        else await player.requestFullscreen();
+      } catch {
+        // Browser policy can still reject fullscreen without a real gesture.
+      } finally {
+        syncCameraFullscreenControls();
+      }
+    };
+    const clearPublicCameraPip = (pipWindow?: Window | null) => {
+      if (pipWindow && publicCameraPipWindow !== pipWindow) return;
+      window.clearInterval(publicCameraPipTimer);
+      publicCameraPipTimer = 0;
+      publicCameraPipWindow = null;
+    };
+    const updatePublicCameraPip = (pipWindow: Window) => {
+      if (pipWindow.closed) return;
+      const snapshot = storedCameraSnapshots()[0];
+      const fallbackImage = pipWindow.document.querySelector<HTMLImageElement>("[data-public-pip-image]");
+      if (fallbackImage && !fallbackImage.hidden && snapshot?.imageUrl && fallbackImage.src !== snapshot.imageUrl) {
+        fallbackImage.src = snapshot.imageUrl;
+      }
+      const overlayImage = pipWindow.document.querySelector<HTMLImageElement>("[data-public-pip-overlay]");
+      const overlayCanvas = player?.querySelector<HTMLCanvasElement>("[data-camera-ai-canvas]");
+      if (overlayImage && overlayCanvas?.width && overlayCanvas.height) {
+        try {
+          overlayImage.src = overlayCanvas.toDataURL("image/png");
+          overlayImage.hidden = false;
+        } catch {
+          overlayImage.hidden = true;
+        }
+      }
+      const assessment = assessmentByStream.get(activeStreamUrl);
+      const status = pipWindow.document.querySelector<HTMLElement>("[data-public-pip-status]");
+      if (status) status.textContent = assessment
+        ? `${assessment.label} · ${assessment.vehicleCount} kendaraan`
+        : "AI memindai frame";
+      const stats = pipWindow.document.querySelector<HTMLElement>("[data-public-pip-stats]");
+      if (stats) {
+        const counts = new Map<string, number>();
+        (publicCameraAiOverlay?.detections || []).forEach((detection) => {
+          const label = detectionLabel(detection.label);
+          counts.set(label, (counts.get(label) || 0) + 1);
+        });
+        stats.innerHTML = ["Mobil", "Motor", "Bus", "Truk", "Sepeda", "Orang"]
+          .map((label) => `<div><span>${label}</span><strong>${counts.get(label) || 0}</strong></div>`)
+          .join("");
+      }
+    };
+    const openPublicCameraPictureInPicture = async (): Promise<boolean> => {
+      if (!player) return false;
+      if (publicCameraPipWindow && !publicCameraPipWindow.closed) {
+        publicCameraPipWindow.focus();
+        return true;
+      }
+      const sourceVideo = player.querySelector<HTMLVideoElement>("video[data-camera-video], video");
+      const api = documentPictureInPictureApi();
+      if (api) {
+        try {
+          const pipWindow = await api.requestWindow({ width: 440, height: 320 });
+          publicCameraPipWindow = pipWindow;
+          const style = pipWindow.document.createElement("style");
+          style.textContent = `
+            *{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#07101e;color:#f8fafc;font:12px/1.35 system-ui,-apple-system,"Segoe UI",sans-serif}
+            button{font:inherit}.cctv-pip{height:100%;display:grid;grid-template-rows:42px minmax(0,1fr);background:#07101e}.cctv-pip header{display:flex;align-items:center;gap:8px;padding:0 9px;border-bottom:1px solid rgba(148,163,184,.2)}
+            .cctv-pip header i{width:8px;height:8px;border-radius:50%;background:#ef4444}.cctv-pip header strong{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cctv-pip header span{color:#67e8f9;font-size:10px;font-weight:800;white-space:nowrap}
+            .cctv-pip button{min-height:31px;border:1px solid rgba(255,255,255,.2);border-radius:7px;background:#fff;color:#0f172a;font-weight:800;cursor:pointer}.cctv-pip main{position:relative;min-height:0;overflow:hidden;background:#020617}.cctv-pip video,.cctv-pip .base{width:100%;height:100%;display:block;object-fit:fill}.cctv-pip [hidden]{display:none!important}
+            .cctv-pip .overlay{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;pointer-events:none}.cctv-pip .stats{position:absolute;left:8px;right:8px;bottom:8px;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;padding:6px;border:1px solid rgba(148,163,184,.24);border-radius:8px;background:rgba(2,6,23,.84)}
+            .cctv-pip .stats div{min-width:0;text-align:center}.cctv-pip .stats span,.cctv-pip .stats strong{display:block}.cctv-pip .stats span{color:#94a3b8;font-size:8px}.cctv-pip .stats strong{font-size:13px}.cctv-pip .detail{position:absolute;right:8px;top:8px;padding:0 10px}
+          `;
+          pipWindow.document.head.appendChild(style);
+          pipWindow.document.body.innerHTML = `
+            <section class="cctv-pip"><header><i aria-hidden="true"></i><strong>${escapeHtml(name)}</strong><span data-public-pip-status>AI memindai frame</span><button type="button" data-public-pip-close aria-label="Tutup">×</button></header>
+            <main><video autoplay muted playsinline hidden data-public-pip-video></video><img class="base" data-public-pip-image alt="Segmen AI ${escapeHtml(name)}"><img class="overlay" data-public-pip-overlay alt="" aria-hidden="true" hidden><button class="detail" type="button" data-public-pip-detail>Lihat detail</button><div class="stats" data-public-pip-stats></div></main></section>`;
+          const pipVideo = pipWindow.document.querySelector<HTMLVideoElement>("[data-public-pip-video]");
+          const pipImage = pipWindow.document.querySelector<HTMLImageElement>("[data-public-pip-image]");
+          let attached = false;
+          if (sourceVideo && pipVideo) {
+            try {
+              const stream = (sourceVideo as HTMLVideoElement & { captureStream?: () => MediaStream }).captureStream?.();
+              if (stream?.getVideoTracks().length) {
+                pipVideo.srcObject = stream;
+                pipVideo.hidden = false;
+                if (pipImage) pipImage.hidden = true;
+                await pipVideo.play().catch(() => undefined);
+                attached = true;
+              }
+            } catch { /* Snapshot fallback remains available. */ }
+          }
+          if (!attached && pipImage) {
+            const snapshot = storedCameraSnapshots()[0];
+            pipImage.hidden = false;
+            if (snapshot?.imageUrl) pipImage.src = snapshot.imageUrl;
+          }
+          pipWindow.document.querySelector("[data-public-pip-close]")?.addEventListener("click", () => pipWindow.close());
+          pipWindow.document.querySelector("[data-public-pip-detail]")?.addEventListener("click", () => {
+            pipWindow.close();
+            window.focus();
+            modal.querySelector<HTMLElement>(".map-camera-source-sheet")?.focus({ preventScroll: true });
+          });
+          pipWindow.addEventListener("pagehide", () => clearPublicCameraPip(pipWindow), { once: true });
+          updatePublicCameraPip(pipWindow);
+          publicCameraPipTimer = window.setInterval(() => updatePublicCameraPip(pipWindow), 500);
+          return true;
+        } catch {
+          clearPublicCameraPip();
+        }
+      }
+      if (sourceVideo?.requestPictureInPicture && document.pictureInPictureEnabled !== false) {
+        try {
+          await sourceVideo.requestPictureInPicture();
+          return true;
+        } catch { /* Browser policy rejected native PiP. */ }
+      }
+      return false;
+    };
+    const registerPublicCameraAutoPip = () => {
+      const video = player?.querySelector<HTMLVideoElement>("video[data-camera-video], video");
+      video?.setAttribute("autopictureinpicture", "");
+      if (!navigator.mediaSession) return;
+      try {
+        (navigator.mediaSession as ItsPictureInPictureMediaSession).setActionHandler("enterpictureinpicture", () => {
+          void openPublicCameraPictureInPicture();
+        });
+        publicCameraAutoPipRegistered = true;
+      } catch { /* Browser does not expose the Media Session PiP action. */ }
+    };
+    const setPlayerSource = (
+      nextUrl: string,
+      aiReadable = publicCameraAiProxyEnabled,
+      nextMediaFormat = mediaFormatByUrl.get(nextUrl) || "",
+    ) => {
+      if (!player) return;
+      stopPublicCameraAiOverlay();
+      stopPublicCameraWhep();
+      stopHlsVideos(player);
+      player.innerHTML = cameraPlayerMarkup(nextUrl, aiReadable, nextMediaFormat) + cameraPlayerChromeMarkup(nextUrl);
+      setupPublicCameraMedia(player, nextUrl, nextMediaFormat);
+      activeStreamUrl = nextUrl;
+      activeStreamMediaFormat = nextMediaFormat;
+      resetCameraMediaTransform();
+      syncCameraFullscreenControls();
+      registerPublicCameraAutoPip();
+    };
     modal.querySelectorAll<HTMLButtonElement>("[data-camera-stream]").forEach((button) => {
       button.addEventListener("click", () => {
         const nextUrl = usablePublicMediaUrl(button.dataset.cameraStream || "");
         if (!player || !nextUrl) return;
-        player.src = nextUrl;
+        setPlayerSource(nextUrl);
         modal.querySelectorAll<HTMLButtonElement>("[data-camera-stream]").forEach((candidate) => {
           candidate.setAttribute("aria-pressed", String(candidate === button));
         });
       });
     });
     document.body.appendChild(modal);
+    setupPublicCameraMedia(modal, streamUrl, streamMediaFormat);
+    // A user can reopen a camera before the next inference finishes. Seed the
+    // relationship chart with the three retained AI snapshots so the modal
+    // stays informative and its hover tooltip is immediately useful; fresh
+    // frames append to the same chronological series below.
+    [...storedCameraSnapshots()].reverse().forEach((snapshot) => {
+      const vehicles = Math.max(0, Math.round(Number(snapshot.objectCount) || 0));
+      trafficChartSamples.push({
+        vehicles,
+        duration: clamp(18 + vehicles * 3, 18, 65),
+      });
+    });
+    renderPublicCctvSegments();
+    drawTrafficRelationshipChart();
+    const trafficChart = modal.querySelector<HTMLCanvasElement>("[data-camera-traffic-chart]");
+    const trafficTooltip = modal.querySelector<HTMLOutputElement>("[data-camera-chart-tooltip]");
+    if (trafficChart && "ResizeObserver" in window) {
+      trafficChartResizeObserver = new ResizeObserver(() => scheduleTrafficChartDraw());
+      trafficChartResizeObserver.observe(trafficChart);
+    }
+    window.addEventListener("resize", onTrafficChartResize, { passive: true });
+    const updateTrafficChartTooltip = (event: PointerEvent) => {
+      if (!trafficChart || !trafficTooltip || !trafficChartSamples.length) return;
+      const rect = trafficChart.getBoundingClientRect();
+      const width = Number(trafficChart.dataset.chartCssWidth || rect.width || 640);
+      const height = Number(trafficChart.dataset.chartCssHeight || rect.height || 220);
+      const pointerX = event.clientX - rect.left;
+      const pointerY = event.clientY - rect.top;
+      const padding = {
+        left: Number(trafficChart.dataset.chartPadLeft || 54),
+        right: Number(trafficChart.dataset.chartPadRight || 18),
+        top: Number(trafficChart.dataset.chartPadTop || 18),
+        bottom: Number(trafficChart.dataset.chartPadBottom || 42),
+      };
+      const plotWidth = width - padding.left - padding.right;
+      const plotHeight = height - padding.top - padding.bottom;
+      const maxVehicles = Number(trafficChart.dataset.maxVehicles || 10);
+      const maxDuration = Number(trafficChart.dataset.maxDuration || 30);
+      const distances = trafficChartSamples.map((sample, index) => {
+        const x = padding.left + sample.vehicles / maxVehicles * plotWidth;
+        const y = padding.top + plotHeight - sample.duration / maxDuration * plotHeight;
+        return { index, distance: Math.hypot(pointerX - x, pointerY - y), x, y };
+      }).sort((left, right) => left.distance - right.distance);
+      const nearest = distances[0];
+      if (!nearest || nearest.distance > clamp(width * 0.075, 27, 42)) {
+        trafficTooltip.hidden = true;
+        trafficChartHighlight = -1;
+        drawTrafficRelationshipChart();
+        return;
+      }
+      const sample = trafficChartSamples[nearest.index];
+      trafficTooltip.hidden = false;
+      trafficTooltip.textContent = `${sample.vehicles} kendaraan · ${sample.duration} detik`;
+      trafficTooltip.style.left = `${clamp(nearest.x, 28, Math.max(28, rect.width - 28))}px`;
+      trafficTooltip.style.top = `${clamp(nearest.y, 28, Math.max(28, rect.height - 16))}px`;
+      trafficChartHighlight = nearest.index;
+      drawTrafficRelationshipChart(nearest.index);
+    };
+    trafficChart?.addEventListener("pointermove", updateTrafficChartTooltip);
+    trafficChart?.addEventListener("pointerdown", updateTrafficChartTooltip);
+    const hideTrafficChartTooltip = () => {
+      if (trafficTooltip) trafficTooltip.hidden = true;
+      trafficChartHighlight = -1;
+      drawTrafficRelationshipChart();
+    };
+    trafficChart?.addEventListener("pointerleave", hideTrafficChartTooltip);
+    trafficChart?.addEventListener("pointercancel", hideTrafficChartTooltip);
+    trafficChart?.addEventListener("pointerup", (event) => {
+      if (event.pointerType === "touch") hideTrafficChartTooltip();
+    });
+    modal.addEventListener("click", (event) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("[data-camera-segment-detail-close]")) {
+        closeCctvSegmentDetail();
+        return;
+      }
+      const segmentButton = target?.closest<HTMLButtonElement>("[data-camera-segment]");
+      if (segmentButton) {
+        const snapshot = storedCameraSnapshots().find((item) => item.id === segmentButton.dataset.cameraSegment);
+        if (snapshot) openCctvSegmentDetail(snapshot);
+        return;
+      }
+      const seek = target?.closest<HTMLButtonElement>("[data-camera-segment-seek]");
+      if (seek) {
+        const snapshot = storedCameraSnapshots().find((item) => item.id === seek.dataset.cameraSegmentSeek);
+        const video = modal.querySelector<HTMLVideoElement>("video[data-camera-video], video[data-hls-video]");
+        const seekToSnapshot = () => {
+          if (!snapshot || !video?.seekable.length) return false;
+          const start = video.seekable.start(0);
+          const end = video.seekable.end(video.seekable.length - 1);
+          const ageSeconds = Math.max(0, (Date.now() - snapshot.capturedAt) / 1_000);
+          // Without PROGRAM-DATE-TIME, map the retained wall-clock age back
+          // from the current live edge. Use elapsedSec only when it still
+          // clearly belongs to this playback timeline.
+          const elapsedStillSeekable = Number.isFinite(snapshot.elapsedSec)
+            && snapshot.elapsedSec >= start && snapshot.elapsedSec <= end;
+          const wallClockTarget = end - ageSeconds;
+          const targetTime = elapsedStillSeekable && Math.abs(video.currentTime - snapshot.elapsedSec) <= ageSeconds + 8
+            ? snapshot.elapsedSec
+            : wallClockTarget;
+          if (targetTime < start - 1 || targetTime > end + 1) return false;
+          video.currentTime = clamp(targetTime, start, end);
+          void video.play().catch(() => undefined);
+          closeCctvSegmentDetail();
+          player?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          return true;
+        };
+        if (snapshot && video && !seekToSnapshot()) {
+          video.addEventListener("loadedmetadata", () => {
+            if (!seekToSnapshot()) {
+              showGlobalNotice("warning", "Segmen di luar jendela live", "Penyedia tidak lagi menyimpan frame ini dalam DVR HLS.");
+            }
+          }, { once: true });
+        }
+      }
+    });
+    const aiButton = modal.querySelector<HTMLButtonElement>("[data-camera-ai-toggle]");
+    const aiStatus = modal.querySelector<HTMLElement>("[data-camera-ai-status]");
+    const latestStoredSnapshot = storedCameraSnapshots()[0];
+    if (latestStoredSnapshot) {
+      const snapshotVehicles = Math.max(0, Math.round(Number(latestStoredSnapshot.objectCount) || 0));
+      const estimatedDuration = clamp(18 + snapshotVehicles * 3, 18, 65);
+      renderCameraDetectionTable(latestStoredSnapshot.detections);
+      const chartCaption = modal.querySelector<HTMLElement>("[data-camera-chart-caption]");
+      if (chartCaption) chartCaption.textContent = `Riwayat AI: ${snapshotVehicles} kendaraan · ${estimatedDuration} detik`;
+    }
+    const persistPublicCameraSnapshot = (
+      video: HTMLVideoElement,
+      canvas: HTMLCanvasElement,
+      result: BrowserRfDetrResult,
+    ) => {
+      try {
+        const snapshotCanvas = document.createElement("canvas");
+        const scale = Math.min(1, 480 / Math.max(1, result.frameWidth));
+        snapshotCanvas.width = Math.max(1, Math.round(result.frameWidth * scale));
+        snapshotCanvas.height = Math.max(1, Math.round(result.frameHeight * scale));
+        const context = snapshotCanvas.getContext("2d");
+        context?.drawImage(video, 0, 0, snapshotCanvas.width, snapshotCanvas.height);
+        context?.drawImage(canvas, 0, 0, snapshotCanvas.width, snapshotCanvas.height);
+        let accent = "#2563eb";
+        if (context) {
+          const pixels = context.getImageData(0, 0, snapshotCanvas.width, snapshotCanvas.height).data;
+          let red = 0;
+          let green = 0;
+          let blue = 0;
+          let samples = 0;
+          for (let offset = 0; offset < pixels.length; offset += 64) {
+            red += pixels[offset];
+            green += pixels[offset + 1];
+            blue += pixels[offset + 2];
+            samples += 1;
+          }
+          if (samples) {
+            const channel = (value: number) => Math.max(24, Math.min(224, Math.round(value / samples))).toString(16).padStart(2, "0");
+            accent = `#${channel(red)}${channel(green)}${channel(blue)}`;
+            modal.style.setProperty("--camera-accent", accent);
+          }
+        }
+        const capturedAt = Date.now();
+        const snapshot = {
+          id: `${publicCctvId}:${capturedAt}`,
+          imageUrl: snapshotCanvas.toDataURL("image/webp", 0.76),
+          capturedAt,
+          objectCount: result.vehicleCount,
+          elapsedSec: video.currentTime,
+          detections: result.detections.map((detection) => ({
+            label: detection.label,
+            confidence: detection.confidence,
+          })),
+          accent,
+        };
+        try {
+          const storageKey = `its-cctv-snapshots:${publicCctvId}`;
+          const previous = JSON.parse(localStorage.getItem(storageKey) || "[]");
+          const snapshots = [snapshot, ...(Array.isArray(previous) ? previous : [])
+            .filter((item) => item?.id !== snapshot.id)].slice(0, 3);
+          localStorage.setItem(storageKey, JSON.stringify(snapshots));
+        } catch {
+          // Snapshot remains available to the connected feed for this session.
+        }
+        window.dispatchEvent(new CustomEvent("its:cctv-snapshot", {
+          detail: { cctvId: publicCctvId, snapshot },
+        }));
+        renderPublicCctvSegments();
+      } catch {
+        // Some protected upstreams permit playback but not canvas export.
+      }
+    };
+    const applyPublicCameraEdgeBootstrap = (result: BrowserRfDetrResult) => {
+      const video = player?.querySelector<HTMLVideoElement>("video[data-camera-video]");
+      const canvas = player?.querySelector<HTMLCanvasElement>("[data-camera-ai-canvas]");
+      if (!video || !canvas || result.status !== "online") return;
+      startPublicCameraAiOverlay(canvas, result.detections, result.frameWidth, result.frameHeight);
+      persistPublicCameraSnapshot(video, canvas, result);
+      const congestion = classifyTrafficFrame(result.detections, result.frameWidth, result.frameHeight);
+      assessmentByStream.set(activeStreamUrl, congestion);
+      const estimatedSignalDuration = clamp(18 + congestion.queueVehicles * 3 + Math.round(congestion.occupancy * 30), 18, 65);
+      trafficChartSamples.push({ vehicles: congestion.vehicleCount, duration: estimatedSignalDuration });
+      if (trafficChartSamples.length > 24) trafficChartSamples.shift();
+      drawTrafficRelationshipChart();
+      const chartCaption = modal.querySelector<HTMLElement>("[data-camera-chart-caption]");
+      if (chartCaption) chartCaption.textContent = `Deteksi awal: ${congestion.vehicleCount} kendaraan · ${estimatedSignalDuration} detik`;
+      renderCameraDetectionTable(result.detections);
+      if (aiStatus) {
+        aiStatus.dataset.traffic = congestion.level;
+        aiStatus.innerHTML = `<strong>${congestion.label} awal · ${congestion.vehicleCount} kendaraan</strong><span>Frame kecil diproses sementara di edge; RF-DETR lokal sedang melanjutkan pemindaian kontinu.</span>`;
+      }
+    };
+    const runPublicCameraAi = async () => {
+      if (publicCameraAiBusy || !player?.isConnected) return;
+      const video = player.querySelector<HTMLVideoElement>("video[data-camera-video]");
+      const canvas = player.querySelector<HTMLCanvasElement>("[data-camera-ai-canvas]");
+      if (!video || !canvas || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+        if (aiStatus) {
+          aiStatus.hidden = false;
+          aiStatus.innerHTML = "<strong>Menyiapkan frame CCTV</strong><span>AI aktif dan akan membaca frame pertama begitu video siap.</span>";
+        }
+        if (video && video.dataset.aiFrameRetryBound !== "true") {
+          video.dataset.aiFrameRetryBound = "true";
+          video.addEventListener("loadeddata", () => {
+            delete video.dataset.aiFrameRetryBound;
+            void runPublicCameraAi();
+          }, { once: true });
+        }
+        return;
+      }
+      // Start the visible scanner as soon as a decoded frame exists. The
+      // detector can finish later without leaving the user with a frozen or
+      // unexplained video surface.
+      startPublicCameraAiOverlay(canvas, [], video.videoWidth, video.videoHeight);
+      publicCameraAiBusy = true;
+      try {
+        // Start the local model immediately. If it has already warmed, it wins
+        // in well under a second and no edge request is made. On a cold device,
+        // one small frame is sent to the bounded Worker so the user sees a
+        // truthful first result while the local model downloads in parallel.
+        const localResultPromise = runBrowserRfDetr(video, {
+          worker: true,
+          includeThumbnails: false,
+          captureMaxEdge: 720,
+          detailCrops: false,
+        });
+        let initialTimer = 0;
+        const initial = await Promise.race([
+          localResultPromise.then((result) => ({ kind: "local" as const, result })),
+          new Promise<{ kind: "wait" }>((resolve) => {
+            initialTimer = window.setTimeout(() => resolve({ kind: "wait" }), 650);
+          }),
+        ]);
+        window.clearTimeout(initialTimer);
+        let edgeBootstrapSucceeded = false;
+        let result: BrowserRfDetrResult;
+        if (initial.kind === "local") {
+          result = initial.result;
+        } else {
+          let edgeResultPromise: Promise<BrowserRfDetrResult | null> = Promise.resolve(null);
+          if (!publicCameraAiEdgeBootstrapByStream.has(activeStreamUrl)) {
+            publicCameraAiEdgeBootstrapByStream.add(activeStreamUrl);
+            if (aiStatus) {
+              aiStatus.hidden = false;
+              aiStatus.innerHTML = "<strong>Deteksi awal sedang dipercepat</strong><span>Frame kecil dianalisis sementara; RF-DETR lokal terus dipersiapkan untuk pemindaian kontinu.</span>";
+            }
+            edgeResultPromise = runCloudflareCctvVision(video);
+          }
+          const firstCompleted = await Promise.race([
+            localResultPromise.then((localResult) => ({ kind: "local" as const, result: localResult })),
+            edgeResultPromise.then((edgeResult) => ({ kind: "edge" as const, result: edgeResult })),
+          ]);
+          if (firstCompleted.kind === "edge") {
+            if (firstCompleted.result?.status === "online") {
+              applyPublicCameraEdgeBootstrap(firstCompleted.result);
+              edgeBootstrapSucceeded = true;
+            }
+            result = await localResultPromise;
+          } else {
+            result = firstCompleted.result;
+          }
+        }
+        if (result.status !== "online") {
+          if (aiStatus) {
+            aiStatus.innerHTML = edgeBootstrapSucceeded
+              ? `<strong>Deteksi awal tetap ditampilkan</strong><span>${escapeHtml(result.note)} Pemindaian lokal akan dicoba lagi pada siklus berikutnya.</span>`
+              : `<strong>AI belum dapat membaca video</strong><span>${escapeHtml(result.note)}</span>`;
+          }
+          return;
+        }
+        startPublicCameraAiOverlay(canvas, result.detections, result.frameWidth, result.frameHeight);
+        persistPublicCameraSnapshot(video, canvas, result);
+        const congestion = classifyTrafficFrame(result.detections, result.frameWidth, result.frameHeight);
+        assessmentByStream.set(activeStreamUrl, congestion);
+        const estimatedSignalDuration = clamp(18 + congestion.queueVehicles * 3 + Math.round(congestion.occupancy * 30), 18, 65);
+        trafficChartSamples.push({ vehicles: congestion.vehicleCount, duration: estimatedSignalDuration });
+        if (trafficChartSamples.length > 24) trafficChartSamples.shift();
+        drawTrafficRelationshipChart();
+        const chartCaption = modal.querySelector<HTMLElement>("[data-camera-chart-caption]");
+        if (chartCaption) chartCaption.textContent = `${congestion.vehicleCount} kendaraan AI · ${estimatedSignalDuration} detik`;
+        renderCameraDetectionTable(result.detections);
+        if (aiStatus) {
+          aiStatus.dataset.traffic = congestion.level;
+          aiStatus.innerHTML = `<strong>${congestion.label} · ${congestion.vehicleCount} kendaraan</strong><span>Okupansi frame ${Math.round(congestion.occupancy * 100)}% · antrian visual ${congestion.queueVehicles} · keyakinan aturan ${Math.round(congestion.confidence * 100)}%</span>`;
+        }
+        const signalPanel = modal.querySelector<HTMLElement>("[data-camera-signal-simulation]");
+        if (signalPanel) {
+          const approaches = [...assessmentByStream.entries()].map(([url, assessment]) => ({
+            id: url,
+            label: streamNameByUrl.get(url) || "Arah kamera",
+            queueVehicles: assessment.queueVehicles,
+            occupancy: assessment.occupancy,
+          }));
+          const phases = recommendSignalPhases(approaches);
+          signalPanel.innerHTML = `
+            <header><strong>Estimasi fase lampu</strong><span>${approaches.length}/${streamOptions.length} arah tersampel</span></header>
+            <div class="map-camera-signal-phases">${phases.map((phase) => `
+              <div data-signal-color="${phase.color}">
+                <i aria-hidden="true"></i>
+                <span><b>${escapeHtml(streamNameByUrl.get(phase.approachId) || "Arah kamera")}</b>${phase.color === "green" ? "HIJAU" : "MERAH"} · ${phase.durationSec} detik</span>
+              </div>`).join("")}</div>
+            <p>Estimasi fase dari antrian dan okupansi visual; tidak mengontrol lampu fisik.</p>`;
+          const activePhase = phases.find((phase) => phase.color === "green");
+          if (activePhase) {
+            const activeLabel = streamNameByUrl.get(activePhase.approachId) || "Arah prioritas";
+            const icon = L.divIcon({
+              className: "cctv-simulated-signal-marker",
+              html: `<span data-active="green" role="img" aria-label="Estimasi lampu hijau ${escapeHtml(activeLabel)}, ${activePhase.durationSec} detik">
+                <i></i><i></i><i></i><b>${activePhase.durationSec}</b>
+              </span>`,
+              iconSize: [34, 54],
+              iconAnchor: [17, 48],
+            });
+            if (!simulatedSignalMarker) {
+              simulatedSignalMarker = L.marker([point.lat + 0.00008, point.lng], {
+                pane: ROAD_ORNAMENT_PANE,
+                icon,
+                zIndexOffset: 1500,
+                title: `Estimasi fase: ${activeLabel}`,
+              }).addTo(map);
+            } else {
+              simulatedSignalMarker.setIcon(icon);
+              simulatedSignalMarker.options.title = `Estimasi fase: ${activeLabel}`;
+            }
+            simulatedSignalMarker.bindTooltip(
+              `ESTIMASI · ${escapeHtml(activeLabel)} hijau ${activePhase.durationSec} detik`,
+              { direction: "top", opacity: 0.96 },
+            );
+          }
+        }
+        const nextUnmeasured = streamOptions.find((option) => !assessmentByStream.has(option.url));
+        if (publicCameraAiProxyEnabled && nextUnmeasured) {
+          setPlayerSource(nextUnmeasured.url, true);
+          modal.querySelectorAll<HTMLButtonElement>("[data-camera-stream]").forEach((button) => {
+            button.setAttribute("aria-pressed", String(button.dataset.cameraStream === nextUnmeasured.url));
+          });
+          if (aiStatus) {
+            aiStatus.innerHTML += `<span>Menyiapkan sampel sudut berikutnya: ${escapeHtml(nextUnmeasured.name)}.</span>`;
+          }
+        }
+      } finally {
+        publicCameraAiBusy = false;
+      }
+    };
+    const togglePublicCameraAi = () => {
+      if (!aiButton) return;
+      if (publicCameraAiTimer) {
+        stopPublicCameraAi();
+        publicCameraAiProxyEnabled = false;
+        if (cameraCapability(activeStreamUrl, activeStreamMediaFormat).format !== "webrtc-whep") {
+          setPlayerSource(activeStreamUrl, false, activeStreamMediaFormat);
+        }
+        aiButton.setAttribute("aria-pressed", "false");
+        aiButton.setAttribute("aria-label", "Aktifkan AI deteksi kendaraan");
+        if (aiStatus) aiStatus.innerHTML = "<strong>AI dijeda</strong><span>Tekan AI untuk melanjutkan analisis kendaraan.</span>";
+        return;
+      }
+      publicCameraAiProxyEnabled = true;
+      if (cameraCapability(activeStreamUrl, activeStreamMediaFormat).format !== "webrtc-whep") {
+        setPlayerSource(activeStreamUrl, true, activeStreamMediaFormat);
+      }
+      aiButton.setAttribute("aria-pressed", "true");
+      aiButton.setAttribute("aria-label", "AI deteksi kendaraan aktif");
+      if (aiStatus) aiStatus.hidden = false;
+      void runPublicCameraAi();
+      publicCameraAiTimer = window.setInterval(() => void runPublicCameraAi(), VIDEO_BROWSER_RF_DETR_INTERVAL_MS);
+    };
+    aiButton?.addEventListener("click", togglePublicCameraAi);
+    if (aiButton) window.setTimeout(togglePublicCameraAi, 350);
+    registerPublicCameraAutoPip();
+    player?.addEventListener("click", (event) => {
+      const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>("button");
+      if (!button) return;
+      if (button.matches("[data-camera-pip]")) {
+        if (!button.disabled) {
+          void openPublicCameraPictureInPicture().then((opened) => {
+            if (!opened) showGlobalNotice("warning", "PiP belum tersedia", "Gunakan Chrome atau Edge terbaru dan putar video lebih dahulu.");
+          });
+        }
+      } else if (button.matches("[data-camera-fullscreen]")) {
+        void toggleCameraFullscreen();
+      }
+    });
     const sheet = modal.querySelector<HTMLElement>(".map-camera-source-sheet");
     const cameraHeader = modal.querySelector<HTMLElement>(".map-license-head");
     let floatDrag: { id: number; x: number; y: number; left: number; top: number } | null = null;
@@ -1808,13 +3751,234 @@ if (staticRoute === "cctv") {
     };
     cameraHeader?.addEventListener("pointerup", endFloatDrag);
     cameraHeader?.addEventListener("pointercancel", endFloatDrag);
-    if (sheet) setupSheetSwipe(sheet, close);
+    const cameraGestureCanStart = (target: HTMLElement | null, sheetEl: HTMLElement) => {
+      if (!target || target.closest("button, a, input, label, select, textarea, iframe, [data-camera-traffic-chart]")) return false;
+      if (target.closest("[data-swipe-handle], .map-license-head")) return true;
+      return nearestScrollableSheetTarget(target, sheetEl).scrollTop <= 1;
+    };
+    const setupCameraSheetDismissGesture = (sheetEl: HTMLElement) => {
+      let drag: {
+        id: number;
+        x: number;
+        y: number;
+        startedAt: number;
+        axis: "pending" | "x" | "y" | "ignore";
+        offset: number;
+      } | null = null;
+      let wheelOffset = 0;
+      let wheelTimer = 0;
+      const desktop = () => usesDesktopSidePanel();
+      const reset = () => {
+        sheetEl.style.transition = "";
+        sheetEl.style.transform = "";
+        if (desktop()) setSidePanelWidthFromSheet(sheetEl);
+      };
+      const apply = (axis: "x" | "y", offset: number) => {
+        const next = clamp(offset, 0, axis === "x" ? sheetEl.getBoundingClientRect().width + 42 : 210);
+        sheetEl.style.transform = axis === "x" ? `translateX(${next}px)` : `translateY(${next}px)`;
+        if (axis === "x" && desktop()) {
+          setSidePanelWidth(Math.max(0, sheetEl.getBoundingClientRect().width - next));
+        }
+      };
+      const start = (event: PointerEvent) => {
+        if (modal.classList.contains("is-floating-camera")) return;
+        const target = event.target as HTMLElement | null;
+        if (!cameraGestureCanStart(target, sheetEl)) return;
+        drag = {
+          id: event.pointerId,
+          x: event.clientX,
+          y: event.clientY,
+          startedAt: performance.now(),
+          axis: "pending",
+          offset: 0,
+        };
+        sheetEl.style.transition = "none";
+        try { sheetEl.setPointerCapture(event.pointerId); } catch { /* Pointer capture is best effort. */ }
+      };
+      const move = (event: PointerEvent) => {
+        if (!drag || event.pointerId !== drag.id) return;
+        const dx = event.clientX - drag.x;
+        const dy = event.clientY - drag.y;
+        if (drag.axis === "pending" && Math.max(Math.abs(dx), Math.abs(dy)) > 7) {
+          if (desktop()) drag.axis = Math.abs(dx) >= Math.abs(dy) ? "x" : "ignore";
+          else drag.axis = Math.abs(dy) >= Math.abs(dx) && dy > 0 ? "y" : "ignore";
+        }
+        if (drag.axis === "x") drag.offset = Math.max(0, dx);
+        else if (drag.axis === "y") drag.offset = Math.max(0, dy);
+        else return;
+        if (drag.offset > 2) event.preventDefault();
+        apply(drag.axis, drag.offset);
+      };
+      const finish = (event: PointerEvent) => {
+        if (!drag || event.pointerId !== drag.id) return;
+        const completed = drag;
+        drag = null;
+        try { sheetEl.releasePointerCapture(event.pointerId); } catch { /* Already released. */ }
+        const velocity = completed.offset / Math.max(1, performance.now() - completed.startedAt);
+        const threshold = completed.axis === "x"
+          ? Math.min(146, Math.max(72, sheetEl.getBoundingClientRect().width * 0.28))
+          : Math.min(130, Math.max(66, sheetEl.getBoundingClientRect().height * 0.2));
+        if ((completed.axis === "x" || completed.axis === "y") && (completed.offset > threshold || velocity > 0.6)) {
+          close();
+          return;
+        }
+        reset();
+      };
+      sheetEl.addEventListener("pointerdown", start);
+      sheetEl.addEventListener("pointermove", move);
+      sheetEl.addEventListener("pointerup", finish);
+      sheetEl.addEventListener("pointercancel", finish);
+      sheetEl.addEventListener("wheel", (event) => {
+        if (modal.classList.contains("is-floating-camera")) return;
+        const target = event.target as HTMLElement | null;
+        const atTop = nearestScrollableSheetTarget(target, sheetEl).scrollTop <= 1;
+        // A real horizontal trackpad gesture does not compete with vertical
+        // content scrolling, so it may dismiss the desktop sheet from any
+        // scroll position. The vertical-wheel fallback remains top-gated.
+        const horizontal = desktop()
+          ? event.deltaX > 8 ? event.deltaX : atTop && event.deltaY < -8 ? Math.abs(event.deltaY) : 0
+          : 0;
+        const vertical = !desktop() && ((atTop && event.deltaY < -8) ? Math.abs(event.deltaY) : 0);
+        const offset = horizontal || vertical;
+        if (!offset) return;
+        event.preventDefault();
+        wheelOffset = clamp(wheelOffset + offset, 0, desktop() ? sheetEl.getBoundingClientRect().width + 42 : 210);
+        apply(desktop() ? "x" : "y", wheelOffset);
+        window.clearTimeout(wheelTimer);
+        wheelTimer = window.setTimeout(() => {
+          const threshold = desktop()
+            ? Math.min(146, Math.max(72, sheetEl.getBoundingClientRect().width * 0.28))
+            : Math.min(130, Math.max(66, sheetEl.getBoundingClientRect().height * 0.2));
+          if (wheelOffset > threshold) close();
+          else reset();
+          wheelOffset = 0;
+        }, 130);
+      }, { passive: false, capture: true });
+    };
+    const setupStackedCameraGesture = (sheetEl: HTMLElement) => {
+      const minHeight = 250;
+      const maxHeight = () => Math.max(360, window.innerHeight - 160);
+      let drag: {
+        id: number;
+        x: number;
+        y: number;
+        height: number;
+        axis: "pending" | "x" | "y" | "ignore";
+        dx: number;
+        dy: number;
+      } | null = null;
+      const applyHeight = (height: number) => {
+        const next = clamp(Math.round(height), minHeight, maxHeight());
+        document.documentElement.style.setProperty("--camera-source-stack-height", `${next}px`);
+        document.documentElement.style.setProperty("--camera-source-stack-space", `${next}px`);
+      };
+      const start = (event: PointerEvent) => {
+        const target = event.target as HTMLElement | null;
+        if (!cameraGestureCanStart(target, sheetEl)) return;
+        const currentHeight = sheetEl.getBoundingClientRect().height;
+        drag = { id: event.pointerId, x: event.clientX, y: event.clientY, height: currentHeight, axis: "pending", dx: 0, dy: 0 };
+        sheetEl.style.transition = "none";
+        try { sheetEl.setPointerCapture(event.pointerId); } catch { /* Pointer capture is best effort. */ }
+      };
+      const move = (event: PointerEvent) => {
+        if (!drag || event.pointerId !== drag.id) return;
+        drag.dx = event.clientX - drag.x;
+        drag.dy = event.clientY - drag.y;
+        if (drag.axis === "pending" && Math.max(Math.abs(drag.dx), Math.abs(drag.dy)) > 8) {
+          drag.axis = Math.abs(drag.dx) > Math.abs(drag.dy) ? "x" : "y";
+        }
+        if (drag.axis === "x") {
+          const dismiss = Math.max(0, drag.dx);
+          sheetEl.style.transform = `translateX(${dismiss}px)`;
+          setSidePanelWidth(Math.max(0, sheetEl.getBoundingClientRect().width - dismiss));
+        } else if (drag.axis === "y") {
+          applyHeight(drag.height - drag.dy);
+        }
+        if (drag.axis !== "pending") event.preventDefault();
+      };
+      const finish = (event: PointerEvent) => {
+        if (!drag || event.pointerId !== drag.id) return;
+        const completed = drag;
+        drag = null;
+        sheetEl.style.transition = "";
+        sheetEl.style.transform = "";
+        try { sheetEl.releasePointerCapture(event.pointerId); } catch { /* Already released. */ }
+        if (completed.axis === "x" && completed.dx > 82) {
+          close();
+          return;
+        }
+        const height = sheetEl.getBoundingClientRect().height;
+        if (completed.axis === "y" && (completed.dy > 150 || height <= minHeight + 18)) {
+          close();
+          return;
+        }
+        applyHeight(height);
+        setSidePanelWidthFromSheet(sheetEl);
+      };
+      sheetEl.addEventListener("pointerdown", start);
+      sheetEl.addEventListener("pointermove", move);
+      sheetEl.addEventListener("pointerup", finish);
+      sheetEl.addEventListener("pointercancel", finish);
+      let wheelIdle = 0;
+      let wheelHorizontalDistance = 0;
+      let wheelDismissDistance = 0;
+      sheetEl.addEventListener("wheel", (event) => {
+        const target = event.target as HTMLElement | null;
+        const scrollTarget = nearestScrollableSheetTarget(target, sheetEl);
+        const atTop = scrollTarget.scrollTop <= 2;
+        const horizontalPull = event.deltaX > 8 ? event.deltaX : 0;
+        if (horizontalPull) {
+          event.preventDefault();
+          wheelHorizontalDistance = clamp(wheelHorizontalDistance + horizontalPull, 0, sheetEl.getBoundingClientRect().width + 42);
+          sheetEl.style.transition = "none";
+          sheetEl.style.transform = `translateX(${wheelHorizontalDistance}px)`;
+          setSidePanelWidth(Math.max(0, sheetEl.getBoundingClientRect().width - wheelHorizontalDistance));
+          window.clearTimeout(wheelIdle);
+          wheelIdle = window.setTimeout(() => {
+            if (wheelHorizontalDistance > 82) close();
+            else {
+              sheetEl.style.transition = "";
+              sheetEl.style.transform = "";
+              setSidePanelWidthFromSheet(sheetEl);
+            }
+            wheelHorizontalDistance = 0;
+          }, 130);
+          return;
+        }
+        if (Math.abs(event.deltaY) < Math.abs(event.deltaX)) return;
+        const directHandle = Boolean(target?.closest("[data-swipe-handle], .map-license-head"));
+        const pullDownAtTop = atTop && event.deltaY < -8;
+        if (!directHandle && !pullDownAtTop) return;
+        event.preventDefault();
+        const current = sheetEl.getBoundingClientRect().height;
+        const next = directHandle ? current - event.deltaY : current - Math.abs(event.deltaY);
+        wheelDismissDistance += directHandle ? Math.max(0, event.deltaY) : Math.max(0, -event.deltaY);
+        if (wheelDismissDistance > 150 || (event.deltaY > 0 && next <= minHeight)) {
+          close();
+          return;
+        }
+        sheetEl.style.transition = "none";
+        applyHeight(next);
+        window.clearTimeout(wheelIdle);
+        wheelIdle = window.setTimeout(() => {
+          sheetEl.style.transition = "";
+          wheelDismissDistance = 0;
+        }, 120);
+      }, { passive: false, capture: true });
+    };
+    if (sheet) {
+      if (stackedWithCctvFeed) setupStackedCameraGesture(sheet);
+      else setupCameraSheetDismissGesture(sheet);
+    }
     requestAnimationFrame(() => {
       modal.classList.add("open");
+      document.body.classList.add("camera-source-open");
       setSidePanelWidthFromSheet(sheet);
     });
   }
 
+  let pendingCctvDeepLink = new URLSearchParams(window.location.search).get("cctv") || "";
+  let pendingDeviceDeepLink = new URLSearchParams(window.location.search).get("device") || "";
   const mapDynamicsRenderer = new MapDynamicsLeafletRenderer(map, {
     manifestUrl: "/data/map-dynamics/manifest.json",
     paneName: "its-map-dynamics",
@@ -1823,7 +3987,78 @@ if (staticRoute === "cctv") {
     pointPaneZIndex: 620,
     moveDebounceMs: 260,
     refreshIntervalMs: 5 * 60_000,
-    onPointClick: openMapDynamicsPoint,
+    onPointClick: openMapDynamicsPointPreview,
+    onPublish: (collection) => {
+      if (!pendingCctvDeepLink) return;
+      const requestedId = pendingCctvDeepLink;
+      const feature = collection.features.find((candidate) => String(candidate.id || "") === requestedId);
+      if (!feature || feature.geometry.type !== "Point") return;
+      const [lng, lat] = feature.geometry.coordinates as number[];
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      pendingCctvDeepLink = "";
+      window.requestAnimationFrame(() => openMapDynamicsPoint(feature, L.latLng(lat, lng)));
+    },
+  });
+
+  async function resolvePendingCctvDeepLink(): Promise<void> {
+    const requestedId = pendingCctvDeepLink;
+    if (!requestedId) return;
+    try {
+      const feature = await cctvCatalogLoader.getFeatureById(requestedId);
+      if (pendingCctvDeepLink !== requestedId || !feature || feature.geometry.type !== "Point"
+        || !Array.isArray(feature.geometry.coordinates)) return;
+      const [lng, lat] = feature.geometry.coordinates;
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      pendingCctvDeepLink = "";
+      window.requestAnimationFrame(() => openMapDynamicsPoint(
+        feature as Parameters<typeof openMapDynamicsPoint>[0],
+        L.latLng(lat, lng),
+      ));
+    } catch {
+      // The viewport renderer remains the fallback when the supplemental
+      // catalogue is temporarily unavailable.
+    }
+  }
+
+  void resolvePendingCctvDeepLink();
+
+  window.addEventListener("its:open-cctv", (event) => {
+    const detail = (event as CustomEvent<{ id?: string; elapsedSec?: number }>).detail || {};
+    const requestedId = String(detail.id || "");
+    if (!requestedId) return;
+    void cctvCatalogLoader.getFeatureById(requestedId).then((feature) => {
+      if (!feature || feature.geometry.type !== "Point" || !Array.isArray(feature.geometry.coordinates)) return;
+      const [lng, lat] = feature.geometry.coordinates;
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      if (document.getElementById("m-ai-history-sheet") && isMobile() && aiHistoryActiveTab !== "cctv") {
+        snapAiHistorySheet("dock");
+      }
+      map.flyTo([lat, lng], Math.max(18, map.getZoom()), { animate: true, duration: 0.8 });
+      cctvAttentionLayer?.remove();
+      cctvAttentionLayer = L.circleMarker([lat, lng], {
+        radius: 25,
+        color: "#2563eb",
+        weight: 3,
+        fillColor: "#60a5fa",
+        fillOpacity: 0.2,
+        className: "its-cctv-attention",
+        interactive: false,
+      }).addTo(map);
+      window.setTimeout(() => cctvAttentionLayer?.remove(), 3_600);
+      openMapDynamicsPoint(
+        feature as Parameters<typeof openMapDynamicsPoint>[0],
+        L.latLng(lat, lng),
+      );
+      if (Number.isFinite(detail.elapsedSec)) {
+        window.setTimeout(() => {
+          const video = document.querySelector<HTMLVideoElement>("#map-dynamics-camera-modal video[data-camera-video], #map-dynamics-camera-modal video[data-hls-video]");
+          if (!video || !video.seekable.length) return;
+          const start = video.seekable.start(0);
+          const end = video.seekable.end(video.seekable.length - 1);
+          video.currentTime = clamp(Number(detail.elapsedSec), start, end);
+        }, 1_200);
+      }
+    }).catch(() => undefined);
   });
 
   function applySharedLocationFromUrl(): void {
@@ -1846,17 +4081,15 @@ if (staticRoute === "cctv") {
   function syncMapStateToUrl(): void {
     const center = map.getCenter();
     const params = new URLSearchParams(window.location.search);
-    // Keep the current map view shareable, matching familiar map URLs. This is
-    // replaceState (not a new history entry) so panning never floods Back/Forward.
     params.set("lat", center.lat.toFixed(6));
     params.set("lng", center.lng.toFixed(6));
-    params.set("z", String(Math.round(map.getZoom() * 100) / 100));
-    params.set("bearing", String(Math.round((map.getBearing?.() ?? 0) * 10) / 10));
-    params.set("mode", state.baseMode);
+    params.set("z", String(Number(map.getZoom().toFixed(2))));
+    const bearing = Number(map.getBearing().toFixed(1));
+    if (Math.abs(bearing) >= 0.1) params.set("bearing", String(bearing));
+    else params.delete("bearing");
     params.delete("zoom");
-    const query = params.toString();
-    const next = `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`;
-    window.history.replaceState(window.history.state, "", next);
+    const nextUrl = `${window.location.pathname}?${params.toString()}${window.location.hash}`;
+    window.history.replaceState(window.history.state, "", nextUrl);
   }
 
   map.whenReady(applySharedLocationFromUrl);
@@ -1969,8 +4202,8 @@ if (staticRoute === "cctv") {
     const labelWidth = showLabel ? clamp(longestLine * 6.1 + 12, 52, 142) : 0;
     // Keep the cartographic symbol small while making the marker's actual
     // interactive box meet the 48 CSS px touch-target recommendation.
-    const hitWidth = Math.max(48, Math.round(size + (showLabel ? labelWidth + 7 : 0)));
-    const hitHeight = Math.max(48, Math.round(Math.max(size + 9, lineCount > 1 ? 31 : 24)));
+    const hitWidth = Math.max(64, Math.round(size + (showLabel ? labelWidth + 7 : 0)));
+    const hitHeight = Math.max(64, Math.round(Math.max(size + 9, lineCount > 1 ? 31 : 24)));
     return L.divIcon({
       className: "poi-marker-icon",
       html: `<div class="poi-marker ${selected ? "is-selected" : ""}" data-kind="${escapeHtml(poi.kind)}" data-icon-id="${escapeHtml(definition.id)}" title="${escapeHtml(poi.title)}" style="--poi-accent:${definition.color}; --poi-size:${Math.round(size)}px;">
@@ -2773,15 +5006,15 @@ if (staticRoute === "cctv") {
     return L.divIcon({
       className: "poi-cluster-icon poi-dominant-cluster-icon",
       html: `<span class="poi-dominant-cluster-symbol" data-poi-cluster="${cluster.pois.length}" data-poi-dominant-id="${escapeHtml(dominant.id)}" role="img" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}" style="--poi-accent:${definition.color};--poi-size:${size}px"><img src="${escapeHtml(imageUrl)}" alt="" draggable="false" width="${size}" height="${size}"></span>`,
-      iconSize: [56, 56],
-      iconAnchor: [28, 28],
+      iconSize: [64, 64],
+      iconAnchor: [32, 32],
     });
   }
 
   function poiCollisionGridSize(zoom = map.getZoom()): number {
-    if (zoom < 15) return 64;
-    if (zoom < 17) return 60;
-    return 56;
+    if (zoom < 15) return 80;
+    if (zoom < 17) return 76;
+    return 72;
   }
 
   function poiGridKeysForRect(left: number, top: number, width: number, height: number, gridSize: number): string[] {
@@ -2880,7 +5113,7 @@ if (staticRoute === "cctv") {
     // A marker may render a small pictogram, but its interactive hit box is
     // 48 CSS px. Keep neighbouring marker centres farther apart so Lighthouse
     // and touch users do not see overlapping targets.
-    const clusterCellSize = zoom >= 19 ? 52 : zoom >= 17 ? 56 : zoom >= 15 ? 60 : 64;
+    const clusterCellSize = zoom >= 19 ? 72 : zoom >= 17 ? 76 : zoom >= 15 ? 80 : 84;
     const clusterBuckets = new Map<string, PoiRecord[]>();
     ranked.forEach((poi) => {
       const worldPoint = map.project([poi.lat, poi.lng], Math.floor(zoom));
@@ -2915,7 +5148,7 @@ if (staticRoute === "cctv") {
         && zoom >= rule.labelZoom
         && poi.title.trim().length > 0;
       const labelWidth = wantsLabel ? clamp(Math.min(22, Math.max(8, Math.ceil(poi.title.length / 2))) * 5.5, 44, 142) : 0;
-      const touchSize = 52;
+      const touchSize = 64;
       const fullWidth = touchSize + (wantsLabel ? labelWidth + 9 : 0);
       const fullHeight = Math.max(touchSize, wantsLabel && poi.title.length > 20 ? 32 : 24);
       const fullKeys = poiGridKeysForRect(
@@ -3946,8 +6179,8 @@ if (staticRoute === "cctv") {
     return L.divIcon({
       className: isRoadCrossing ? "road-crossing-icon" : "rail-crossing-icon",
       html: `<span class="${isRoadCrossing ? "road-crossing-mark" : "rail-crossing-mark"}" role="img" style="--crossing-size:${size}px;--crossing-depth:${depth}px;--crossing-bearing:${cssBearing}deg" title="${escapeHtml(crossing.name || (isRoadCrossing ? "Penyeberangan" : "Perlintasan kereta"))}" aria-label="${escapeHtml(crossing.name || (isRoadCrossing ? "Penyeberangan" : "Perlintasan kereta"))}"></span>`,
-      iconSize: [48, 48],
-      iconAnchor: [24, 24],
+      iconSize: [56, 56],
+      iconAnchor: [28, 28],
     });
   }
 
@@ -4318,8 +6551,8 @@ if (staticRoute === "cctv") {
     return L.divIcon({
       className: "traffic-signal-guide-icon",
       html: `<span role="img" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"><i></i><i></i><i></i></span>`,
-      iconSize: [48, 48],
-      iconAnchor: [24, 24],
+      iconSize: [56, 56],
+      iconAnchor: [28, 28],
     });
   }
 
@@ -5280,7 +7513,7 @@ if (staticRoute === "cctv") {
         || map.distance(a.points[0], map.getCenter()) - map.distance(b.points[0], map.getCenter())
       ));
     const ornamentLimit = zoom >= 18 ? 84 : 36;
-    const ornamentSeparation = zoom >= 18 ? 20 : 27;
+    const ornamentSeparation = zoom >= 18 ? 72 : 76;
     const selectedOrnaments = pointOrnaments.reduce<MapOrnamentRecord[]>((selected, ornament) => {
       if (selected.length >= ornamentLimit) return selected;
       const point = map.latLngToContainerPoint(ornament.points[0]);
@@ -5291,15 +7524,16 @@ if (staticRoute === "cctv") {
     mapRoot.dataset.ornamentVisible = String(selectedOrnaments.length);
     selectedOrnaments.forEach((ornament) => {
       const title = [ornament.name, `${ornament.tagKey}=${ornament.tagValue}`].filter(Boolean).join(" · ");
+      const hasDetailAction = ornament.kind === "surveillance" || ornament.kind === "speed_camera";
       const marker = L.marker(ornament.points[0], {
         pane: ROAD_ORNAMENT_PANE,
         icon: makeOrnamentIcon(ornament),
-        interactive: true,
-        keyboard: true,
+        interactive: hasDetailAction,
+        keyboard: hasDetailAction,
         title,
         zIndexOffset: 120,
       }).bindTooltip(escapeHtml(title), { direction: "top", sticky: true, opacity: 0.94 });
-      if (ornament.kind === "surveillance" || ornament.kind === "speed_camera") {
+      if (hasDetailAction) {
         marker.on("click", () => openMapDynamicsPoint({
           type: "Feature",
           id: ornament.id,
@@ -5342,12 +7576,11 @@ if (staticRoute === "cctv") {
         icon: isPedestrianStructure
           ? makePedestrianStructureIcon(label)
           : makeRoadSemanticNameIcon(label, midpoint.bearing),
-        interactive: isPedestrianStructure,
-        keyboard: isPedestrianStructure,
-        title: isPedestrianStructure ? label : undefined,
+        interactive: false,
+        keyboard: false,
+        title: undefined,
         zIndexOffset: 114,
       });
-      if (isPedestrianStructure) marker.bindTooltip(escapeHtml(label), { direction: "top", opacity: 0.94 });
       marker.addTo(state.roadGuideLayer as L.LayerGroup);
     });
 
@@ -8802,7 +11035,18 @@ if (staticRoute === "cctv") {
   function usablePublicMediaUrl(value: unknown): string {
     const url = typeof value === "string" ? value.trim() : "";
     if (!url) return "";
-    if (/^https?:\/\/(?:127\.0\.0\.1|0\.0\.0\.0|localhost)(?::|\/|$)/i.test(url)) return "";
+    if (/^(?:https?|wss):\/\/(?:127\.0\.0\.1|0\.0\.0\.0|localhost)(?::|\/|$)/i.test(url)) return "";
+    try {
+      const host = new URL(url, window.location.href).hostname.toLowerCase();
+      // A Quick Tunnel hostname is intentionally ephemeral.  It is suitable
+      // for an operator's short-lived preview, not a catalogued public CCTV
+      // feed.  Keeping one here made the player retry a DNS name that had
+      // already expired (for example `*.trycloudflare.com`) indefinitely.
+      if (host === "trycloudflare.com" || host.endsWith(".trycloudflare.com")) return "";
+    } catch {
+      // Preserve existing behavior for non-URL media values; downstream
+      // renderers still decide whether they are playable.
+    }
     return url;
   }
 
@@ -8866,6 +11110,28 @@ if (staticRoute === "cctv") {
 
   function isLikelyHlsUrl(url: string): boolean {
     return /\.m3u8(\?|$)/i.test(url);
+  }
+
+  function hlsAiProxyUrl(url: string): string {
+    try {
+      const source = new URL(url);
+      // ATCS Banjar serves credential-free HLS with public CORS on its
+      // dedicated HTTPS media port. Cloudflare Workers cannot egress that
+      // port, so retaining the official URL is required for playback and
+      // canvas-readable AI frames.
+      if (source.hostname === "atcs.banjarkota.go.id" && source.port === "5443") return source.href;
+    } catch {
+      // Invalid URLs continue to the proxy, which rejects them safely.
+    }
+    const proxy = new URL("https://its.hanifahseptiani45.workers.dev/v1/media/hls");
+    proxy.searchParams.set("url", url);
+    return proxy.href;
+  }
+
+  function publicMediaProxyUrl(url: string): string {
+    const proxy = new URL("https://its.hanifahseptiani45.workers.dev/v1/media/hls");
+    proxy.searchParams.set("url", url);
+    return proxy.href;
   }
 
   function isLikelyImageUrl(url: string): boolean {
@@ -9212,8 +11478,59 @@ if (staticRoute === "cctv") {
     return "";
   }
 
+  const publicFlvPlayers = new Map<HTMLVideoElement, {
+    destroy(): void;
+    unload(): void;
+    detachMediaElement(): void;
+  }>();
+
   function setupHlsVideos(root: ParentNode = document): void {
     root.querySelectorAll<HTMLVideoElement>("video[data-hls-video]").forEach((video) => setupHlsVideo(video));
+    root.querySelectorAll<HTMLVideoElement>("video[data-flv-video]").forEach((video) => setupFlvVideo(video));
+  }
+
+  async function setupFlvVideo(video: HTMLVideoElement): Promise<void> {
+    if (video.dataset.flvReady === "true") {
+      void video.play().catch(() => undefined);
+      return;
+    }
+    const src = usablePublicMediaUrl(video.dataset.src || "");
+    if (!src) return;
+    video.dataset.flvReady = "true";
+    video.muted = true;
+    video.autoplay = true;
+    video.playsInline = true;
+    try {
+      const module = await import("mpegts.js");
+      const mpegts = module.default;
+      if (!mpegts?.isSupported?.()) throw new Error("Media Source Extensions tidak tersedia.");
+      const player = mpegts.createPlayer({
+        type: "flv",
+        isLive: true,
+        url: src,
+        cors: true,
+      }, {
+        enableWorker: true,
+        enableStashBuffer: false,
+        stashInitialSize: 128,
+        liveBufferLatencyChasing: true,
+        liveBufferLatencyMaxLatency: 3,
+        liveBufferLatencyMinRemain: 0.5,
+      });
+      publicFlvPlayers.set(video, player);
+      player.attachMediaElement(video);
+      player.load();
+      await Promise.resolve(player.play()).catch(() => undefined);
+    } catch (error) {
+      video.dataset.flvReady = "error";
+      console.warn("[ITS] FLV player failed:", error);
+      const status = video.closest<HTMLElement>("[data-camera-player]")?.parentElement
+        ?.querySelector<HTMLElement>("[data-camera-ai-status]");
+      if (status) {
+        status.hidden = false;
+        status.innerHTML = "<strong>FLV belum dapat diputar</strong><span>Browser atau sumber resmi sedang menolak Media Source playback.</span>";
+      }
+    }
   }
 
   function setupHlsVideo(video: HTMLVideoElement): void {
@@ -9236,7 +11553,17 @@ if (staticRoute === "cctv") {
     video.addEventListener("canplay", hide);
     video.addEventListener("playing", hide);
     video.addEventListener("play", () => syncCustomVideoButtons(document));
-    video.addEventListener("pause", () => syncCustomVideoButtons(document));
+    video.addEventListener("pause", () => {
+      syncCustomVideoButtons(document);
+      if (video.dataset.hlsStopping === "true" || video.ended || !video.isConnected) return;
+      const previous = Number(video.dataset.hlsResumeTimer || 0);
+      if (previous) window.clearTimeout(previous);
+      const timer = window.setTimeout(() => {
+        delete video.dataset.hlsResumeTimer;
+        if (video.dataset.hlsStopping !== "true" && video.isConnected && video.paused) playHlsVideo(video);
+      }, 250);
+      video.dataset.hlsResumeTimer = String(timer);
+    });
     video.addEventListener("error", () => {
       showHlsMessage(video, "HLS live sedang disambungkan ulang...");
       scheduleHlsRetry(video, playlist);
@@ -9260,8 +11587,11 @@ if (staticRoute === "cctv") {
         capLevelToPlayerSize: true,
         backBufferLength: 12,
         maxBufferLength: 18,
-        liveSyncDurationCount: 3,
-        liveMaxLatencyDurationCount: 8,
+        // Several official CCTV providers (notably ATCS Denpasar) retain only
+        // seven two-second fragments. Stay near the live edge so a brief stall
+        // does not leave hls.js requesting a segment the origin has removed.
+        liveSyncDurationCount: 2,
+        liveMaxLatencyDurationCount: 4,
         manifestLoadingMaxRetry: 4,
         levelLoadingMaxRetry: 4,
         fragLoadingMaxRetry: 4,
@@ -9277,7 +11607,31 @@ if (staticRoute === "cctv") {
       });
       hls.on?.(Hls.Events.LEVEL_LOADED, hide);
       hls.on?.(Hls.Events.FRAG_BUFFERED, hide);
-      hls.on?.(Hls.Events.ERROR, (_event: unknown, data: { fatal?: boolean; type?: string }) => {
+      hls.on?.(Hls.Events.ERROR, (_event: unknown, data: {
+        fatal?: boolean;
+        type?: string;
+        details?: string;
+        response?: { code?: number };
+      }) => {
+        const responseCode = Number(data?.response?.code || 0);
+        const expiredLiveFragment = data?.details === Hls.ErrorDetails?.FRAG_LOAD_ERROR
+          && (responseCode === 404 || responseCode === 410);
+        if (expiredLiveFragment) {
+          const now = Date.now();
+          const lastRecoveryAt = Number(video.dataset.hlsExpiredRecoveryAt || 0);
+          if (now - lastRecoveryAt >= 750) {
+            video.dataset.hlsExpiredRecoveryAt = String(now);
+            showHlsMessage(video, "Mengejar posisi live terbaru...");
+            try {
+              hls.stopLoad?.();
+              hls.loadSource(cacheBustMediaUrl(playlist, now));
+              hls.startLoad?.(-1);
+            } catch {
+              scheduleHlsRetry(video, cacheBustMediaUrl(playlist, now));
+            }
+          }
+          return;
+        }
         if (!data?.fatal) return;
         const fatalCount = Number(video.dataset.hlsFatalCount || 0) + 1;
         video.dataset.hlsFatalCount = String(fatalCount);
@@ -9381,9 +11735,24 @@ if (staticRoute === "cctv") {
   }
 
   function stopHlsVideos(root: ParentNode): void {
+    root.querySelectorAll<HTMLVideoElement>("video[data-flv-video]").forEach((video) => {
+      const player = publicFlvPlayers.get(video);
+      if (player) {
+        try { player.unload(); } catch { /* ignore */ }
+        try { player.detachMediaElement(); } catch { /* ignore */ }
+        try { player.destroy(); } catch { /* ignore */ }
+      }
+      publicFlvPlayers.delete(video);
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+    });
     root.querySelectorAll<HTMLVideoElement>("video[data-hls-video]").forEach((video) => {
       const timer = Number(video.dataset.hlsRetryTimer || 0);
       if (timer) window.clearTimeout(timer);
+      const resumeTimer = Number(video.dataset.hlsResumeTimer || 0);
+      if (resumeTimer) window.clearTimeout(resumeTimer);
+      video.dataset.hlsStopping = "true";
       const hls = state.hlsInstances.get(video);
       if (hls?.destroy) {
         try { hls.destroy(); } catch { /* ignore */ }
@@ -9583,6 +11952,564 @@ if (staticRoute === "cctv") {
     return state.mapNavigationSeq;
   }
 
+  type BackgroundCctvAnalysisRequest = {
+    cctvId: string;
+    streamUrl: string;
+    mediaFormat?: string;
+    name: string;
+    priority?: number;
+    source?: string;
+    requestedAt?: number;
+  };
+  type BackgroundCctvVisualSource = HTMLVideoElement | HTMLImageElement;
+  const backgroundCctvAnalysisQueue: BackgroundCctvAnalysisRequest[] = [];
+  const backgroundCctvAnalysisQueued = new Set<string>();
+  const backgroundCctvAnalysisDeferred = new Map<string, BackgroundCctvAnalysisRequest>();
+  const backgroundCctvAnalysisAttempts = new Map<string, number>();
+  const backgroundCctvAnalysisStates = new Map<string, { state: string; message: string }>();
+  const backgroundCctvAnalysisRetryTimers = new Map<string, number>();
+  const MAX_BACKGROUND_CCTV_QUEUE = 24;
+  const MAX_BACKGROUND_CCTV_RETRIES = 2;
+  const BACKGROUND_CCTV_SNAPSHOT_TARGET = 3;
+  const MAX_BACKGROUND_CCTV_LOCAL_PASSES = 3;
+  const BACKGROUND_CCTV_FRAME_INTERVAL_MS = 800;
+  let backgroundCctvAnalysisRunning = false;
+  let backgroundCctvModelWarmPromise: Promise<string> | null = null;
+  let backgroundCctvInteractivePlayback = false;
+  let stopActiveBackgroundCctvMedia: (() => void) | null = null;
+
+  function setBackgroundCctvInteractivePlayback(active: boolean): void {
+    backgroundCctvInteractivePlayback = active;
+    if (active) {
+      // User-visible playback always wins over invisible card analysis. Stop
+      // the active hidden media element immediately; model work may unwind in
+      // the background, but it can no longer consume HLS/WebRTC bandwidth.
+      stopActiveBackgroundCctvMedia?.();
+      return;
+    }
+    pumpDeferredBackgroundCctvAnalysis();
+    void drainBackgroundCctvAnalysisQueue();
+  }
+
+  function warmBackgroundCctvModel(): void {
+    if (backgroundCctvModelWarmPromise) return;
+    backgroundCctvModelWarmPromise = warmBrowserRfDetrWorker().catch((error) => {
+      // A later visible card can try again.  Frame analysis retains its own
+      // truthful error state instead of pretending an inference completed.
+      backgroundCctvModelWarmPromise = null;
+      throw error;
+    });
+    void backgroundCctvModelWarmPromise.catch(() => undefined);
+  }
+
+  function emitBackgroundCctvStatus(cctvId: string, stateName: string, message: string): void {
+    backgroundCctvAnalysisStates.set(cctvId, { state: stateName, message });
+    window.dispatchEvent(new CustomEvent("its:cctv-analysis-status", {
+      detail: { cctvId, state: stateName, message },
+    }));
+  }
+
+  function backgroundCctvPriority(request: BackgroundCctvAnalysisRequest): number {
+    const priority = Number(request.priority);
+    return Number.isFinite(priority) ? Math.max(0, Math.min(1_000, Math.round(priority))) : 0;
+  }
+
+  function backgroundCctvConnectionIsConstrained(): boolean {
+    const connection = (navigator as Navigator & {
+      connection?: { saveData?: boolean; effectiveType?: string };
+    }).connection;
+    return Boolean(connection?.saveData || /(?:slow-)?2g/i.test(connection?.effectiveType || ""));
+  }
+
+  function backgroundCctvCanStart(): boolean {
+    return !backgroundCctvInteractivePlayback
+      && document.visibilityState !== "hidden"
+      && !backgroundCctvConnectionIsConstrained();
+  }
+
+  function deferBackgroundCctvAnalysis(request: BackgroundCctvAnalysisRequest, message: string): void {
+    backgroundCctvAnalysisDeferred.set(request.cctvId, request);
+    emitBackgroundCctvStatus(request.cctvId, "deferred", message);
+  }
+
+  function enqueueBackgroundCctvAnalysis(request: BackgroundCctvAnalysisRequest): void {
+    if (!backgroundCctvCanStart()) {
+      deferBackgroundCctvAnalysis(request, document.visibilityState === "hidden"
+        ? "pemindaian dilanjutkan saat tab aktif"
+        : "hemat data atau jaringan lambat aktif");
+      return;
+    }
+    const queuedRequest = {
+      ...request,
+      priority: backgroundCctvPriority(request),
+      requestedAt: request.requestedAt || Date.now(),
+    };
+    // Start obtaining the model while HLS buffers.  This is deliberately
+    // detached from the modal: visible feed cards initiate analysis too.
+    warmBackgroundCctvModel();
+    if (backgroundCctvAnalysisQueue.length >= MAX_BACKGROUND_CCTV_QUEUE) {
+      const lowestPriorityRequest = backgroundCctvAnalysisQueue[backgroundCctvAnalysisQueue.length - 1];
+      if (lowestPriorityRequest && backgroundCctvPriority(queuedRequest) > backgroundCctvPriority(lowestPriorityRequest)) {
+        backgroundCctvAnalysisQueue.pop();
+        deferBackgroundCctvAnalysis(lowestPriorityRequest, "pemindaian dijadwalkan ulang karena kamera terlihat diprioritaskan");
+      } else {
+        deferBackgroundCctvAnalysis(queuedRequest, "antrean penuh; pemindaian dijadwalkan ulang");
+        return;
+      }
+    }
+    backgroundCctvAnalysisQueue.push(queuedRequest);
+    backgroundCctvAnalysisQueue.sort((left, right) =>
+      backgroundCctvPriority(right) - backgroundCctvPriority(left)
+      || Number(left.requestedAt || 0) - Number(right.requestedAt || 0));
+    emitBackgroundCctvStatus(
+      queuedRequest.cctvId,
+      "queued",
+      "pemindaian otomatis berjalan di latar belakang; kamera tidak perlu dibuka",
+    );
+    void drainBackgroundCctvAnalysisQueue();
+  }
+
+  function pumpDeferredBackgroundCctvAnalysis(): void {
+    if (!backgroundCctvCanStart()) return;
+    const pending = [...backgroundCctvAnalysisDeferred.values()]
+      .sort((left, right) => backgroundCctvPriority(right) - backgroundCctvPriority(left)
+        || Number(left.requestedAt || 0) - Number(right.requestedAt || 0));
+    for (const request of pending) {
+      if (backgroundCctvAnalysisQueue.length >= MAX_BACKGROUND_CCTV_QUEUE) break;
+      backgroundCctvAnalysisDeferred.delete(request.cctvId);
+      enqueueBackgroundCctvAnalysis(request);
+    }
+  }
+
+  function releaseBackgroundCctvAnalysis(cctvId: string): void {
+    backgroundCctvAnalysisQueued.delete(cctvId);
+    backgroundCctvAnalysisDeferred.delete(cctvId);
+    backgroundCctvAnalysisAttempts.delete(cctvId);
+    const retryTimer = backgroundCctvAnalysisRetryTimers.get(cctvId);
+    if (retryTimer) window.clearTimeout(retryTimer);
+    backgroundCctvAnalysisRetryTimers.delete(cctvId);
+  }
+
+  function isBackgroundCctvVisualFormat(url: string, mediaFormat = ""): boolean {
+    return classifyCctvMedia({ url, mediaFormat }).aiFrames;
+  }
+
+  function backgroundCctvUnsupportedMessage(url: string, mediaFormat = ""): string {
+    return classifyCctvMedia({ url, mediaFormat }).reason;
+  }
+
+  async function waitForBackgroundCctvFrame(
+    source: BackgroundCctvVisualSource,
+    timeoutMs = 12_000,
+  ): Promise<void> {
+    const startedAt = performance.now();
+    while (performance.now() - startedAt < timeoutMs) {
+      if (source instanceof HTMLVideoElement) {
+        if (source.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
+          && source.videoWidth > 1 && source.videoHeight > 1) return;
+        if (source.error) throw new Error(`Frame CCTV gagal dimuat (kode ${source.error.code})`);
+        if (source.networkState === HTMLMediaElement.NETWORK_NO_SOURCE) {
+          throw new Error("Sumber video CCTV tidak tersedia");
+        }
+        if (source.paused) void source.play().catch(() => undefined);
+      } else {
+        // A multipart MJPEG response may never reach `complete`, but its
+        // natural dimensions become available as soon as the first JPEG frame
+        // is decoded. Those dimensions are therefore the reliable readiness
+        // signal for both multipart MJPEG and snapshot-style endpoints.
+        if (source.naturalWidth > 1 && source.naturalHeight > 1) return;
+        if (source.complete && performance.now() - startedAt > 500) {
+          throw new Error("Frame MJPEG tidak tersedia");
+        }
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 200));
+    }
+    throw new Error("Frame CCTV belum tersedia");
+  }
+
+  function publishBackgroundCctvSnapshot(
+    request: BackgroundCctvAnalysisRequest,
+    sourceElement: BackgroundCctvVisualSource,
+    result: BrowserRfDetrResult,
+    source: "edge" | "local",
+    sequence: number,
+  ): number {
+    const overlay = document.createElement("canvas");
+    overlay.width = result.frameWidth;
+    overlay.height = result.frameHeight;
+    drawRfDetrDetections(overlay, result.detections, result.frameWidth, result.frameHeight, {
+      hud: true,
+      scanActive: true,
+    });
+    const snapshotCanvas = document.createElement("canvas");
+    const scale = Math.min(1, 480 / Math.max(1, result.frameWidth));
+    snapshotCanvas.width = Math.max(1, Math.round(result.frameWidth * scale));
+    snapshotCanvas.height = Math.max(1, Math.round(result.frameHeight * scale));
+    const context = snapshotCanvas.getContext("2d", { willReadFrequently: true });
+    if (!context) throw new Error("Canvas snapshot CCTV tidak tersedia");
+    context.drawImage(sourceElement, 0, 0, snapshotCanvas.width, snapshotCanvas.height);
+    let accent = "#2563eb";
+    // Sample the actual source before drawing colorful detection boxes so the
+    // UI accent follows the scene rather than the overlay palette.
+    const pixels = context.getImageData(0, 0, snapshotCanvas.width, snapshotCanvas.height).data;
+    let red = 0;
+    let green = 0;
+    let blue = 0;
+    let samples = 0;
+    for (let offset = 0; offset < pixels.length; offset += 64) {
+      red += pixels[offset];
+      green += pixels[offset + 1];
+      blue += pixels[offset + 2];
+      samples += 1;
+    }
+    const channel = (value: number) =>
+      Math.max(24, Math.min(224, Math.round(value / Math.max(1, samples)))).toString(16).padStart(2, "0");
+    accent = `#${channel(red)}${channel(green)}${channel(blue)}`;
+    context.drawImage(overlay, 0, 0, snapshotCanvas.width, snapshotCanvas.height);
+    const capturedAt = Date.now();
+    const vehicleCount = Math.max(0, Math.round(result.vehicleCount));
+    const elapsedSec = sourceElement instanceof HTMLVideoElement && Number.isFinite(sourceElement.currentTime)
+      ? Math.max(0, sourceElement.currentTime)
+      : 0;
+    const snapshot = {
+      id: `${request.cctvId}:${capturedAt}:${source}:${sequence}`,
+      imageUrl: snapshotCanvas.toDataURL("image/webp", 0.74),
+      capturedAt,
+      objectCount: vehicleCount,
+      elapsedSec,
+      detections: result.detections.map((detection) => ({
+        label: detection.label,
+        confidence: detection.confidence,
+      })),
+      accent,
+    };
+    try {
+      const storageKey = `its-cctv-snapshots:${request.cctvId}`;
+      const previous = JSON.parse(localStorage.getItem(storageKey) || "[]");
+      localStorage.setItem(storageKey, JSON.stringify([
+        snapshot,
+        ...(Array.isArray(previous) ? previous : []).filter((item) => item?.id !== snapshot.id),
+      ].slice(0, 3)));
+    } catch {
+      // The snapshot event still updates the current session.
+    }
+    window.dispatchEvent(new CustomEvent("its:cctv-snapshot", {
+      detail: { cctvId: request.cctvId, snapshot },
+    }));
+    return vehicleCount;
+  }
+
+  function createBackgroundCctvVisualSource(
+    surface: HTMLElement,
+    streamUrl: string,
+    mediaFormat = "",
+  ): BackgroundCctvVisualSource {
+    const capability = classifyCctvMedia({ url: streamUrl, mediaFormat });
+    if (capability.format === "mjpeg") {
+      const image = new Image();
+      image.alt = "";
+      image.crossOrigin = "anonymous";
+      image.decoding = "async";
+      image.src = publicMediaProxyUrl(streamUrl);
+      surface.appendChild(image);
+      return image;
+    }
+
+    const video = document.createElement("video");
+    video.crossOrigin = "anonymous";
+    video.autoplay = true;
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = "auto";
+    if (capability.format === "webrtc-whep") {
+      video.dataset.whepVideo = "";
+      video.dataset.src = streamUrl;
+    } else if (capability.format === "hls") {
+      video.dataset.hlsVideo = "";
+      video.dataset.src = hlsAiProxyUrl(streamUrl);
+    } else if (capability.format === "flv") {
+      video.dataset.flvVideo = "";
+      video.dataset.src = /^wss:\/\//iu.test(streamUrl) ? streamUrl : publicMediaProxyUrl(streamUrl);
+    } else {
+      video.src = publicMediaProxyUrl(streamUrl);
+    }
+    surface.appendChild(video);
+    return video;
+  }
+
+  function cleanupBackgroundCctvVisualSource(
+    surface: HTMLElement,
+    source: BackgroundCctvVisualSource,
+  ): void {
+    stopHlsVideos(surface);
+    if (source instanceof HTMLVideoElement) {
+      source.pause();
+      source.removeAttribute("src");
+      source.removeAttribute("data-src");
+      // Reset direct-video network/decoder state. HLS and FLV cleanup above
+      // already destroyed their respective player instances.
+      try { source.load(); } catch { /* Media element may already be detached. */ }
+    } else {
+      // Removing src aborts an open multipart MJPEG response as the analyzer
+      // leaves the queue, preventing invisible background network activity.
+      source.removeAttribute("src");
+    }
+    surface.replaceChildren();
+    surface.remove();
+  }
+
+  async function analyzeBackgroundCctv(request: BackgroundCctvAnalysisRequest): Promise<void> {
+    const surface = document.createElement("div");
+    surface.className = "its-cctv-background-analyzer";
+    surface.setAttribute("aria-hidden", "true");
+    emitBackgroundCctvStatus(request.cctvId, "loading", "menyiapkan frame AI otomatis");
+    const mediaCapability = classifyCctvMedia({
+      url: request.streamUrl,
+      mediaFormat: request.mediaFormat,
+    });
+    const visualSource = createBackgroundCctvVisualSource(surface, request.streamUrl, request.mediaFormat);
+    let whepSession: WhepPlaybackSession | null = null;
+    const whepController = visualSource instanceof HTMLVideoElement
+      && mediaCapability.format === "webrtc-whep"
+      ? new AbortController()
+      : null;
+    document.body.appendChild(surface);
+    let mediaStoppedForInteractivePlayback = false;
+    const stopHiddenMedia = () => {
+      if (mediaStoppedForInteractivePlayback) return;
+      mediaStoppedForInteractivePlayback = true;
+      whepController?.abort();
+      cleanupBackgroundCctvVisualSource(surface, visualSource);
+    };
+    stopActiveBackgroundCctvMedia = stopHiddenMedia;
+    if (backgroundCctvInteractivePlayback) stopHiddenMedia();
+    try {
+      if (mediaStoppedForInteractivePlayback) throw new Error("interactive-camera-priority");
+      if (visualSource instanceof HTMLVideoElement && whepController) {
+        whepSession = await startWhepPlayback(visualSource, request.streamUrl, {
+          signal: whepController.signal,
+          onState: (stateName, detail) => emitBackgroundCctvStatus(
+            request.cctvId,
+            stateName === "connected" ? "loading" : stateName,
+            detail || (stateName === "negotiating" ? "negosiasi WHEP untuk frame AI" : "menyiapkan MediaStream WHEP"),
+          ),
+        });
+      } else if (visualSource instanceof HTMLVideoElement
+        && (mediaCapability.format === "hls" || mediaCapability.format === "flv")) {
+        setupHlsVideos(surface);
+      } else if (visualSource instanceof HTMLVideoElement) {
+        void visualSource.play().catch(() => undefined);
+      }
+      await waitForBackgroundCctvFrame(visualSource);
+      if (mediaStoppedForInteractivePlayback) throw new Error("interactive-camera-priority");
+      emitBackgroundCctvStatus(request.cctvId, "analyzing", "AI menganalisis frame live");
+      // Start the private local HF detector immediately.  A bounded, non-
+      // persistent Workers AI pass races alongside it to avoid a blank card on
+      // the first model download; local RF-DETR remains authoritative.
+      const runLocalPass = (): Promise<BrowserRfDetrResult | Error> => runBrowserRfDetr(visualSource, {
+        worker: true,
+        includeThumbnails: false,
+        captureMaxEdge: 640,
+        detailCrops: false,
+      }).catch((error) => error instanceof Error ? error : new Error("Model AI lokal belum siap"));
+      const initialTasks: Array<Promise<{
+        kind: "edge" | "local";
+        result: BrowserRfDetrResult | Error | null;
+      }>> = [
+        runLocalPass().then((result) => ({ kind: "local", result })),
+        runCloudflareCctvVision(visualSource, { maxEdge: 480, timeoutMs: 5_500 })
+          .then((result) => ({ kind: "edge", result })),
+      ];
+      let publishedCount = 0;
+      let localPasses = 1;
+      let latestVehicleCount = 0;
+      let latestError: Error | null = null;
+      const publishResult = (kind: "edge" | "local", result: BrowserRfDetrResult | Error | null): void => {
+        if (publishedCount >= BACKGROUND_CCTV_SNAPSHOT_TARGET || !result) return;
+        if (result instanceof Error) {
+          latestError = result;
+          return;
+        }
+        if (result.status !== "online") {
+          latestError = new Error(result.note || "Model AI belum siap");
+          return;
+        }
+        try {
+          latestVehicleCount = publishBackgroundCctvSnapshot(
+            request,
+            visualSource,
+            result,
+            kind,
+            publishedCount + 1,
+          );
+          publishedCount += 1;
+          emitBackgroundCctvStatus(
+            request.cctvId,
+            "analyzing",
+            `${publishedCount}/${BACKGROUND_CCTV_SNAPSHOT_TARGET} frame AI terbaru siap`,
+          );
+        } catch (error) {
+          latestError = error instanceof Error ? error : new Error("Snapshot AI tidak dapat dibuat");
+        }
+      };
+
+      // Publish whichever bootstrap completes first so a warm local model is
+      // never delayed by the edge timeout, while the slower result can still
+      // become a second truthful frame.
+      const pendingInitialTasks = [...initialTasks];
+      while (pendingInitialTasks.length) {
+        const settled = await Promise.race(pendingInitialTasks.map((task, index) =>
+          task.then((value) => ({ index, value }))));
+        pendingInitialTasks.splice(settled.index, 1);
+        publishResult(settled.value.kind, settled.value.result);
+      }
+
+      // Fill the three recent segment slots with newly captured frames. The
+      // pass count is fixed and small: no persistent loop, no invented counts.
+      while (publishedCount < BACKGROUND_CCTV_SNAPSHOT_TARGET
+        && localPasses < MAX_BACKGROUND_CCTV_LOCAL_PASSES) {
+        await new Promise((resolve) => window.setTimeout(resolve, BACKGROUND_CCTV_FRAME_INTERVAL_MS));
+        try {
+          await waitForBackgroundCctvFrame(visualSource, 4_000);
+        } catch (error) {
+          latestError = error instanceof Error ? error : new Error("Frame lanjutan CCTV tidak tersedia");
+          break;
+        }
+        localPasses += 1;
+        emitBackgroundCctvStatus(
+          request.cctvId,
+          "analyzing",
+          `menganalisis frame ${localPasses}/${MAX_BACKGROUND_CCTV_LOCAL_PASSES}`,
+        );
+        publishResult("local", await runLocalPass());
+      }
+
+      if (!publishedCount) throw latestError || new Error("Model AI belum menghasilkan deteksi");
+      emitBackgroundCctvStatus(
+        request.cctvId,
+        "complete",
+        `${latestVehicleCount} kendaraan terdeteksi - ${publishedCount}/${BACKGROUND_CCTV_SNAPSHOT_TARGET} frame terbaru`,
+      );
+    } finally {
+      if (stopActiveBackgroundCctvMedia === stopHiddenMedia) stopActiveBackgroundCctvMedia = null;
+      whepController?.abort();
+      if (whepSession) await whepSession.close();
+      if (!mediaStoppedForInteractivePlayback) cleanupBackgroundCctvVisualSource(surface, visualSource);
+    }
+  }
+
+  async function drainBackgroundCctvAnalysisQueue(): Promise<void> {
+    if (backgroundCctvAnalysisRunning || !backgroundCctvCanStart()) return;
+    backgroundCctvAnalysisRunning = true;
+    try {
+      while (backgroundCctvAnalysisQueue.length
+        && backgroundCctvCanStart()) {
+        const request = backgroundCctvAnalysisQueue.shift()!;
+        try {
+          await analyzeBackgroundCctv(request);
+          releaseBackgroundCctvAnalysis(request.cctvId);
+        } catch (error) {
+          const attempts = (backgroundCctvAnalysisAttempts.get(request.cctvId) || 0) + 1;
+          const reason = error instanceof Error ? error.message : "frame AI belum tersedia";
+          if (backgroundCctvInteractivePlayback || reason === "interactive-camera-priority") {
+            deferBackgroundCctvAnalysis(
+              request,
+              "pemutaran CCTV dibuka; pemindaian latar belakang dijeda",
+            );
+            continue;
+          }
+          backgroundCctvAnalysisAttempts.set(request.cctvId, attempts);
+          if (attempts < MAX_BACKGROUND_CCTV_RETRIES) {
+            const delay = Math.min(24_000, 1_800 * 2 ** (attempts - 1));
+            emitBackgroundCctvStatus(request.cctvId, "retry", `${reason}; mencoba lagi (${attempts}/${MAX_BACKGROUND_CCTV_RETRIES - 1})`);
+            // Allow the scheduled retry to re-enter the queue.  Keeping this
+            // marker set meant enqueueBackgroundCctvAnalysis() treated the
+            // retry as a duplicate forever, leaving the card at "COBA ULANG"
+            // even after a temporary HLS/network failure had recovered.
+            backgroundCctvAnalysisQueued.delete(request.cctvId);
+            const timer = window.setTimeout(() => {
+              backgroundCctvAnalysisRetryTimers.delete(request.cctvId);
+              // A newer visible-card request may already have queued this
+              // camera.  In that case it is the fresher work, so do not add a
+              // duplicate retry behind it.
+              if (backgroundCctvAnalysisQueued.has(request.cctvId)) return;
+              enqueueBackgroundCctvAnalysis(request);
+            }, delay);
+            backgroundCctvAnalysisRetryTimers.set(request.cctvId, timer);
+          } else {
+            emitBackgroundCctvStatus(request.cctvId, "unavailable", `${reason}; pemindaian dihentikan sementara`);
+            releaseBackgroundCctvAnalysis(request.cctvId);
+          }
+        } finally {
+          pumpDeferredBackgroundCctvAnalysis();
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 700));
+      }
+    } finally {
+      backgroundCctvAnalysisRunning = false;
+      pumpDeferredBackgroundCctvAnalysis();
+    }
+  }
+
+  window.addEventListener("its:request-cctv-analysis", (event) => {
+    const detail = (event as CustomEvent<Partial<BackgroundCctvAnalysisRequest>>).detail;
+    const cctvId = String(detail?.cctvId || "").trim();
+    const streamUrl = usablePublicMediaUrl(String(detail?.streamUrl || ""));
+    if (!cctvId) return;
+    if (!streamUrl) {
+      emitBackgroundCctvStatus(cctvId, "unsupported", "URL video live tidak tersedia");
+      return;
+    }
+    const mediaFormat = String(detail?.mediaFormat || "").trim();
+    if (!isBackgroundCctvVisualFormat(streamUrl, mediaFormat)) {
+      emitBackgroundCctvStatus(cctvId, "unsupported", backgroundCctvUnsupportedMessage(streamUrl, mediaFormat));
+      return;
+    }
+    if (backgroundCctvAnalysisQueued.has(cctvId)) {
+      const current = backgroundCctvAnalysisStates.get(cctvId);
+      if (current) emitBackgroundCctvStatus(cctvId, current.state, current.message);
+      return;
+    }
+    backgroundCctvAnalysisQueued.add(cctvId);
+    const request: BackgroundCctvAnalysisRequest = {
+      cctvId,
+      streamUrl,
+      mediaFormat,
+      name: String(detail?.name || "Kamera CCTV"),
+      priority: Number(detail?.priority),
+      source: String(detail?.source || "feed"),
+      requestedAt: Date.now(),
+    };
+    enqueueBackgroundCctvAnalysis(request);
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      pumpDeferredBackgroundCctvAnalysis();
+      void drainBackgroundCctvAnalysisQueue();
+    }
+  });
+  window.addEventListener("online", () => {
+    pumpDeferredBackgroundCctvAnalysis();
+    void drainBackgroundCctvAnalysisQueue();
+  });
+  const backgroundCctvConnection = (navigator as Navigator & {
+    connection?: EventTarget & { addEventListener?: (type: string, listener: EventListener) => void };
+  }).connection;
+  backgroundCctvConnection?.addEventListener?.("change", () => {
+    pumpDeferredBackgroundCctvAnalysis();
+    void drainBackgroundCctvAnalysisQueue();
+  });
+  // Begin the browser model download after the interactive map has settled,
+  // rather than making the first CCTV modal pay the entire cold-start cost.
+  // Save-Data, slow networks, and hidden documents remain explicitly exempt.
+  const warmCctvModelAfterAppIdle = () => {
+    window.setTimeout(() => {
+      if (backgroundCctvCanStart()) warmBackgroundCctvModel();
+    }, 2_600);
+  };
+  if (document.readyState === "complete") warmCctvModelAfterAppIdle();
+  else window.addEventListener("load", warmCctvModelAfterAppIdle, { once: true });
+
   // Home follows the actively selected controller and is an explicit
   // north-up navigation action, independent from an earlier GPS request.
   function goHome(): void {
@@ -9618,7 +12545,16 @@ if (staticRoute === "cctv") {
 
   function applyLocatedUser(lat: number, lng: number, accuracy?: number, center = true, source = "gps"): void {
     const latlng: [number, number] = [lat, lng];
-    state.lastUserLocation = { lat, lng, accuracy, source, updatedAt: Date.now() };
+    const updatedAt = Date.now();
+    state.lastUserLocation = { lat, lng, accuracy, source, updatedAt };
+    try {
+      localStorage.setItem("its-last-user-location:v1", JSON.stringify(state.lastUserLocation));
+    } catch {
+      // Storage is an acceleration hint; live GPS remains authoritative.
+    }
+    window.dispatchEvent(new CustomEvent("its:user-location", {
+      detail: { lat, lng, accuracy, source, updatedAt },
+    }));
     if (center) map.setView(latlng, Math.max(map.getZoom(), 16), { animate: true });
     showVehicleMarker(latlng);
     state.vehicleMarker?.bindPopup(`Lokasi Anda${accuracy ? ` ±${Math.round(accuracy)}m` : ""}`);
@@ -11702,11 +14638,10 @@ if (staticRoute === "cctv") {
       </svg>
     </button>
     <button type="button" class="toolbar-btn" data-action="home" title="Kembali ke posisi device">
-      <svg viewBox="0 0 20 20" fill="none" width="16" height="16">
-        <path d="M3 9.5L10 3l7 6.5V17a1 1 0 01-1 1H5a1 1 0 01-1-1V9.5z"
-              stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
-        <path d="M7.5 18v-5h5v5"
-              stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+      <svg viewBox="0 0 24 24" fill="none" width="20" height="20" aria-hidden="true">
+        <path d="M3.5 10.8 12 3.4l8.5 7.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M5.6 9.8v9.1c0 .9.7 1.6 1.6 1.6h9.6c.9 0 1.6-.7 1.6-1.6V9.8L12 4.3 5.6 9.8Z" fill="currentColor" fill-opacity=".1" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M9.4 20.5v-5.3c0-.7.5-1.2 1.2-1.2h2.8c.7 0 1.2.5 1.2 1.2v5.3" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
       </svg>
     </button>
     <div class="toolbar-divider"></div>
@@ -11732,10 +14667,9 @@ if (staticRoute === "cctv") {
     </button>
     <button type="button" class="toolbar-btn" data-action="home" title="Kembali ke posisi device">
       <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M4 11.5L12 4l8 7.5V19a1.2 1.2 0 01-1.2 1.2H5.2A1.2 1.2 0 014 19V11.5z"
-              stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
-        <path d="M9.5 20.2v-5.4a1 1 0 011-1h3a1 1 0 011 1v5.4"
-              stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+        <path d="M3.5 10.8 12 3.4l8.5 7.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M5.6 9.8v9.1c0 .9.7 1.6 1.6 1.6h9.6c.9 0 1.6-.7 1.6-1.6V9.8L12 4.3 5.6 9.8Z" fill="currentColor" fill-opacity=".1" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M9.4 20.5v-5.3c0-.7.5-1.2 1.2-1.2h2.8c.7 0 1.2.5 1.2 1.2v5.3" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
       </svg>
     </button>
     <div class="toolbar-divider"></div>
@@ -11982,6 +14916,16 @@ if (staticRoute === "cctv") {
       ? devices.find((d) => d.id === state.device!.id) ?? devices[0]
       : devices[0];
     state.device = selected;
+    if (pendingDeviceDeepLink) {
+      const linkedDevice = devices.find((device) => device.id === pendingDeviceDeepLink);
+      if (linkedDevice) {
+        pendingDeviceDeepLink = "";
+        state.device = linkedDevice;
+        state.hasCentered = true;
+        map.setView([linkedDevice.position.lat, linkedDevice.position.lng], Math.max(17, map.getZoom()), { animate: false });
+        window.requestAnimationFrame(() => openModal(linkedDevice));
+      }
+    }
     showUpdateNoticeForDevice(selected);
     renderCameraTile();
     syncOpenCameraFrameUrls(selected);
@@ -12280,7 +15224,7 @@ if (staticRoute === "cctv") {
 
   // ─── Types ───────────────────────────────────────────────────────────────────
 
-  type MobileTab = "peta" | "its" | "profil";
+  type MobileTab = "peta" | "cctv" | "its" | "profil";
   type LayerMode = "street" | "satellite" | "3d";
 
   const mobileState = {
@@ -12590,6 +15534,15 @@ if (staticRoute === "cctv") {
     </span>
     <span class="m-nav-label">ITS</span>
   </button>
+  <button class="m-nav-tab" data-tab="cctv">
+    <span class="m-nav-icon">
+      <svg viewBox="0 0 24 24" fill="none" width="22" height="22" aria-hidden="true">
+        <rect x="3" y="6" width="14" height="11" rx="3" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M17 10l4-2v7l-4-2M7 10h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </span>
+    <span class="m-nav-label">CCTV</span>
+  </button>
   <button class="m-nav-tab" data-tab="profil">
     <span class="m-nav-icon">
       <svg viewBox="0 0 24 24" fill="none" width="22" height="22">
@@ -12619,6 +15572,15 @@ if (staticRoute === "cctv") {
     if (tab === "peta") {
       closeITSSheet();
       openAiHistorySheet("dock");
+    } else if (tab === "cctv") {
+      closeITSSheet();
+      document.getElementById("m-profil-sheet")?.remove();
+      aiHistoryActiveTab = "cctv";
+      openAiHistorySheet("full");
+      document.querySelectorAll(".m-nav-tab").forEach((button) => button.classList.remove("active"));
+      document.querySelector<HTMLButtonElement>('.m-nav-tab[data-tab="cctv"]')?.classList.add("active");
+      mobileState.activeTab = "cctv";
+      renderAiHistorySheetContent();
     } else if (tab === "its") {
       document.getElementById("m-profil-sheet")?.remove();
       const hasHistorySheet = Boolean(document.getElementById("m-ai-history-sheet"));
@@ -12632,7 +15594,7 @@ if (staticRoute === "cctv") {
   }
 
   type AiHistorySnap = "closed" | "dock" | "peek" | "full";
-  let aiHistoryActiveTab: "history" | "about" = "history";
+  let aiHistoryActiveTab: "history" | "cctv" | "about" = "history";
   let snapshotHistoryWarmupTimer = 0;
 
   const AI_HISTORY_SNAP = {
@@ -12809,6 +15771,7 @@ if (staticRoute === "cctv") {
   </div>
   <div class="modal-tabs m-ai-history-tabs" role="tablist" aria-label="Panel riwayat AI">
     <button type="button" id="m-ai-history-tab-history" class="modal-tab-btn active" role="tab" aria-selected="true" aria-controls="m-ai-history-panel" data-ai-history-tab="history">${cameraImageIconSvg()} Riwayat</button>
+    <button type="button" id="m-ai-history-tab-cctv" class="modal-tab-btn" role="tab" aria-selected="false" aria-controls="m-ai-history-panel" data-ai-history-tab="cctv">${cameraAiIconSvg()} CCTV</button>
     <button type="button" id="m-ai-history-tab-about" class="modal-tab-btn" role="tab" aria-selected="false" aria-controls="m-ai-history-panel" data-ai-history-tab="about"><span class="tab-icon" aria-hidden="true">i</span> Tentang</button>
   </div>
   <div id="m-ai-history-panel" class="m-ai-history-content" role="tabpanel" aria-labelledby="m-ai-history-tab-history" data-ai-history-content></div>`;
@@ -12928,7 +15891,13 @@ if (staticRoute === "cctv") {
       const tab = target?.closest<HTMLButtonElement>("[data-ai-history-tab]");
       if (tab) {
         event.stopPropagation();
-        aiHistoryActiveTab = tab.dataset.aiHistoryTab === "about" ? "about" : "history";
+        aiHistoryActiveTab = tab.dataset.aiHistoryTab === "about"
+          ? "about"
+          : tab.dataset.aiHistoryTab === "cctv" ? "cctv" : "history";
+        if (aiHistoryActiveTab === "cctv" && aiHistoryIsMobileDocked()) {
+          snapAiHistorySheet("full");
+          return;
+        }
         renderAiHistorySheetContent();
       }
     });
@@ -12959,9 +15928,24 @@ if (staticRoute === "cctv") {
       button.setAttribute("aria-selected", String(active));
       button.tabIndex = active ? 0 : -1;
     });
-    host.setAttribute("aria-labelledby", aiHistoryActiveTab === "about" ? "m-ai-history-tab-about" : "m-ai-history-tab-history");
+    host.setAttribute(
+      "aria-labelledby",
+      aiHistoryActiveTab === "about"
+        ? "m-ai-history-tab-about"
+        : aiHistoryActiveTab === "cctv" ? "m-ai-history-tab-cctv" : "m-ai-history-tab-history",
+    );
     if (aiHistoryActiveTab === "about") {
-      host.innerHTML = renderAiAboutProfiles(PROFILE_MEMBER_COUNT);
+      host.innerHTML = renderAiAboutProfiles();
+      return;
+    }
+    if (aiHistoryActiveTab === "cctv") {
+      // Snapshot/history refreshes continue while the live camera panel is
+      // stacked beside this feed. Preserve the custom element so its
+      // incremental pages, active-camera highlight, and three AI segments are
+      // not discarded by an unrelated history update.
+      if (!host.querySelector("its-cctv-traffic-feed")) {
+        host.innerHTML = "<its-cctv-traffic-feed></its-cctv-traffic-feed>";
+      }
       return;
     }
 
@@ -12987,57 +15971,45 @@ if (staticRoute === "cctv") {
     void analyzeVisibleHistorySnapshots(host);
   }
 
-  function renderAiAboutProfiles(memberCount: number): string {
-    const members = Array.from({ length: Math.max(1, memberCount) }, (_, index) => {
-      return PROFILE_MEMBERS[index] || {
-        name: `Nama anggota ${index + 1}`,
-        prodi: "Belum diisi",
-        posisi: "Belum diisi",
-        tugas: "Belum diisi",
-        photoUrl: profileAssetUrl(index),
-      };
-    });
-    return `
-  <section class="m-ai-about-section" data-jumlah-profil="${members.length}">
-    ${members.map((member, index) => `
-      <table class="m-ai-about-table">
-        <tbody>
-          <tr>
-            <td class="m-profile-photo-cell" rowspan="4">
-              <div class="m-profile-photo">
-                <img src="${escapeHtml(member.photoUrl)}" alt="Foto ${escapeHtml(member.name)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.removeAttribute('hidden')">
-                <span hidden>${escapeHtml(profileInitials(member.name || `P${index + 1}`))}</span>
-              </div>
-            </td>
-            <th scope="row">Nama</th>
-            <td>${escapeHtml(member.name)}</td>
-          </tr>
-          <tr>
-            <th scope="row">Prodi</th>
-            <td>${escapeHtml(member.prodi)}</td>
-          </tr>
-          <tr>
-            <th scope="row">Posisi</th>
-            <td>${escapeHtml(member.posisi)}</td>
-          </tr>
-          <tr>
-            <th scope="row">Tugas</th>
-            <td>${escapeHtml(member.tugas)}</td>
-          </tr>
-        </tbody>
-      </table>
-    `).join("")}
-  </section>
-`;
+  function renderTeamProfileCards(): string {
+    return PROFILE_MEMBERS.map((member) => `
+      <article class="m-team-profile-card">
+        <div class="m-team-profile-photo">
+          <img src="${escapeHtml(member.photoUrl)}" alt="Foto ${escapeHtml(member.name)}" loading="lazy" decoding="async">
+        </div>
+        <div class="m-team-profile-content">
+          <p class="m-team-profile-role">${escapeHtml(member.posisi)}</p>
+          <h3>${escapeHtml(member.name)}</h3>
+          <dl class="m-team-profile-meta">
+            <div>
+              <dt>Program studi</dt>
+              <dd>${escapeHtml(member.prodi)}</dd>
+            </div>
+          </dl>
+          ${member.tugas.length ? `
+            <div class="m-team-profile-work">
+              <span>Tanggung jawab</span>
+              <ul>${member.tugas.map((task) => `<li>${escapeHtml(task)}</li>`).join("")}</ul>
+            </div>
+          ` : ""}
+        </div>
+      </article>
+    `).join("");
   }
 
-  function profileInitials(name: string): string {
-    return name
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0]?.toUpperCase() || "")
-      .join("") || "ITS";
+  function renderAiAboutProfiles(): string {
+    return `
+  <section class="m-ai-about-section" data-jumlah-profil="${PROFILE_MEMBERS.length}" aria-labelledby="m-team-profile-title">
+    <header class="m-team-profile-heading">
+      <span>Tim ITS Maps</span>
+      <h2 id="m-team-profile-title">Profil tim</h2>
+      <p>Dua anggota yang menangani perangkat lunak dan perangkat keras ITS Maps.</p>
+    </header>
+    <div class="m-team-profile-grid">
+      ${renderTeamProfileCards()}
+    </div>
+  </section>
+`;
   }
 
   function renderAiHistoryItem(item: SnapshotHistoryItem): string {
@@ -13725,10 +16697,10 @@ if (staticRoute === "cctv") {
         <summary>Moda transportasi <span>${transitLegend.length} jalur</span></summary>
         <div class="m-dynamics-grid">
         ${([
-          ["busway", "Busway"], ["bus", "Bus / angkot"], ["mrt", "MRT"],
-          ["lrt", "LRT"], ["tram", "Tram"], ["monorail", "Monorel"],
-          ["commuter", "KRL komuter"], ["high_speed", "Kereta cepat"], ["train", "Kereta"],
-        ] as Array<[TransitGuideMode, string]>).map(([value, label]) => `
+        ["busway", "Busway"], ["bus", "Bus / angkot"], ["mrt", "MRT"],
+        ["lrt", "LRT"], ["tram", "Tram"], ["monorail", "Monorel"],
+        ["commuter", "KRL komuter"], ["high_speed", "Kereta cepat"], ["train", "Kereta"],
+      ] as Array<[TransitGuideMode, string]>).map(([value, label]) => `
           <label><input type="checkbox" data-transit-mode="${value}" ${state.transitModeFilter.has(value) ? "checked" : ""}><span>${label}</span></label>
         `).join("")}
         </div>
@@ -13738,8 +16710,8 @@ if (staticRoute === "cctv") {
         <summary>Jenis jalan <span>${roadLegend.length} jenis/nama</span></summary>
         <div class="m-dynamics-grid">
         ${([
-          ["major", "Jalan utama/tol"], ["street", "Jalan kota"], ["foot", "Trotoar & sepeda"], ["service", "Jalan layanan"],
-        ] as Array<["major" | "street" | "foot" | "service", string]>).map(([value, label]) => `
+        ["major", "Jalan utama/tol"], ["street", "Jalan kota"], ["foot", "Trotoar & sepeda"], ["service", "Jalan layanan"],
+      ] as Array<["major" | "street" | "foot" | "service", string]>).map(([value, label]) => `
           <label><input type="checkbox" data-road-class="${value}" ${state.roadClassFilter.has(value) ? "checked" : ""}><span>${label}</span></label>
         `).join("")}
         </div>
@@ -14326,15 +17298,10 @@ if (staticRoute === "cctv") {
     ctx.fillStyle = "#0f172a";
     ctx.fillRect(0, 0, W, H);
 
-    const points: { x: number; y: number }[] = [];
-    for (let i = 0; i < 12; i++) {
-      const seed = hashString(`chart:${i}:${Math.floor(Date.now() / 8000)}`);
-      points.push({ x: 5 + (seed % 95), y: 3 + ((seed * 7) % 40) });
-    }
-    state.devices.forEach(d => {
+    const points: { x: number; y: number }[] = state.devices.map(d => {
       const t = trafficStateForDevice(d);
-      points.push({ x: t.vehicleCount, y: t.duration });
-    });
+      return { x: t.vehicleCount, y: t.duration };
+    }).sort((left, right) => left.x - right.x || left.y - right.y);
 
     const padL = 42, padB = 30, padT = 14, padR = 16;
     const chartW = W - padL - padR;
@@ -14418,53 +17385,71 @@ if (staticRoute === "cctv") {
 
     const sheet = document.createElement("div");
     sheet.id = "m-profil-sheet";
+    const returnFocusTarget = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
 
     const online = state.devices.filter((d) => effectiveDeviceStatus(d) === "online").length;
     const offline = state.devices.filter((d) => effectiveDeviceStatus(d) === "offline").length;
 
     sheet.innerHTML = `
-  <div class="m-layer-backdrop"></div>
-  <div class="m-profil-inner">
-    <div class="m-sheet-handle-bar" style="margin:0 auto 16px"></div>
-    <div class="m-profil-avatar">
-      <svg viewBox="0 0 64 64" fill="none" width="56" height="56">
-        <circle cx="32" cy="24" r="14" fill="#3b82f6" opacity="0.15"/>
-        <circle cx="32" cy="24" r="10" stroke="#3b82f6" stroke-width="2"/>
-        <path d="M8 56c0-11 10.745-20 24-20s24 8.955 24 20"
-              stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/>
-      </svg>
+  <div class="m-layer-backdrop" aria-hidden="true"></div>
+  <section class="m-profil-inner" role="dialog" aria-modal="true" aria-labelledby="m-profil-title" tabindex="-1">
+    <div class="m-sheet-handle-bar" data-swipe-handle aria-hidden="true"></div>
+    <header class="m-profil-header">
+      <div>
+        <span>ITS Maps</span>
+        <h2 id="m-profil-title">Profil tim</h2>
+      </div>
+      <button class="m-profil-close" type="button" aria-label="Tutup profil tim">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="m7 7 10 10M17 7 7 17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </header>
+    <div class="m-profil-scroll">
+      <div class="m-team-profile-grid m-team-profile-grid--sheet">
+        ${renderTeamProfileCards()}
+      </div>
     </div>
-    <div class="m-profil-name">Operator ITS Maps</div>
-    <div class="m-profil-role">Sistem Manajemen Lalu Lintas</div>
-    <div class="m-profil-stats">
+    <div class="m-profil-stats" aria-label="Status perangkat ITS Maps">
       <div class="m-stat">
         <span class="m-stat-val">${state.devices.length}</span>
         <span class="m-stat-lbl">Perangkat</span>
       </div>
       <div class="m-stat">
-        <span class="m-stat-val" style="color:#22c55e">${online}</span>
+        <span class="m-stat-val m-stat-val--online">${online}</span>
         <span class="m-stat-lbl">Online</span>
       </div>
       <div class="m-stat">
-        <span class="m-stat-val" style="color:#ef4444">${offline}</span>
+        <span class="m-stat-val m-stat-val--offline">${offline}</span>
         <span class="m-stat-lbl">Offline</span>
       </div>
     </div>
-  </div>
+  </section>
 `;
 
     const goBackToPeta = () => {
       sheet.remove();
       document.querySelectorAll(".m-nav-tab").forEach(b => b.classList.remove("active"));
-      document.querySelector<HTMLButtonElement>('.m-nav-tab[data-tab="peta"]')?.classList.add("active");
+      const mapTab = document.querySelector<HTMLButtonElement>('.m-nav-tab[data-tab="peta"]');
+      mapTab?.classList.add("active");
       mobileState.activeTab = "peta";
+      (mapTab || returnFocusTarget)?.focus({ preventScroll: true });
     };
 
     sheet.querySelector(".m-layer-backdrop")!.addEventListener("click", goBackToPeta);
+    sheet.querySelector<HTMLButtonElement>(".m-profil-close")?.addEventListener("click", goBackToPeta);
+    sheet.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") goBackToPeta();
+    });
     setupSheetSwipe(sheet.querySelector<HTMLElement>(".m-profil-inner")!, goBackToPeta);
 
     document.body.appendChild(sheet);
-    requestAnimationFrame(() => sheet.classList.add("open"));
+    requestAnimationFrame(() => {
+      sheet.classList.add("open");
+      sheet.querySelector<HTMLButtonElement>(".m-profil-close")?.focus({ preventScroll: true });
+    });
   }
 
   // ─── 6. Repositioning Leaflet Controls untuk Mobile ──────────────────────────
@@ -14528,6 +17513,10 @@ if (staticRoute === "cctv") {
     map.invalidateSize();
   }
   initMobileUI();
+  if (cctvRoute) {
+    document.title = "CCTV Indonesia | ITS Maps";
+    switchMobileTab("cctv");
+  }
   void refreshSnapshot();
   // CARTO paints the normal 2D/street surface immediately. MapLibre is reserved
   // for an explicit 3D request while Leaflet keeps interaction and overlays.
@@ -15440,6 +18429,12 @@ function appFeatureGalleryHtml(features: AppFeaturePreview[]): string {
 
 function itsCreateSplash(): void {
   if (document.getElementById("its-splash")) return;
+  // The module can finish parsing after Leaflet and the mobile navigation are
+  // already interactive.  Showing a full-screen splash at that point puts a
+  // high-z-index element over the controls and swallows the first tap.  A
+  // delayed splash is worse than no splash, so only create it during the real
+  // bootstrap window.
+  if (document.getElementById("map")?.classList.contains("leaflet-container")) return;
   const startedAt = performance.now();
   const splash = document.createElement("div");
   splash.id = "its-splash";
@@ -17844,6 +20839,111 @@ async function itsWeatherAssistantResponse(question: string, signal?: AbortSigna
   };
 }
 
+type ItsPublicCctvAiSnapshot = {
+  id?: string;
+  imageUrl?: string;
+  capturedAt?: number;
+  objectCount?: number;
+  detections?: Array<{ label?: string; confidence?: number }>;
+  accent?: string;
+};
+
+function itsPublicCctvQuestion(question: string): boolean {
+  return /\b(cctv|kamera (?:jalan|lalu lintas|publik)|pantau(?:an)? jalan|kemacetan (?:di|jalan|sekitar)|lalu lintas (?:di|jalan|sekitar))\b/iu.test(question);
+}
+
+function itsPublicCctvSearchTerms(question: string): string[] {
+  const ignored = new Set([
+    "cctv", "kamera", "jalan", "lalu", "lintas", "publik", "pantauan", "pantau",
+    "kemacetan", "macet", "kondisi", "status", "berapa", "kendaraan", "tolong",
+    "cari", "carikan", "tampilkan", "lihat", "buka", "di", "ke", "dari", "yang",
+    "dan", "atau", "sekitar", "sekarang", "terkini", "terbaru", "apakah", "ada",
+  ]);
+  return question.toLocaleLowerCase("id-ID")
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((term) => term.length > 1 && !ignored.has(term));
+}
+
+function itsReadPublicCctvSnapshots(id: string): ItsPublicCctvAiSnapshot[] {
+  try {
+    const value = JSON.parse(localStorage.getItem(`its-cctv-snapshots:${id}`) || "[]");
+    return Array.isArray(value) ? value.slice(0, 3) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function itsPublicCctvAssistantResponse(question: string, signal?: AbortSignal): Promise<ItsAssistantResponse> {
+  const response = await fetch("/data/public-cctv.geojson", { cache: "no-cache", signal });
+  if (!response.ok) throw new Error(`Katalog CCTV publik gagal dimuat (HTTP ${response.status}).`);
+  const collection = await response.json() as MapDetailFeatureCollection;
+  const terms = itsPublicCctvSearchTerms(question);
+  const userLocation = itsRuntimeBridge().getUserLocation?.();
+  const matches = collection.features.flatMap((feature) => {
+    if (feature.geometry.type !== "Point") return [];
+    const properties = feature.properties || {};
+    const searchable = [
+      properties.name,
+      properties.operator,
+      properties.source,
+      properties.region,
+      properties.catalogSourceKey,
+      objectRecord(properties.roadCorridor).roadName,
+    ].map((value) => String(value || "")).join(" ").toLocaleLowerCase("id-ID");
+    const score = terms.reduce((total, term) => total + (searchable.includes(term) ? 1 : 0), 0);
+    if (terms.length && score === 0) return [];
+    const [lng, lat] = feature.geometry.coordinates as number[];
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return [];
+    const distanceMeters = userLocation ? itsDistanceMeters(userLocation, { lat, lng }) : Number.MAX_SAFE_INTEGER;
+    return [{ feature, properties, id: String(feature.id || properties.sourceId || ""), lat, lng, score, distanceMeters }];
+  }).sort((left, right) => right.score - left.score || left.distanceMeters - right.distanceMeters).slice(0, 6);
+
+  if (!matches.length) {
+    return {
+      text: `Saya belum menemukan CCTV publik yang cocok dengan "${question}". Katalog hanya memuat kamera yang koordinat dan sumbernya dapat diverifikasi; saya tidak membuat lokasi atau status kamera palsu.`,
+    };
+  }
+
+  let camerasWithEvidence = 0;
+  let detectedObjects = 0;
+  const cards = matches.map(({ properties, id, lat, lng, distanceMeters }) => {
+    const snapshots = itsReadPublicCctvSnapshots(id);
+    const latest = snapshots[0];
+    if (latest?.imageUrl) camerasWithEvidence += 1;
+    detectedObjects += Number(latest?.objectCount || 0);
+    const name = String(properties.name || "Kamera CCTV");
+    const operator = String(properties.operator || properties.source || "Sumber publik");
+    const streamStatus = String(properties.streamStatus || properties.verification || "belum diverifikasi");
+    const attribution = String(properties.attribution || properties.source || operator);
+    const roadName = String(objectRecord(properties.roadCorridor).roadName || "");
+    const evidence = snapshots.length
+      ? `<div class="its-ai-cctv-evidence">${snapshots.map((snapshot, index) => snapshot.imageUrl
+        ? `<figure style="--cctv-ai-accent:${escapeHtml(snapshot.accent || "#2563eb")}">
+            <img src="${escapeHtml(snapshot.imageUrl)}" alt="Snapshot AI ${index + 1} ${escapeHtml(name)}" loading="lazy">
+            <figcaption><b>${Number(snapshot.objectCount || 0)} objek</b><span>${new Date(Number(snapshot.capturedAt || Date.now())).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span></figcaption>
+          </figure>`
+        : "").join("")}</div>`
+      : `<p class="its-ai-card-note">Belum ada snapshot AI di browser ini. Buka kamera agar inferensi visual berjalan; status macet tidak ditebak dari nama lokasi.</p>`;
+    return `<section class="its-ai-card its-ai-cctv-card">
+      <div class="its-ai-card-head"><span>${escapeHtml(name)}</span><strong>${escapeHtml(streamStatus)}</strong></div>
+      <p>${escapeHtml([roadName, operator].filter(Boolean).join(" · "))}</p>
+      ${evidence}
+      <p class="its-ai-card-note">${Number.isFinite(distanceMeters) && distanceMeters < Number.MAX_SAFE_INTEGER ? `${escapeHtml(itsChatDistanceText(distanceMeters))} dari lokasi Anda · ` : ""}Atribusi: ${escapeHtml(attribution)}</p>
+      <div class="its-ai-actions">
+        <button type="button" data-ai-open-cctv="${escapeHtml(id)}">Lihat kamera</button>
+        <a href="/?lat=${lat.toFixed(6)}&lng=${lng.toFixed(6)}&z=18&cctv=${encodeURIComponent(id)}">Buka di peta</a>
+      </div>
+    </section>`;
+  }).join("");
+  const evidenceText = camerasWithEvidence
+    ? `${camerasWithEvidence} kamera memiliki snapshot AI lokal terbaru dengan total ${detectedObjects} objek pada frame terakhirnya.`
+    : "Belum ada snapshot AI lokal untuk hasil ini, sehingga saya belum menyatakan tingkat kemacetan.";
+  return {
+    text: `Saya menemukan ${matches.length} CCTV publik yang cocok. ${evidenceText} Status stream berasal dari verifikasi katalog; kondisi lalu lintas hanya disimpulkan setelah frame kamera benar-benar dianalisis.`,
+    html: cards,
+  };
+}
+
 async function itsFastAssistantResponse(
   question: string,
   history: ItsChatTurn[],
@@ -17921,6 +21021,29 @@ async function askItsMapsAssistant(
   signal?: AbortSignal,
 ): Promise<ItsAssistantResponse> {
   const socialOnly = /^(?:hai|halo|hello|hi|hey|selamat (?:pagi|siang|sore|malam)|ass?alamualaikum|apa kabar|terima kasih|makasih|thanks)[!.,?\s]*$/i.test(question.trim());
+  if (itsPublicCctvQuestion(question)) {
+    onStage?.("Mencari CCTV publik, koordinat, sumber, dan bukti snapshot AI...");
+    return itsPublicCctvAssistantResponse(question, signal);
+  }
+  if (shouldUseItsLocalAi(question)) {
+    const fastResponse = await itsFastAssistantResponse(question, history, signal, onStage);
+    if (fastResponse) return fastResponse;
+    onStage?.("Menjalankan model bahasa di perangkat...");
+    let streamedCharacters = 0;
+    let nextProgressAt = 48;
+    const generated = await generateWithItsLocalAi(question, {
+      signal,
+      maxNewTokens: 192,
+      temperature: 0.2,
+      onToken: (token) => {
+        streamedCharacters += token.length;
+        if (streamedCharacters < nextProgressAt) return;
+        nextProgressAt += 48;
+        onStage?.(`Menyusun jawaban lokal... ${streamedCharacters.toLocaleString("id-ID")} karakter`);
+      },
+    });
+    return { text: generated.text };
+  }
   if (!socialOnly) {
     onStage?.("Merencanakan pencarian sumber publik...");
     try {
@@ -18109,9 +21232,21 @@ function itsOpenChatDetectionDetail(detail: ItsAssistantDetectionDetail): void {
   if (sheet) setupPromptSheetSwipe(sheet, closeDetail);
 }
 
-function itsShowAiChatModal(): void {
+function itsShowAiChatModal(initialNotificationContext?: NotificationChatContext): void {
   document.querySelector<HTMLElement>('[role="dialog"][aria-labelledby="its-ai-chat-title"]')?.remove();
   closeFloatingMapPanels();
+  const notificationRecents = initialNotificationContext
+    ? rememberNotificationChatContext(initialNotificationContext, window.sessionStorage)
+    : [];
+  const initialNotificationPrompt = initialNotificationContext
+    ? notificationChatPrompt(initialNotificationContext, notificationRecents)
+    : "";
+  const notificationContextMarkup = initialNotificationContext ? `
+    <article class="its-ai-chat-msg status" data-notification-chat-context aria-label="Konteks notifikasi lalu lintas">
+      <strong>Konteks notifikasi dimuat</strong>
+      <p>${escapeHtml(initialNotificationContext.title || "Peringatan ITS Maps")} Â· ${escapeHtml(initialNotificationContext.cameraId || "tanpa ID kamera")}</p>
+      <small>Moda ${escapeHtml(initialNotificationContext.mode)} Â· ${escapeHtml(travelModeSourceLabel(initialNotificationContext.modeSource))}${initialNotificationContext.modeConfidence > 0 ? ` Â· skor bukti ${Math.round(initialNotificationContext.modeConfidence * 100)}%` : ""}. Riwayat konteks sesi dibatasi ${notificationRecents.length}/4.</small>
+    </article>` : "";
   const modal = document.createElement("section");
   modal.id = "its-ai-chat-modal";
   modal.className = "its-ai-chat-modal";
@@ -18123,17 +21258,20 @@ function itsShowAiChatModal(): void {
       <div class="map-license-grip" data-swipe-handle aria-hidden="true"></div>
       <header class="its-ai-chat-head">
         <div>
-          <span>ITS AI <small data-ai-cloud-status>Model lokal</small></span>
+          <span>ITS AI <small data-ai-cloud-status>Model lokal opsional</small></span>
           <h2 id="its-ai-chat-title">Asisten ITS Maps</h2>
-          <p>Jawaban disusun oleh model ONNX lokal; jaringan hanya dipakai untuk membaca sumber publik yang dapat diverifikasi.</p>
+          <p>Aktifkan model perangkat bila diperlukan; riset terbaru tetap membaca sumber publik yang dapat diverifikasi.</p>
         </div>
         <button type="button" data-ai-chat-close aria-label="Tutup chat AI">${closeIconSvg()}</button>
       </header>
       <div class="its-ai-chat-log" data-ai-chat-log role="log" aria-label="Percakapan ITS Assistant">
         <article class="its-ai-chat-msg assistant" aria-label="Jawaban ITS Assistant">
           <strong>ITS Assistant</strong>
-          <p>Saya siap membantu. Tanyakan kondisi ITS Maps, data perangkat, sumber ilmiah, formula, atau topik lain.</p>
+          <p>${initialNotificationContext
+            ? "Konteks peringatan sudah dimuat. Tinjau pertanyaan di bawah, lalu kirim untuk meminta penjelasan berbasis bukti."
+            : "Saya siap membantu. Tanyakan kondisi ITS Maps, data perangkat, sumber ilmiah, formula, atau topik lain."}</p>
         </article>
+        ${notificationContextMarkup}
       </div>
       <div class="its-ai-chat-quick">
         <button type="button" data-ai-chat-prompt="Bagaimana status Raspberry Pi sekarang?">Status</button>
@@ -18141,6 +21279,8 @@ function itsShowAiChatModal(): void {
         <button type="button" data-ai-chat-prompt="Tampilkan peta lokasi Raspberry dengan link maps.">Peta</button>
         <button type="button" data-ai-python-run title="Jalankan Python lokal setelah konfirmasi">Python lokal</button>
         <button type="button" data-ai-agent-toggle class="${itsAgentModeEnabled ? "active" : ""}" aria-pressed="${itsAgentModeEnabled ? "true" : "false"}">${itsAgentModeEnabled ? "Agent aktif" : "Agent"}</button>
+        <button type="button" data-ai-local-activate aria-pressed="false">Aktifkan AI lokal</button>
+        <button type="button" data-ai-local-cancel hidden>Batalkan model</button>
       </div>
       <form class="its-ai-chat-form" data-ai-chat-form
             method="get"
@@ -18172,24 +21312,99 @@ function itsShowAiChatModal(): void {
   const sendButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]') || null;
   const sendLabel = sendButton?.querySelector<HTMLElement>("[data-ai-send-label]");
   const cloudStatus = modal.querySelector<HTMLElement>("[data-ai-cloud-status]");
-  if (cloudStatus) {
-    cloudStatus.textContent = "Model lokal";
-    cloudStatus.title = "Inferensi chat berjalan lokal melalui Transformers.js; sumber publik diambil terpisah.";
-  }
+  const localActivationButton = modal.querySelector<HTMLButtonElement>("[data-ai-local-activate]");
+  const localCancelButton = modal.querySelector<HTMLButtonElement>("[data-ai-local-cancel]");
   const disposeLiveActivity = log ? mountAgentLiveActivity(log) : () => undefined;
   const conversation: ItsChatTurn[] = [];
   let promptRunning = false;
   let promptController: AbortController | null = null;
+  let localPreparing = false;
+  if (input && initialNotificationPrompt) input.value = initialNotificationPrompt;
+  const updateLocalAiControls = (snapshot = getItsLocalAiSnapshot()) => {
+    const ready = snapshot.phase === "ready" || snapshot.phase === "fallback-ready";
+    const active = ready && isItsLocalAiEnabled();
+    const busy = [
+      "checking-capabilities",
+      "loading-runtime",
+      "loading-model",
+      "loading-fallback",
+      "generating",
+      "cancelling",
+    ].includes(snapshot.phase);
+    const backendLabel = snapshot.backend === "litert-lm"
+      ? "LiteRT-LM"
+      : snapshot.backend === "transformers-js"
+        ? "Transformers.js"
+        : "Model lokal opsional";
+    if (cloudStatus) {
+      cloudStatus.textContent = active ? backendLabel : ready ? `${backendLabel} siap` : backendLabel;
+      cloudStatus.title = active
+        ? "Inferensi pertanyaan umum berjalan di perangkat; permintaan sumber terbaru tetap memakai jalur riset publik."
+        : "Model hanya diunduh setelah tombol aktivasi ditekan pengguna.";
+    }
+    if (localActivationButton) {
+      localActivationButton.disabled = localPreparing || busy;
+      localActivationButton.setAttribute("aria-pressed", String(active));
+      localActivationButton.textContent = active
+        ? "AI lokal aktif"
+        : ready
+          ? "Gunakan AI lokal"
+          : snapshot.phase === "failed"
+            ? "Coba AI lokal lagi"
+            : busy
+              ? "Menyiapkan AI lokal..."
+              : "Aktifkan AI lokal";
+    }
+    if (localCancelButton) localCancelButton.hidden = !busy;
+    if (!promptRunning && busy) {
+      itsSetChatStatus(snapshot.progress?.message || "Menyiapkan model lokal di perangkat...");
+    }
+  };
+  const disposeLocalAiSubscription = itsLocalAiRuntime.subscribe(updateLocalAiControls);
   const close = () => {
     promptController?.abort(new DOMException("Permintaan dibatalkan karena panel ditutup.", "AbortError"));
+    cancelItsLocalAi();
     agentOrchestrator.cancel();
     publicResearchAgent.cancel();
     itsReleaseAgentPanelStack();
+    disposeLocalAiSubscription();
     disposeLiveActivity();
     modal.classList.remove("open");
     clearPromptSidePanelWidth();
     window.setTimeout(() => modal.remove(), 220);
   };
+  localActivationButton?.addEventListener("click", async (event) => {
+    if (isItsLocalAiReady()) {
+      setItsLocalAiEnabled(!isItsLocalAiEnabled());
+      updateLocalAiControls();
+      itsSetChatStatus(isItsLocalAiEnabled()
+        ? "AI lokal aktif untuk pertanyaan umum. Riset terbaru tetap memakai sumber publik."
+        : "AI lokal dinonaktifkan dan memori percakapan lokal dibersihkan.");
+      window.setTimeout(() => {
+        if (!promptRunning) itsSetChatStatus();
+      }, 2_200);
+      return;
+    }
+    localPreparing = true;
+    updateLocalAiControls();
+    try {
+      const snapshot = await activateItsLocalAi(event);
+      updateLocalAiControls(snapshot);
+      itsSetChatStatus(snapshot.backend === "litert-lm"
+        ? "LiteRT-LM siap di perangkat."
+        : "Fallback Transformers.js dipilih; model kecil dimuat saat pertanyaan lokal pertama.");
+    } catch (error) {
+      updateLocalAiControls();
+      itsSetChatStatus(error instanceof Error ? error.message : "Model lokal gagal disiapkan.");
+    } finally {
+      localPreparing = false;
+      updateLocalAiControls();
+    }
+  });
+  localCancelButton?.addEventListener("click", () => {
+    cancelItsLocalAi();
+    itsSetChatStatus("Membatalkan pekerjaan model lokal...");
+  });
   const scrollLog = () => {
     if (log) log.scrollTop = log.scrollHeight;
   };
@@ -18247,7 +21462,7 @@ function itsShowAiChatModal(): void {
     if (input) input.disabled = busy;
     if (sendButton) sendButton.disabled = busy;
     if (sendLabel) sendLabel.textContent = busy ? "Memproses" : "Kirim";
-    modal.querySelectorAll<HTMLButtonElement>("[data-ai-chat-prompt], [data-ai-agent-toggle], [data-ai-python-run]").forEach((button) => {
+    modal.querySelectorAll<HTMLButtonElement>("[data-ai-chat-prompt], [data-ai-agent-toggle], [data-ai-python-run], [data-ai-local-activate]").forEach((button) => {
       button.disabled = busy;
     });
   };
@@ -18306,6 +21521,16 @@ function itsShowAiChatModal(): void {
       else if (panel === "app-license") itsShowSiteInfoModal("app-license");
       else if (panel === "ai-license") itsShowAiLicenseModal();
       else if (panel === "roadmap") itsShowRoadmapStoryModal();
+      return;
+    }
+    const cctvButton = target?.closest<HTMLButtonElement>("[data-ai-open-cctv]");
+    if (cctvButton) {
+      event.preventDefault();
+      const id = String(cctvButton.dataset.aiOpenCctv || "");
+      if (id) {
+        close();
+        window.setTimeout(() => window.dispatchEvent(new CustomEvent("its:open-cctv", { detail: { id, source: "ai-chat" } })), 180);
+      }
       return;
     }
     const poiButton = target?.closest<HTMLButtonElement>("[data-ai-poi-id]");
@@ -18405,6 +21630,16 @@ function itsShowAiChatModal(): void {
   input?.focus();
 }
 
+function itsOpenNotificationChatDeepLink(): void {
+  const context = notificationChatContextFromUrl(window.location.href);
+  if (!context) return;
+  itsShowAiChatModal(context);
+  const cleanUrl = new URL(window.location.href);
+  cleanUrl.hash = "";
+  NOTIFICATION_CHAT_QUERY_KEYS.forEach((key) => cleanUrl.searchParams.delete(key));
+  window.history.replaceState(window.history.state, "", cleanUrl.href);
+}
+
 function itsRegisterWebMcpTools(): boolean {
   if (!itsWebMcpListenersInstalled) {
     document.querySelectorAll<HTMLFormElement>("[data-webmcp-open-resource], [data-webmcp-site-search], [data-webmcp-public-context]")
@@ -18432,6 +21667,13 @@ function itsRegisterWebMcpTools(): boolean {
     }
   };
 
+  // Passive registration only: this tool reports activation-required until a
+  // user explicitly presses the AI-local button in the chat panel.
+  void registerItsLocalAiWebMcp(modelContext).catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!/duplicate tool name/i.test(message)) console.warn("[ITS] WebMCP local AI tool skipped", error);
+  });
+
   register({
     name: "list_its_maps_device_ids",
     description: "List all ITS Maps Raspberry Pi device IDs and their online/offline status from Firebase RTDB.",
@@ -18440,6 +21682,75 @@ function itsRegisterWebMcpTools(): boolean {
     execute: async () => {
       const result = await itsListDeviceIds();
       return itsWebMcpContentResponse(JSON.stringify(result, null, 2), result);
+    },
+  });
+
+  register({
+    name: "search_its_public_cctv",
+    description: "Cari CCTV publik Indonesia berdasarkan jalan/wilayah/operator. Mengembalikan koordinat, status stream, ruas OSM, deep-link, atribusi, serta sampai tiga snapshot AI lokal sebagai bukti jika kamera pernah dianalisis pada browser ini.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", title: "Jalan atau wilayah", maxLength: 200 },
+        limit: { type: "number", title: "Jumlah hasil", minimum: 1, maximum: 20, default: 8 },
+      },
+    },
+    annotations: { readOnlyHint: true },
+    execute: async (input: Record<string, unknown>) => {
+      const query = String(input.query || "").trim().toLocaleLowerCase("id-ID");
+      const terms = query.split(/\s+/).filter(Boolean);
+      const limit = Math.min(20, Math.max(1, Number(input.limit) || 8));
+      const response = await fetch("/data/public-cctv.geojson", { cache: "no-cache" });
+      if (!response.ok) return itsWebMcpContentResponse(`Katalog CCTV HTTP ${response.status}.`, { ok: false });
+      const payload = await response.json() as MapDetailFeatureCollection;
+      const results = payload.features.flatMap((feature) => {
+        if (feature.geometry.type !== "Point") return [];
+        const properties = feature.properties || {};
+        const searchable = [
+          properties.name,
+          properties.operator,
+          properties.source,
+          properties.region,
+          properties.catalogSourceKey,
+        ].map((value) => String(value || "")).join(" ").toLocaleLowerCase("id-ID");
+        const score = terms.length ? terms.reduce((total, term) => total + (searchable.includes(term) ? 1 : 0), 0) : 1;
+        if (terms.length && score === 0) return [];
+        const id = String(feature.id || properties.sourceId || "");
+        const [lng, lat] = feature.geometry.coordinates as number[];
+        let snapshots: unknown[] = [];
+        try {
+          const stored = JSON.parse(localStorage.getItem(`its-cctv-snapshots:${id}`) || "[]");
+          if (Array.isArray(stored)) snapshots = stored.slice(0, 3);
+        } catch {
+          snapshots = [];
+        }
+        const mapUrl = new URL(window.location.origin);
+        mapUrl.searchParams.set("lat", lat.toFixed(6));
+        mapUrl.searchParams.set("lng", lng.toFixed(6));
+        mapUrl.searchParams.set("z", "18");
+        mapUrl.searchParams.set("cctv", id);
+        return [{
+          score,
+          id,
+          name: String(properties.name || "Kamera CCTV"),
+          operator: String(properties.operator || ""),
+          streamStatus: String(properties.streamStatus || ""),
+          coordinates: { lat, lng },
+          roadCorridor: properties.roadCorridor || null,
+          attribution: String(properties.attribution || ""),
+          sourceUrl: String(properties.sourceUrl || ""),
+          mapUrl: mapUrl.href,
+          snapshots,
+        }];
+      }).sort((left, right) => right.score - left.score || left.name.localeCompare(right.name, "id-ID")).slice(0, limit);
+      const structured = {
+        ok: true,
+        query,
+        catalogSize: payload.features.length,
+        results,
+        caveat: "Kemacetan dan fase lampu adalah hasil inferensi frame yang tersimpan, bukan status lampu fisik.",
+      };
+      return itsWebMcpContentResponse(JSON.stringify(structured, null, 2), structured);
     },
   });
 
@@ -18883,6 +22194,7 @@ function itsScheduleWebMcpRegistration(): void {
 if (!staticRoute) {
   itsScheduleWebMcpRegistration();
   itsCreateAiChatButton();
+  itsOpenNotificationChatDeepLink();
   itsCreateSplash();
   itsCreateWindowsDownloadButton();
   const checkInstalledWindowsApp = () => window.setTimeout(() => {
