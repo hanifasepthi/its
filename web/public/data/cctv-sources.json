@@ -161,6 +161,21 @@
       "accessType": "official-portal",
       "maxPages": 30,
       "crawlDepth": 2
+    },
+    {
+      "region": "Sulawesi Selatan",
+      "operator": "Lalu Lintas Kota Makassar",
+      "url": "https://www.youtube.com/@lalinmks",
+      "accessType": "public-youtube-live",
+      "attribution": "Lalu Lintas Kota Makassar / YouTube",
+      "evidenceUrl": "https://berita.news/2025/09/01/demo-makassar-berlanjut-pantau-cctv-arus-lalu-lintas-disini/",
+      "players": [
+        {
+          "name": "Kondisi Arus Lalu-Lintas Kota Makassar",
+          "pageUrl": "https://www.youtube.com/live/FRE6otES69Q",
+          "youtubeId": "FRE6otES69Q"
+        }
+      ]
     }
   ]
 }

@@ -1,11 +1,11 @@
 {
-  "generatedAt": "2026-08-11T15:35:40.676Z",
-  "featureCount": 3777,
+  "generatedAt": "2026-08-11T15:39:20.836Z",
+  "featureCount": 3768,
   "provinceCount": 38,
-  "coveredProvinceCount": 22,
+  "coveredProvinceCount": 23,
   "sufficientlyCoveredCount": 8,
-  "missingProvinceCount": 16,
-  "lowProvinceCount": 14,
+  "missingProvinceCount": 15,
+  "lowProvinceCount": 15,
   "targetPerProvince": 100,
   "nonProvinceBuckets": [
     {
@@ -136,7 +136,7 @@
     },
     {
       "province": "Jawa Barat",
-      "count": 757,
+      "count": 755,
       "verifiedLiveCount": 728,
       "status": "covered",
       "target": 100,
@@ -144,7 +144,7 @@
     },
     {
       "province": "Jawa Tengah",
-      "count": 337,
+      "count": 333,
       "verifiedLiveCount": 265,
       "status": "covered",
       "target": 100,
@@ -152,7 +152,7 @@
     },
     {
       "province": "DI Yogyakarta",
-      "count": 809,
+      "count": 808,
       "verifiedLiveCount": 806,
       "status": "covered",
       "target": 100,
@@ -160,7 +160,7 @@
     },
     {
       "province": "Jawa Timur",
-      "count": 537,
+      "count": 536,
       "verifiedLiveCount": 272,
       "status": "covered",
       "target": 100,
@@ -216,11 +216,11 @@
     },
     {
       "province": "Kalimantan Timur",
-      "count": 31,
+      "count": 30,
       "verifiedLiveCount": 28,
       "status": "low",
       "target": 100,
-      "gap": 69
+      "gap": 70
     },
     {
       "province": "Kalimantan Utara",
@@ -232,11 +232,11 @@
     },
     {
       "province": "Sulawesi Utara",
-      "count": 35,
+      "count": 34,
       "verifiedLiveCount": 31,
       "status": "low",
       "target": 100,
-      "gap": 65
+      "gap": 66
     },
     {
       "province": "Gorontalo",
@@ -264,11 +264,11 @@
     },
     {
       "province": "Sulawesi Selatan",
-      "count": 0,
+      "count": 1,
       "verifiedLiveCount": 0,
-      "status": "missing",
+      "status": "low",
       "target": 100,
-      "gap": 100
+      "gap": 99
     },
     {
       "province": "Sulawesi Tenggara",

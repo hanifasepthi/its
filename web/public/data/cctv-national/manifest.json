@@ -1,13 +1,13 @@
 {
   "schemaVersion": "1.0",
   "dataset": "its-cctv-indonesia",
-  "generatedAt": "2026-08-11T15:35:40.581Z",
-  "featureCount": 3777,
+  "generatedAt": "2026-08-11T15:39:19.771Z",
+  "featureCount": 3768,
   "pageSize": 250,
   "byType": {
     "jpeg": 46,
-    "youtube": 51,
     "hls": 1141,
+    "youtube": 42,
     "mp4": 20,
     "html-page": 2453,
     "mjpeg": 66
@@ -30,7 +30,7 @@
     {
       "region": "DI Yogyakarta",
       "slug": "di-yogyakarta",
-      "featureCount": 809,
+      "featureCount": 808,
       "verifiedLiveCount": 806,
       "pageCount": 4
     },
@@ -79,21 +79,21 @@
     {
       "region": "Jawa Barat",
       "slug": "jawa-barat",
-      "featureCount": 757,
+      "featureCount": 755,
       "verifiedLiveCount": 728,
       "pageCount": 4
     },
     {
       "region": "Jawa Tengah",
       "slug": "jawa-tengah",
-      "featureCount": 337,
+      "featureCount": 333,
       "verifiedLiveCount": 265,
       "pageCount": 2
     },
     {
       "region": "Jawa Timur",
       "slug": "jawa-timur",
-      "featureCount": 537,
+      "featureCount": 536,
       "verifiedLiveCount": 272,
       "pageCount": 3
     },
@@ -121,7 +121,7 @@
     {
       "region": "Kalimantan Timur",
       "slug": "kalimantan-timur",
-      "featureCount": 31,
+      "featureCount": 30,
       "verifiedLiveCount": 28,
       "pageCount": 1
     },
@@ -154,6 +154,13 @@
       "pageCount": 1
     },
     {
+      "region": "Sulawesi Selatan",
+      "slug": "sulawesi-selatan",
+      "featureCount": 1,
+      "verifiedLiveCount": 0,
+      "pageCount": 1
+    },
+    {
       "region": "Sulawesi Tengah",
       "slug": "sulawesi-tengah",
       "featureCount": 68,
@@ -170,7 +177,7 @@
     {
       "region": "Sulawesi Utara",
       "slug": "sulawesi-utara",
-      "featureCount": 35,
+      "featureCount": 34,
       "verifiedLiveCount": 31,
       "pageCount": 1
     },

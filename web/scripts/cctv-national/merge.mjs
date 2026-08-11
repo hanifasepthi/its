@@ -47,6 +47,7 @@ function normalizeRegion(row) {
 
 function accepted(row) {
   if (!row?.streamUrl || !mediaTypes.has(row.streamType) || junk.test(row.streamUrl)) return false;
+  if (row.streamType === "youtube" && !/(?:youtube\.com\/(?:watch\?v=|live\/|embed\/)|youtu\.be\/)[\w-]{6,}/i.test(row.streamUrl)) return false;
   if (row.streamType === "html-page" && !/(?:cctv|camera|stream|atcs|pantau|monitor|opencctv|play-hls|player)/i.test(row.streamUrl)) return false;
   return row.browserPlayable !== false;
 }
