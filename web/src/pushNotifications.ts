@@ -2,6 +2,7 @@ import { ITS_CLOUDFLARE_WORKER_URL } from "./ai-runtime/CloudflareAiClient";
 
 const OPT_IN_KEY = "its-public-push-opt-in:v1";
 const TOKEN_KEY = "its-public-push-token:v1";
+const FCM_TOKEN_KEY = "its-fcm-token:v1";
 const PUSH_OUTBOX_DB = "its-push-outbox-v1";
 const PUSH_OUTBOX_STORE = "outbox";
 const TRAVEL_CONTEXT_OUTBOX_KEY = "travel-context-latest";
@@ -22,6 +23,15 @@ type PushConfig = {
   enabled: boolean;
   senderReady: boolean;
   vapidPublicKey: string;
+};
+
+const FIREBASE_WEB_CONFIG = {
+  apiKey: "AIzaSyCjF1ukhniubgZf4K-zNaY9EdB8Yq8wAsg",
+  authDomain: "itstelkom.firebaseapp.com",
+  projectId: "itstelkom",
+  storageBucket: "itstelkom.firebasestorage.app",
+  messagingSenderId: "224371234284",
+  appId: "1:224371234284:web:e2b2f4711fae246a545cc9",
 };
 
 export type TravelContextUpdate = {
@@ -165,6 +175,45 @@ async function registerSubscription(subscription: PushSubscription): Promise<{ s
   return { senderReady: payload.senderReady === true };
 }
 
+async function registerFcmToken(
+  registration: ServiceWorkerRegistration,
+  config: PushConfig,
+): Promise<boolean> {
+  if (!config.vapidPublicKey) return false;
+  const [appModule, messagingModule] = await Promise.all([
+    import("firebase/app"),
+    import("firebase/messaging"),
+  ]);
+  if (!await messagingModule.isSupported()) return false;
+  const firebaseApp = appModule.getApps().length
+    ? appModule.getApp()
+    : appModule.initializeApp(FIREBASE_WEB_CONFIG);
+  const messaging = messagingModule.getMessaging(firebaseApp);
+  const token = await messagingModule.getToken(messaging, {
+    vapidKey: config.vapidPublicKey,
+    serviceWorkerRegistration: registration,
+  });
+  if (!token) return false;
+  const response = await fetch(`${ITS_CLOUDFLARE_WORKER_URL}/v1/push/subscriptions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({
+      token,
+      topics: ["public", "release"],
+      origin: window.location.origin,
+      language: navigator.language,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
+      userAgent: navigator.userAgent,
+    }),
+  });
+  const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+  if (!response.ok || payload.ok !== true) {
+    throw new Error(typeof payload.message === "string" ? payload.message : `Registrasi FCM HTTP ${response.status}.`);
+  }
+  localStorage.setItem(FCM_TOKEN_KEY, token);
+  return true;
+}
+
 async function subscribeWithRegistration(registration: ServiceWorkerRegistration, requestPermission: boolean): Promise<PublicPushState> {
   if (!("Notification" in window) || !("serviceWorker" in navigator)) {
     return { supported: false, subscribed: false, permission: "unsupported", senderReady: false, vapidConfigured: false, message: "Browser ini belum mendukung Web Push." };
@@ -197,6 +246,13 @@ async function subscribeWithRegistration(registration: ServiceWorkerRegistration
     applicationServerKey: applicationServerKey(config.vapidPublicKey),
   });
   const registrationResult = await registerSubscription(subscription);
+  // Register the same browser permission with Firebase Messaging as a second
+  // delivery channel. Web Push remains the reliable fallback, while this token
+  // makes Firebase Messaging delivery/reporting observable in its own console.
+  const fcmRegistered = await registerFcmToken(registration, config).catch((error) => {
+    console.warn("[PWA] FCM token registration failed; standard Web Push remains active.", error);
+    return false;
+  });
   localStorage.setItem(OPT_IN_KEY, "true");
   localStorage.setItem(TOKEN_KEY, subscription.endpoint);
   bindServiceWorkerMessages();
@@ -207,7 +263,7 @@ async function subscribeWithRegistration(registration: ServiceWorkerRegistration
     senderReady: registrationResult.senderReady,
     vapidConfigured: Boolean(config.vapidPublicKey),
     message: registrationResult.senderReady
-      ? "Web Push publik aktif dan dapat diterima saat halaman ditutup."
+      ? `Web Push publik aktif${fcmRegistered ? " bersama Firebase Messaging" : ""} dan dapat diterima saat halaman ditutup.`
       : "Perangkat sudah terdaftar; secret pengirim Web Push masih perlu disetel di Cloudflare.",
   };
 }
@@ -322,6 +378,7 @@ export async function disablePublicPush(): Promise<PublicPushState> {
     ? await registration.pushManager.getSubscription()
     : null;
   const endpoint = subscription?.endpoint || localStorage.getItem(TOKEN_KEY) || "";
+  const fcmToken = localStorage.getItem(FCM_TOKEN_KEY) || "";
   if (endpoint) {
     const response = await fetch(`${ITS_CLOUDFLARE_WORKER_URL}/v1/push/subscriptions`, {
       method: "DELETE",
@@ -333,12 +390,27 @@ export async function disablePublicPush(): Promise<PublicPushState> {
       throw new Error(typeof payload.message === "string" ? payload.message : `Penghapusan langganan HTTP ${response.status}.`);
     }
   }
+  if (fcmToken) {
+    await fetch(`${ITS_CLOUDFLARE_WORKER_URL}/v1/push/subscriptions`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ token: fcmToken }),
+    }).catch(() => undefined);
+    const [appModule, messagingModule] = await Promise.all([
+      import("firebase/app"),
+      import("firebase/messaging"),
+    ]).catch(() => [] as never);
+    if (appModule && messagingModule && appModule.getApps().length && await messagingModule.isSupported().catch(() => false)) {
+      await messagingModule.deleteToken(messagingModule.getMessaging(appModule.getApp())).catch(() => false);
+    }
+  }
   if (subscription) await subscription.unsubscribe().catch(() => false);
   if (registration) {
     await disableTravelContextSync(registration);
   }
   localStorage.removeItem(OPT_IN_KEY);
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(FCM_TOKEN_KEY);
   const state: PublicPushState = {
     supported: Boolean(registration && "PushManager" in window),
     subscribed: false,
